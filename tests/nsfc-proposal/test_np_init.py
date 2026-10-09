@@ -41,7 +41,7 @@ class InitTest(unittest.TestCase):
     def test_creates_all_files_with_project_fields(self) -> None:
         result = init_proposal(self.root, title="肺磨玻璃结节浸润性预测", project_type="青年科学基金")
         paths = proposal_paths(self.root)
-        self.assertEqual(set(result.created), {paths.case, paths.evidence, paths.plan, paths.assumptions, paths.leads})
+        self.assertEqual(set(result.created), {paths.case, paths.evidence, paths.plan, paths.assumptions, paths.leads, paths.ledger})
         case = read_yaml(paths.case)
         self.assertEqual(case["project"]["title"], "肺磨玻璃结节浸润性预测")
         self.assertEqual(case["version"], 1)

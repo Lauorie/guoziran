@@ -25,6 +25,7 @@ class ProposalPaths:
     plan: Path
     assumptions: Path
     leads: Path
+    ledger: Path
 
 
 def read_yaml(path: Path) -> Dict[str, Any]:
@@ -76,6 +77,7 @@ def proposal_paths(project_root: Path) -> ProposalPaths:
         plan=base / "section_plan.yaml",
         assumptions=base / "assumptions.md",
         leads=base / "literature_leads.md",
+        ledger=base / "citation_ledger.jsonl",
     )
 
 

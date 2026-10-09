@@ -96,5 +96,21 @@ def read_bib_index(bib_files: list[Path]) -> BibIndex:
     return BibIndex(keys=frozenset(keys), doi_keys=doi_keys)
 
 
+def bib_entry_texts(bib_files: list[Path]) -> dict[str, str]:
+    """返回 {bibkey: 条目文本}；条目文本从条目起点到下一个 @ 起点之前。同名 key 取先出现的。"""
+    texts: dict[str, str] = {}
+    for path in bib_files:
+        if not Path(path).is_file():
+            continue
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        starts = list(ENTRY_START_RE.finditer(text))
+        for index, match in enumerate(starts):
+            if match.group(1).lower() in NON_ENTRY_TYPES or not match.group(2):
+                continue
+            end = starts[index + 1].start() if index + 1 < len(starts) else len(text)
+            texts.setdefault(match.group(2), text[match.start():end])
+    return texts
+
+
 def relpath(project_root: Path, path: Path) -> str:
     return Path(path).resolve().relative_to(Path(project_root).resolve()).as_posix()

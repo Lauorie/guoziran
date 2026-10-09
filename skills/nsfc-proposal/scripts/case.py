@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from citation_ledger import register_user_entries
 from latex_files import read_bib_index, relpath, scan_latex_tree
 from proposal_common import (
     SKILL_ROOT,
@@ -130,6 +131,12 @@ def init_proposal(
         if not path.exists():
             path.write_text(template, encoding="utf-8")
             result.created.append(path)
+    if not paths.ledger.exists():
+        paths.ledger.write_text("", encoding="utf-8")
+        result.created.append(paths.ledger)
+        registered = register_user_entries(root)
+        if registered:
+            result.warnings.append(f"已有 {len(registered)} 条文献按申请人提供登记")
     if paths.assumptions in result.created:
         for warning in result.warnings:
             append_under_heading(paths.assumptions, "## 待核实项", f"- {warning}")
