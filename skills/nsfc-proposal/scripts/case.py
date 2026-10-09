@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from latex_files import relpath, scan_latex_tree
+from latex_files import read_bib_index, relpath, scan_latex_tree
 from proposal_common import (
     SKILL_ROOT,
     ProposalError,
@@ -24,6 +24,7 @@ from proposal_common import (
     resolve_project_root,
     write_yaml,
 )
+from case_validate import validate_all
 
 ASSUMPTIONS_TEMPLATE = "# 假设与待核实清单\n\n## 确认点状态\n\n## AI 拟定项\n\n## 待核实项\n\n## 占位清单\n"
 LEADS_TEMPLATE = "# 文献线索\n\n## 检索式\n\n## 未核实线索\n"
@@ -143,6 +144,25 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_shared(root: Path) -> tuple[dict, dict | None, dict | None]:
+    paths = proposal_paths(root)
+    case = read_yaml(paths.case)
+    evidence = read_yaml(paths.evidence) if paths.evidence.exists() else None
+    plan = read_yaml(paths.plan) if paths.plan.exists() else None
+    return case, evidence, plan
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    root = resolve_project_root(args.project_root)
+    case, evidence, plan = _load_shared(root)
+    bib = read_bib_index(scan_latex_tree(root).bib_files)
+    problems = validate_all(case, evidence, plan, bib_keys=set(bib.keys))
+    for problem in problems:
+        print(f"✗ {problem}")
+    print("✅ 校验通过" if not problems else f"共 {len(problems)} 处不通过")
+    return 0 if not problems else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="case.py", description="nsfc-proposal 共享文件工具")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -153,6 +173,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--type", dest="project_type", required=True, help="项目类型，如 青年科学基金")
     p_init.add_argument("--sections", help="逗号分隔的章节名；默认全部")
     p_init.set_defaults(func=cmd_init)
+
+    p_validate = sub.add_parser("validate", help="校验 proposal/ 下的三份 YAML")
+    p_validate.add_argument("--project-root", required=True)
+    p_validate.set_defaults(func=cmd_validate)
 
     return parser
 
