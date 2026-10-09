@@ -119,6 +119,19 @@ class CaseRuleTest(unittest.TestCase):
         self.assertTrue(any("tasks[0]" in e for e in errors), errors)
         self.assertTrue(any("version" in e for e in errors), errors)
 
+    def test_unhashable_enum_values_do_not_raise(self) -> None:
+        case = valid_case()
+        case["status"] = ["draft"]  # list instead of string
+        errors = validate_case(case, valid_evidence())
+        self.assertTrue(any("status" in e for e in errors), errors)
+        self.assertFalse(any("TypeError" in str(type(e)) for e in errors))
+
+        case = valid_case()
+        case["research_object"]["source"] = {"a": 1}  # dict instead of string
+        errors = validate_case(case, valid_evidence())
+        self.assertTrue(any("source" in e for e in errors), errors)
+        self.assertFalse(any("TypeError" in str(type(e)) for e in errors))
+
 
 class EvidenceRuleTest(unittest.TestCase):
     def test_overclaimed_support(self) -> None:
@@ -146,6 +159,33 @@ class EvidenceRuleTest(unittest.TestCase):
         errors = validate_evidence(evidence, {"wu2021value"})
         self.assertTrue(any("重复" in e for e in errors), errors)
         self.assertTrue(any("type" in e for e in errors), errors)
+
+    def test_unhashable_enum_values_do_not_raise(self) -> None:
+        evidence = valid_evidence()
+        evidence["claims"][0]["support"] = ["single_verified"]  # list instead of string
+        errors = validate_evidence(evidence, {"wu2021value"})
+        self.assertTrue(any("support" in e for e in errors), errors)
+        self.assertFalse(any("TypeError" in str(type(e)) for e in errors))
+
+        evidence = valid_evidence()
+        evidence["claims"][0]["type"] = {"a": 1}  # dict instead of string
+        errors = validate_evidence(evidence, {"wu2021value"})
+        self.assertTrue(any("type" in e for e in errors), errors)
+
+        evidence = valid_evidence()
+        evidence["claims"][0]["evidence"][0]["role"] = [1]  # list instead of string
+        errors = validate_evidence(evidence, {"wu2021value"})
+        self.assertTrue(any("role" in e for e in errors), errors)
+
+    def test_duplicate_refs_counted_as_one_paper(self) -> None:
+        evidence = valid_evidence()
+        # Add a second entry with same bibkey to C1 (which already has one supporting entry with wu2021value)
+        evidence["claims"][0]["evidence"].append({"ref": "wu2021value", "role": "supporting", "basis": "full_abstract"})
+        evidence["claims"][0]["support"] = "multi_verified"  # mark as multi_verified but it's really just one paper
+        # Now it has two entries with wu2021value, but they should be counted as one distinct paper
+        errors = validate_evidence(evidence, {"wu2021value"})
+        # C1 is marked as multi_verified but only has one distinct verified paper, so it should error
+        self.assertTrue(any("C1" in e and "multi_verified" in e for e in errors), errors)
 
 
 class PlanRuleTest(unittest.TestCase):

@@ -47,6 +47,11 @@ def _str_list(value: Any) -> list[str]:
     return [v.strip() for v in value if isinstance(v, str) and v.strip()]
 
 
+def _in(value: Any, allowed: set[str]) -> bool:
+    """Check if value is a string and in the allowed set, avoiding TypeError on unhashable types."""
+    return isinstance(value, str) and value in allowed
+
+
 def _items(container: Mapping[str, Any], key: str, errors: list[str]) -> list[Mapping[str, Any]]:
     value = container.get(key)
     if value is None:
@@ -91,20 +96,20 @@ def validate_case(case: Mapping[str, Any], evidence: Mapping[str, Any] | None) -
     version = case.get("version")
     if not isinstance(version, int) or isinstance(version, bool) or version < 1:
         errors.append("version 必须是不小于 1 的整数")
-    if case.get("status") not in CASE_STATUSES:
+    if not _in(case.get("status"), CASE_STATUSES):
         errors.append("status 必须是 draft、confirmed 或 bypassed")
 
     research_object = _mapping(case.get("research_object"))
     if not _text(research_object.get("sample_vs_target_gap")):
         errors.append("research_object.sample_vs_target_gap 不能为空；样本与目标人群无差异时写「无」")
-    if research_object and research_object.get("source") not in SOURCES:
+    if research_object and not _in(research_object.get("source"), SOURCES):
         errors.append("research_object.source 必须是 user 或 ai_proposed")
 
     terms = _items(case, "terms", errors)
     if not [t for t in terms if _text(t.get("term")) and _text(t.get("definition"))]:
         errors.append("terms 至少界定一个术语（term 与 definition 都要填）")
     for term in terms:
-        if term.get("source") not in SOURCES:
+        if not _in(term.get("source"), SOURCES):
             errors.append(f"术语「{_text(term.get('term')) or '?'}」的 source 必须是 user 或 ai_proposed")
 
     gap_ids = {_text(g.get("id")) for g in _items(case, "gaps", errors) if _text(g.get("id"))}
@@ -145,17 +150,17 @@ def validate_case(case: Mapping[str, Any], evidence: Mapping[str, Any] | None) -
         errors.append(f"科学问题 {qid} 没有对应的研究任务")
 
     for item in _items(case, "constraints", errors):
-        if item.get("source") not in SOURCES:
+        if not _in(item.get("source"), SOURCES):
             errors.append(f"约束「{_text(item.get('text')) or '?'}」的 source 必须是 user 或 ai_proposed")
     for item in _items(case, "feasibility", errors):
         label = _text(item.get("text")) or "?"
-        if item.get("kind") not in FEASIBILITY_KINDS:
+        if not _in(item.get("kind"), FEASIBILITY_KINDS):
             errors.append(f"可行性条目「{label}」的 kind 不在允许值内")
-        if item.get("source") not in FEASIBILITY_SOURCES:
+        if not _in(item.get("source"), FEASIBILITY_SOURCES):
             errors.append(f"可行性条目「{label}」的 source 必须是 user_material 或 missing")
     risks = _items(case, "risks", errors)
     for risk in risks:
-        if risk.get("category") not in RISK_CATEGORIES:
+        if not _in(risk.get("category"), RISK_CATEGORIES):
             errors.append(f"风险「{_text(risk.get('risk')) or '?'}」的 category 必须是 technical、schedule 或 resource")
     if FOUNDATION_MARK in _str_list(_mapping(case.get("project")).get("sections")) and len(risks) < 3:
         errors.append("要写研究基础时，risks 至少 3 条")
@@ -180,29 +185,30 @@ def validate_evidence(evidence: Mapping[str, Any], bib_keys: set[str] | None) ->
         if not _text(claim.get("text")):
             errors.append(f"论断 {cid} 的 text 不能为空")
         claim_type = claim.get("type")
-        if claim_type not in CLAIM_TYPES:
+        if not _in(claim_type, CLAIM_TYPES):
             errors.append(f"论断 {cid} 的 type 必须是 {'、'.join(sorted(CLAIM_TYPES))} 之一")
         support = claim.get("support")
-        if support not in SUPPORT_LEVELS:
+        if not _in(support, SUPPORT_LEVELS):
             errors.append(f"论断 {cid} 的 support 必须是 {'、'.join(sorted(SUPPORT_LEVELS))} 之一")
             continue
         entries = claim.get("evidence") or []
         if not isinstance(entries, list):
             errors.append(f"论断 {cid} 的 evidence 必须是列表")
             entries = []
-        verified = 0
+        verified_refs: set[str] = set()
         for entry in entries:
             if not isinstance(entry, Mapping):
                 errors.append(f"论断 {cid} 的 evidence 条目必须是映射")
                 continue
             ref = _text(entry.get("ref"))
-            if entry.get("role") not in EVIDENCE_ROLES:
+            if not _in(entry.get("role"), EVIDENCE_ROLES):
                 errors.append(f"论断 {cid} 的证据 {ref or '?'} 的 role 必须是 supporting 或 counter")
             is_lead = ref.startswith("lead:")
             if ref and not is_lead and bib_keys is not None and ref not in bib_keys:
                 errors.append(f"论断 {cid} 的证据 {ref} 不在 .bib 中")
-            if entry.get("role") == "supporting" and ref and not is_lead and entry.get("basis") in EVIDENCE_BASES:
-                verified += 1
+            if entry.get("role") == "supporting" and ref and not is_lead and _in(entry.get("basis"), EVIDENCE_BASES):
+                verified_refs.add(ref)
+        verified = len(verified_refs)
         if support == "applicant_material":
             if claim_type != "applicant_result":
                 errors.append(f"论断 {cid}：applicant_material 只能用于 applicant_result 类论断")
