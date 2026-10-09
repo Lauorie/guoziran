@@ -9,7 +9,10 @@ from pathlib import Path
 from _yaml_utils import extract_yaml_list_under_block, extract_yaml_value_under_block
 
 DEFAULT_RISK_PHRASES = ["首次", "领先", "填补空白", "突破性", "国际领先", "世界领先"]
-DEFAULT_SUBGOAL_MARKERS_MIN = 3
+
+# SKILL.md 规定 S1–S4 只用于内部规划，禁止出现在 .tex 正文中
+INTERNAL_SUBGOAL_ID_RE = re.compile(r"(?<![A-Za-z0-9])S\d+(?![A-Za-z0-9])")
+LATEX_COMMENT_RE = re.compile(r"(?<!\\)%.*$")
 
 
 def _err(message: str) -> int:
@@ -31,18 +34,9 @@ def _read_targets_from_config(config_yaml: Path) -> dict[str, str]:
     }
 
 
-def _read_checks_from_config(config_yaml: Path) -> tuple[list[str], int]:
+def _read_checks_from_config(config_yaml: Path) -> list[str]:
     lines = config_yaml.read_text(encoding="utf-8").splitlines()
-
-    risk_phrases = extract_yaml_list_under_block(lines, "checks", "risk_phrases") or DEFAULT_RISK_PHRASES
-    raw_min = extract_yaml_value_under_block(lines, "checks", "subgoal_markers_min")
-    try:
-        subgoal_markers_min = int(raw_min) if raw_min is not None else DEFAULT_SUBGOAL_MARKERS_MIN
-    except ValueError:
-        subgoal_markers_min = DEFAULT_SUBGOAL_MARKERS_MIN
-
-    subgoal_markers_min = max(1, subgoal_markers_min)
-    return risk_phrases, subgoal_markers_min
+    return extract_yaml_list_under_block(lines, "checks", "risk_phrases") or DEFAULT_RISK_PHRASES
 
 
 def _check_file_exists(project_root: Path, relpath: str) -> str | None:
@@ -54,19 +48,24 @@ def _check_file_exists(project_root: Path, relpath: str) -> str | None:
     return None
 
 
-def _check_minimal_content(path: Path, *, kind: str, subgoal_markers_min: int) -> list[str]:
-    text = path.read_text(encoding="utf-8", errors="replace")
+def _strip_latex_comments(text: str) -> str:
+    return "\n".join(LATEX_COMMENT_RE.sub("", line) for line in text.splitlines())
+
+
+def _check_minimal_content(path: Path, *, kind: str) -> list[str]:
+    text = _strip_latex_comments(path.read_text(encoding="utf-8", errors="replace"))
     problems: list[str] = []
 
+    leaked = sorted(set(INTERNAL_SUBGOAL_ID_RE.findall(text)))
+    if leaked:
+        problems.append(f"{path}: internal subgoal IDs leaked into body: {', '.join(leaked)} (use natural language instead)")
+
     if kind == "research":
-        markers = {int(m.group(1)) for m in re.finditer(r"\bS(\d+)\b", text)}
-        if len(markers) < subgoal_markers_min:
-            problems.append(
-                f"{path}: not enough subgoal markers like S1/S2/... (found={len(markers)} min={subgoal_markers_min})"
-            )
+        if not text.strip():
+            problems.append(f"{path}: research content is empty")
     elif kind == "innovation":
-        if not re.search(r"对应\s*S\d+", text):
-            problems.append(f"{path}: missing backreference marker like '对应 S1'")
+        if not text.strip():
+            problems.append(f"{path}: innovation content is empty")
     elif kind == "yearly":
         year_patterns = {
             "第1年/第一年": [r"第\s*1\s*年", r"第一年"],
@@ -76,8 +75,6 @@ def _check_minimal_content(path: Path, *, kind: str, subgoal_markers_min: int) -
         for label, patterns in year_patterns.items():
             if not any(re.search(p, text) for p in patterns):
                 problems.append(f"{path}: missing yearly header ({label})")
-        if not re.search(r"对应\s*S\d+", text) and not re.search(r"\bS\d+\b", text):
-            problems.append(f"{path}: missing subgoal backreference like '对应 S1'")
     else:
         problems.append(f"{path}: unknown kind {kind}")
 
@@ -126,7 +123,7 @@ def main() -> int:
     except ValueError as exc:
         return _err(str(exc))
 
-    risk_phrases, subgoal_markers_min = _read_checks_from_config(config_yaml)
+    risk_phrases = _read_checks_from_config(config_yaml)
 
     errors: list[str] = []
     errors.extend(
@@ -151,7 +148,7 @@ def main() -> int:
         ]
         for relpath, kind in checks:
             errors.extend(
-                _check_minimal_content(project_root / relpath, kind=kind, subgoal_markers_min=subgoal_markers_min)
+                _check_minimal_content(project_root / relpath, kind=kind)
             )
 
     warnings: list[str] = []
