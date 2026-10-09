@@ -60,6 +60,8 @@ python3 S/scripts/case.py validate --project-root P
 
 不通过就改，直到通过。
 
+各列表条目和论断条目的字段写法见 `references/scientific_case_guide.md` 的「列表条目的写法」和 `references/evidence_wording.md` 的「论断条目的写法」。
+
 **3. 文献与证据**
 
 1. 生成 5–25 条英文关键词检索式，写入 `T/nsfc-proposal/input/keyword_queries.json`（格式 `{"queries": [...]}`），并抄入 `P/proposal/literature_leads.md` 的「## 检索式」。
@@ -126,13 +128,15 @@ python3 S/scripts/case.py render --project-root P
 
 每一章都遵守四条：措辞不超过 `evidence_map.yaml` 中对应论断的 `support`；不写 `must_exclude` 中的内容；缺失的信息写成可见占位 `【待补充：……】`，并逐条列入 `assumptions.md` 的「## 占位清单」（格式：`- 文件：【待补充：……】`）；正文不出现内部编号。
 
+第五条：被调用的写作 skill 若在自己的说明里要向用户提问（确认 project_root 或 output_mode、确认后创建 `extraTex`、nsfc-abstract 多次超长裁剪后让用户选方案等），一律不问，取保守默认（保留已有文件、按配置先预览再应用、停止裁剪并保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md`，并列入最终报告。整个流程只有第 5 步向用户提问。
+
 1. 立项依据：
 
    ```bash
    python3 S/scripts/case.py to-info-form --project-root P --writer nsfc-justification-writer --out T/nsfc-proposal/output/info_form_justification.md
    ```
 
-   按 `SK/nsfc-justification-writer/SKILL.md` 执行。它的每条 CLI 命令都加 `--task-root T`，`coach` 加 `--info-form T/nsfc-proposal/output/info_form_justification.md`。写入后运行 `python3 S/scripts/case.py mark-written --project-root P --file extraTex/1.1.立项依据.tex`。
+   按 `SK/nsfc-justification-writer/SKILL.md` 执行。`--task-root T` 是顶层选项，放在子命令之前，例如 `python3 SK/nsfc-justification-writer/scripts/run.py --task-root T coach --project-root P --info-form T/nsfc-proposal/output/info_form_justification.md`；每条 CLI 命令都这样加。`coach` 加 `--info-form T/nsfc-proposal/output/info_form_justification.md`。写入后运行 `python3 S/scripts/case.py mark-written --project-root P --file extraTex/1.1.立项依据.tex`。
 2. 研究内容、特色与创新、年度研究计划：用 `--writer nsfc-research-content-writer` 生成信息表，按 `SK/nsfc-research-content-writer/SKILL.md` 执行。写完运行 `python3 SK/nsfc-research-content-writer/scripts/run_checks.py --project-root P`，三个文件逐一 `mark-written`。
 3. 研究基础、工作条件：用 `--writer nsfc-research-foundation-writer` 生成信息表，按 `SK/nsfc-research-foundation-writer/SKILL.md` 执行，两个文件逐一 `mark-written`。
 4. 摘要：按 `SK/nsfc-abstract/SKILL.md` 在 `P` 下写 `NSFC-ABSTRACTS.md`，科学问题与术语以科学论证为准，然后 `mark-written --file NSFC-ABSTRACTS.md`。

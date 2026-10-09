@@ -36,3 +36,54 @@
 - 不把工程任务包装成科学问题。
 - 不把缺证据的判断写成事实。
 - 不把研究方案的细节写进科学论证；方法细节属于研究内容。
+
+## 列表条目的写法
+
+字段名和允许值以 `scripts/case_validate.py` 为准。内容用 `……` 代替，写作时替换。
+
+```yaml
+terms:
+  - term: "……"
+    definition: "……"
+    source: user            # user | ai_proposed
+importance:
+  - text: "……"
+    claim_ids: [C1]         # 对应 evidence_map.yaml 中的论断编号
+gaps:
+  - id: G1
+    text: "……"
+    claim_ids: [C2]
+mainstream_routes:
+  - name: "……"
+    limitation: "……"
+    claim_ids: [C3]
+questions:
+  - id: Q1
+    text: "……？"            # 必须以问号结尾
+    answers_gaps: [G1]      # 至少一个，且必须是已有缺口编号
+tasks:
+  - id: T1
+    question: Q1            # 每个科学问题至少对应一个任务
+    aim: "……"
+    indicator: "……"
+    baselines: ["……"]       # 至少一项必比基线
+    confounders: ["……"]
+    validation: "……"
+    subtasks: ["……"]
+    depends_on: []
+constraints:
+  - text: "……"
+    source: user            # user | ai_proposed
+feasibility:
+  - text: "……"
+    kind: preliminary       # paper | patent | data | platform | preliminary | team | collaborator | condition
+    source: user_material   # user_material | missing
+risks:
+  - risk: "……"
+    mitigation: "……"
+    category: technical     # technical | schedule | resource
+```
+
+- `claim_ids` 只出现在 `importance`、`gaps`、`mainstream_routes`。
+- `feasibility` 中 `source: missing` 的条目，在研究基础的 `placeholders` 里各留一条。
+- 要写研究基础时，`risks` 至少 3 条。
