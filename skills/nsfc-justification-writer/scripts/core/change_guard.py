@@ -9,7 +9,7 @@ import difflib
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Sequence
 
 
 STRUCTURE_COMMAND_RE = re.compile(
@@ -25,8 +25,19 @@ class ChangeGuardResult:
     diff: str
 
 
-def inspect_proposal(*, original: str, proposed: str, target_path: Path, project_root: Path) -> ChangeGuardResult:
-    """生成 diff，并提示新增/删除行是否触碰结构或配置命令。"""
+def inspect_proposal(
+    *,
+    original: str,
+    proposed: str,
+    target_path: Path,
+    project_root: Path,
+    allowed_new_headings: Sequence[str] = (),
+) -> ChangeGuardResult:
+    """生成 diff，并提示新增/删除行是否触碰结构或配置命令。
+
+    ``allowed_new_headings`` 列出允许出现在新增行中的标题命令（如 ``subsubsection``）。
+    删除行中的结构命令一律计入 hits，所以删改已有标题仍会被拒绝。
+    """
     root = Path(project_root).resolve()
     target = Path(target_path).resolve()
     target.relative_to(root)  # 越界时抛出 ValueError，由 CLI 转成安全错误
@@ -39,6 +50,22 @@ def inspect_proposal(*, original: str, proposed: str, target_path: Path, project
             lineterm="",
         )
     )
-    changed = [line[1:] for line in diff_lines if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))]
-    hits = sorted({m.group(0) for line in changed for m in STRUCTURE_COMMAND_RE.finditer(line)})
-    return ChangeGuardResult(ok=not hits, changed_lines=len(changed), structural_hits=hits, diff="\n".join(diff_lines) + ("\n" if diff_lines else ""))
+    allowed = {"\\" + name.strip().lstrip("\\") for name in allowed_new_headings if name and name.strip()}
+    hits: set[str] = set()
+    changed_lines = 0
+    for line in diff_lines:
+        if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
+            continue
+        changed_lines += 1
+        is_added = line.startswith("+")
+        for match in STRUCTURE_COMMAND_RE.finditer(line[1:]):
+            command = match.group(0)
+            if is_added and command in allowed:
+                continue
+            hits.add(command)
+    return ChangeGuardResult(
+        ok=not hits,
+        changed_lines=changed_lines,
+        structural_hits=sorted(hits),
+        diff="\n".join(diff_lines) + ("\n" if diff_lines else ""),
+    )

@@ -58,6 +58,9 @@ guardrails:
   auto_select_target: true
   auto_create_target: true
   auto_retry_body_only: true
+  # 模板自带的标题命令允许在提案中新增；删改已有标题仍按结构变动拒绝。
+  allowed_new_heading_commands:
+    - subsubsection
 
 quality:
   # 吹牛式表述由宿主 AI 按 references/boastful_expression_guidelines.md 语义复核；

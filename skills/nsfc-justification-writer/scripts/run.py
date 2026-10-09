@@ -544,7 +544,13 @@ def cmd_preview(args: argparse.Namespace) -> int:
     proposal = _read_body_file(args.proposal_file)
     original = target.read_text(encoding="utf-8", errors="ignore") if target.is_file() else ""
     try:
-        result = inspect_proposal(original=original, proposed=proposal, target_path=target, project_root=project_root)
+        result = inspect_proposal(
+            original=original,
+            proposed=proposal,
+            target_path=target,
+            project_root=project_root,
+            allowed_new_headings=get_seq_str(guard, "allowed_new_heading_commands"),
+        )
     except ValueError as exc:
         logger.error("❌ 目标路径越出 project_root：%s", exc)
         return 2
