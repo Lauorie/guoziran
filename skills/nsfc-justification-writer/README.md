@@ -1,6 +1,6 @@
 # nsfc-justification-writer — 用户使用指南
 
-本 README 面向使用者：说明如何触发、准备输入、分阶段写作和可逆自动写入。当前版本为 **v1.3.0**；AI 执行规范见 [`SKILL.md`](SKILL.md)，默认参数见 [`config.yaml`](config.yaml)。
+本 README 面向使用者：说明如何触发、准备输入、分阶段写作和可逆自动写入。AI 执行规范见 [`SKILL.md`](SKILL.md)，默认参数与版本号见 [`config.yaml`](config.yaml)。
 
 ## 它适合做什么
 

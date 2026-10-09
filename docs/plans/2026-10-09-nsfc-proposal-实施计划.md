@@ -75,7 +75,7 @@
 | `tests/research-literature-search/test_rls_host_results.py` | 新建 | Task 5 |
 | `tests/nsfc-proposal/test_np_*.py` | 新建 | Task 6–13 |
 | `skills/README.md`、`CHANGELOG.md`、设计文档 | 改 | Task 14 |
-| `/home/juli/guoziran/nsfc-proposal-eval/`（仓库外） | 新建 | 验收输入、项目副本、盲评材料（Task 15–20） |
+| `<eval-dir>/`（仓库外） | 新建 | 验收输入、项目副本、盲评材料（Task 15–20） |
 
 ---
 
@@ -3729,7 +3729,7 @@ Expected: 12 passed。
 用 2026-10-09 实测中 `deep_search` 返回、带 DOI 的那篇论文（`10.1177/0284185119826536`）做一次真实查询，只读不写。临时文件放在本会话的 scratchpad 目录（下面的 `$L`），不用 `/tmp` 根目录：
 
 ```bash
-L=/tmp/claude-1001/-home-juli-guoziran/25ac919b-131c-4b62-b3c5-71f4e1b5fe5c/scratchpad/np-live
+L=<scratchpad-dir>/np-live
 mkdir -p $L/proj/references $L/.bensz-api/task-20261009-0000-live
 printf '\\bibliography{references/refs}\n' > $L/proj/main.tex
 : > $L/proj/references/refs.bib
@@ -4963,18 +4963,18 @@ Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>"
 
 ## 阶段四：验收（Task 15–20，仓库外进行）
 
-验收目录 `E = /home/juli/guoziran/nsfc-proposal-eval/`，不进仓库。每次运行用独立目录：
+验收目录 `E = <eval-dir>/`，不进仓库。每次运行用独立目录：
 
 ```text
 E/<运行名>/
 ├── projects/proj/      项目副本（prepare_project.py 生成）
-├── packages -> /home/juli/guoziran/ChineseResearchLaTeX/packages   软链接，供项目编译脚本找到 bensz-nsfc
+├── packages -> <repo>/packages   软链接，供项目编译脚本找到 bensz-nsfc
 └── .bensz-api/         该运行的任务目录（运行时以 E/<运行名> 为当前目录）
 ```
 
 （项目自带的 `scripts/nsfc_build.py` 在 `项目目录/../../packages` 下找 `bensz-nsfc`，所以用这个布局。）
 
-实验组 skill 路径：`/home/juli/guoziran/ChineseResearchLaTeX/skills/`（`nsfc-proposal` 分支）。对照组 skill 路径：`E/crl-main/skills/`（`main` 分支的 worktree）。
+实验组 skill 路径：`<repo>/skills/`（`nsfc-proposal` 分支）。对照组 skill 路径：`E/crl-main/skills/`（`main` 分支的 worktree）。
 
 ### Task 15: 验收输入、项目副本工具与对照组 worktree
 
@@ -5022,7 +5022,7 @@ from pathlib import Path
 
 BODY_FILES = ["1.1.立项依据.tex", "2.1.研究内容.tex", "2.2.特色与创新.tex", "2.3.年度研究计划.tex", "3.1.研究基础.tex", "3.2.工作条件.tex"]
 HEADER = "\\justifying\n\\NSFCBodyText\n\n"
-REPO = Path("/home/juli/guoziran/ChineseResearchLaTeX")
+REPO = Path("<repo>")
 
 
 def main() -> int:
@@ -5053,7 +5053,7 @@ if __name__ == "__main__":
 - [ ] **Step 3: 确认空白副本能编译**
 
 ```bash
-cd /home/juli/guoziran/nsfc-proposal-eval
+cd <eval-dir>
 python3 prepare_project.py --run-dir smoke
 cd smoke/projects/proj && python3 scripts/nsfc_build.py build --project-dir . ; ls -la main.pdf
 ```
@@ -5063,8 +5063,8 @@ Expected: 生成 `main.pdf`。若因字体等环境原因失败，把错误摘�
 - [ ] **Step 4: 建对照组 worktree**
 
 ```bash
-git -C /home/juli/guoziran/ChineseResearchLaTeX worktree add /home/juli/guoziran/nsfc-proposal-eval/crl-main main
-git -C /home/juli/guoziran/nsfc-proposal-eval/crl-main log --oneline -1
+git -C <repo> worktree add <eval-dir>/crl-main main
+git -C <eval-dir>/crl-main log --oneline -1
 ```
 
 Expected: 显示 `main` 的最新提交（`3630a8c`）。
@@ -5083,8 +5083,8 @@ Expected: 显示 `main` 的最新提交（`3630a8c`）。
 - [ ] **Step 1: 准备项目**
 
 ```bash
-cd /home/juli/guoziran/nsfc-proposal-eval && python3 prepare_project.py --run-dir e2e
-touch /home/juli/guoziran/nsfc-proposal-eval/e2e/.start-marker
+cd <eval-dir> && python3 prepare_project.py --run-dir e2e
+touch <eval-dir>/e2e/.start-marker
 ```
 
 - [ ] **Step 2: 派一个子代理执行 nsfc-proposal**
@@ -5092,25 +5092,25 @@ touch /home/juli/guoziran/nsfc-proposal-eval/e2e/.start-marker
 用 Agent 工具（general-purpose），提示词：
 
 ```text
-你在执行一次验收运行。工作目录：/home/juli/guoziran/nsfc-proposal-eval/e2e（所有 .bensz-api 任务目录建在这里）。
-project_root：/home/juli/guoziran/nsfc-proposal-eval/e2e/projects/proj
-skills 根目录：/home/juli/guoziran/ChineseResearchLaTeX/skills
+你在执行一次验收运行。工作目录：<eval-dir>/e2e（所有 .bensz-api 任务目录建在这里）。
+project_root：<eval-dir>/e2e/projects/proj
+skills 根目录：<repo>/skills
 读取并严格按 skills 根目录下 nsfc-proposal/SKILL.md 执行，SKILL.md 中的 S 指 nsfc-proposal 目录，SK 指 skills 根目录。
 用户请求如下（原文）：
 <粘贴 E/input_full.md 全文>
-要求：可以联网；可以使用 wispaper MCP 检索工具；不得修改 /home/juli/guoziran/ChineseResearchLaTeX 下的任何文件；运行任何 python3 命令前先设置 PYTHONPYCACHEPREFIX=/home/juli/guoziran/nsfc-proposal-eval/e2e/.pycache，不要 cd 进 skill 目录。
+要求：可以联网；可以使用 wispaper MCP 检索工具；不得修改 <repo> 下的任何文件；运行任何 python3 命令前先设置 PYTHONPYCACHEPREFIX=<eval-dir>/e2e/.pycache，不要 cd 进 skill 目录。
 完成后报告：任务目录路径；写入的文件；确认点的处理方式；bib_resolve 的 counts；consistency_check 的最终输出；遇到的问题与偏离 SKILL.md 之处。
 ```
 
 - [ ] **Step 3: 运行客观检查，写入 `E/e2e/checks.md`**
 
 ```bash
-R=/home/juli/guoziran/ChineseResearchLaTeX
-P=/home/juli/guoziran/nsfc-proposal-eval/e2e/projects/proj
-python3 $R/skills/nsfc-proposal/scripts/consistency_check.py --project-root $P --json > /home/juli/guoziran/nsfc-proposal-eval/e2e/consistency.json; echo "exit=$?"
+R=<repo>
+P=<eval-dir>/e2e/projects/proj
+python3 $R/skills/nsfc-proposal/scripts/consistency_check.py --project-root $P --json > <eval-dir>/e2e/consistency.json; echo "exit=$?"
 python3 $R/skills/nsfc-proposal/scripts/case.py validate --project-root $P
-python3 $R/skills/nsfc-length-aligner/scripts/check_length.py --input $P --config $R/skills/nsfc-length-aligner/config.yaml --out-dir /home/juli/guoziran/nsfc-proposal-eval/e2e/length
-python3 $R/skills/nsfc-ref-alignment/scripts/run_ref_alignment.py --project-root $P --main-tex main.tex --report-dir /home/juli/guoziran/nsfc-proposal-eval/e2e/ref-alignment --prepare
+python3 $R/skills/nsfc-length-aligner/scripts/check_length.py --input $P --config $R/skills/nsfc-length-aligner/config.yaml --out-dir <eval-dir>/e2e/length
+python3 $R/skills/nsfc-ref-alignment/scripts/run_ref_alignment.py --project-root $P --main-tex main.tex --report-dir <eval-dir>/e2e/ref-alignment --prepare
 (cd $P && python3 scripts/nsfc_build.py build --project-dir .) && python3 -c "import subprocess;print(subprocess.run(['pdfinfo','$P/main.pdf'],capture_output=True,text=True).stdout)"
 git -C $R status --short
 ```
@@ -5125,7 +5125,7 @@ git -C $R status --short
 | 内部编号 | 无确属内部编号的残留 |
 | 占位 | 全部可见，且都列在 `proposal/assumptions.md` |
 | 引用 key | 无 `missing_bibkey`；nsfc-ref-alignment 无缺失 key |
-| 仓库未被改动 | `git status --short` 与运行前相同；`find $R/skills -name __pycache__ -newer /home/juli/guoziran/nsfc-proposal-eval/e2e/.start-marker` 无输出 |
+| 仓库未被改动 | `git status --short` 与运行前相同；`find $R/skills -name __pycache__ -newer <eval-dir>/e2e/.start-marker` 无输出 |
 | mark-written 覆盖 | `section_plan.yaml` 中每个已写入内容的文件，`written_with_case_version` 都不为空；为空说明子代理没有按 SKILL.md 第 6 步执行，记为不通过 |
 
 - [ ] **Step 4: 引用抽查，写入 `E/e2e/citation_spotcheck.md`**
@@ -5147,7 +5147,7 @@ git -C $R status --short
 - [ ] **Step 1: 交互模式停在确认点**
 
 ```bash
-cd /home/juli/guoziran/nsfc-proposal-eval && python3 prepare_project.py --run-dir interactive
+cd <eval-dir> && python3 prepare_project.py --run-dir interactive
 ```
 
 派子代理，提示词与 Task 16 Step 2 相同，但：工作目录与 project_root 换成 `interactive`；用户请求中「希望的协作方式」一行改为「协作写作，科学问题定下来之前先给我看」；禁止联网检索（「本次不检索文献，按离线处理」），以节省时间。
@@ -5163,8 +5163,8 @@ cd /home/juli/guoziran/nsfc-proposal-eval && python3 prepare_project.py --run-di
 - [ ] **Step 3: 写完后修改科学论证，检测失效章节**
 
 ```bash
-cd /home/juli/guoziran/nsfc-proposal-eval && cp -r e2e e2e-stale
-R=/home/juli/guoziran/ChineseResearchLaTeX; P=/home/juli/guoziran/nsfc-proposal-eval/e2e-stale/projects/proj
+cd <eval-dir> && cp -r e2e e2e-stale
+R=<repo>; P=<eval-dir>/e2e-stale/projects/proj
 python3 - "$P" <<'PY'
 import sys, yaml, pathlib
 root = pathlib.Path(sys.argv[1])
@@ -5189,13 +5189,13 @@ Expected: 前置检查通过并打印已写章节数；`grep -c` 的计数等于
 用 e2e 任务目录中的关键词检索式，不传 `--host-results` 重跑检索：
 
 ```bash
-R=/home/juli/guoziran/ChineseResearchLaTeX
-T=$(ls -d /home/juli/guoziran/nsfc-proposal-eval/e2e/.bensz-api/task-* | head -1)
+R=<repo>
+T=$(ls -d <eval-dir>/e2e/.bensz-api/task-* | head -1)
 python3 $R/skills/research-literature-search/scripts/search_runner.py run --topic "GGN invasiveness" \
-  --query-file $T/nsfc-proposal/input/keyword_queries.json --output-dir /home/juli/guoziran/nsfc-proposal-eval/fallback-bundle --max-results-per-query 20
+  --query-file $T/nsfc-proposal/input/keyword_queries.json --output-dir <eval-dir>/fallback-bundle --max-results-per-query 20
 python3 - <<'PY'
 import json
-m = json.load(open("/home/juli/guoziran/nsfc-proposal-eval/fallback-bundle/manifest.json", encoding="utf-8"))
+m = json.load(open("<eval-dir>/fallback-bundle/manifest.json", encoding="utf-8"))
 print({a["provider"]: a["status"] for a in m["attempts"][:3]})
 print(m["status"], m["counts"]["deduped"])
 PY
@@ -5238,15 +5238,15 @@ Expected: `mcp` 为 `skipped`，`openalex` 为 `success`；`status` 为 `success
 - [ ] **Step 1: 准备四个运行目录**
 
 ```bash
-cd /home/juli/guoziran/nsfc-proposal-eval
+cd <eval-dir>
 for r in new-1 new-2 ctl-1 ctl-2; do python3 prepare_project.py --run-dir $r; done
 ```
 
 - [ ] **Step 2: 并行派四个子代理（同一条消息发出）**
 
-共同要求（写进每个提示词）：不联网；不使用任何 MCP 检索工具；不检索文献；全自动，不停下提问；用户请求为 `E/input_full.md` 全文；不得修改 `/home/juli/guoziran/ChineseResearchLaTeX` 和 `E/crl-main` 下的文件。
+共同要求（写进每个提示词）：不联网；不使用任何 MCP 检索工具；不检索文献；全自动，不停下提问；用户请求为 `E/input_full.md` 全文；不得修改 `<repo>` 和 `E/crl-main` 下的文件。
 
-- `new-1`、`new-2`：工作目录与 project_root 为各自目录；按 `/home/juli/guoziran/ChineseResearchLaTeX/skills/nsfc-proposal/SKILL.md` 执行，并在提示词中原样写明：「本次运行把 config.yaml 的 literature.use_wispaper 视为 false，按 SKILL.md 第 3 步『完全离线』的路径执行，跳过 3–6。」
+- `new-1`、`new-2`：工作目录与 project_root 为各自目录；按 `<repo>/skills/nsfc-proposal/SKILL.md` 执行，并在提示词中原样写明：「本次运行把 config.yaml 的 literature.use_wispaper 视为 false，按 SKILL.md 第 3 步『完全离线』的路径执行，跳过 3–6。」
 - `ctl-1`、`ctl-2`：工作目录与 project_root 为各自目录；依次按 `E/crl-main/skills/` 下的 `nsfc-justification-writer`、`nsfc-research-content-writer`、`nsfc-research-foundation-writer`、`nsfc-abstract` 的 `SKILL.md` 执行，每个 skill 都以 `input_full.md` 为输入，按各自 SKILL.md 正常工作（可读取项目中已写成的章节）；不使用 nsfc-proposal。
 
 每个子代理完成后报告写入的文件与偏离之处。
@@ -5267,7 +5267,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-COMPARE = Path("/home/juli/guoziran/nsfc-compare-20261009/normalize_and_check.py")
+COMPARE = Path("<compare-dir>/normalize_and_check.py")
 SPEC = importlib.util.spec_from_file_location("normalize_and_check", COMPARE)
 NC = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
@@ -5309,7 +5309,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: 统一格式并随机标 A/B**
 
 ```bash
-cd /home/juli/guoziran/nsfc-proposal-eval && mkdir -p blind
+cd <eval-dir> && mkdir -p blind
 for r in new-1 new-2 ctl-1 ctl-2; do python3 normalize_full.py $r/projects/proj blind/$r.md; done
 python3 - <<'PY'
 import json, random, shutil
@@ -5370,7 +5370,7 @@ PY
 - [ ] **Step 1: 全量测试与工作区检查**
 
 ```bash
-cd /home/juli/guoziran/ChineseResearchLaTeX
+cd <repo>
 PYTHONPYCACHEPREFIX=.bensz-api/pycache python3 -m pytest -q -p no:cacheprovider --continue-on-collection-errors tests/
 git status --short
 find skills tests -name "__pycache__" -o -name ".pytest_cache" | head

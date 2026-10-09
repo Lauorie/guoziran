@@ -31,6 +31,7 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 提案可新增模板使用的标题命令（`guardrails.allowed_new_heading_commands`，默认 `subsubsection`）；删改已有标题仍被拒绝。
 - `list-runs` 不再把任务工作区的 `input/output/log/cache` 当作运行记录。
 - 新增顶层参数 `--task-root`；`diff`、`rollback`、`list-runs` 未指定时跨任务目录按 run_id 查找，修复跨分钟找不到前一步的问题。
+- README 删去版本号，版本以 `config.yaml` 为准。
 
 ### Added（新增）
 - 与 nsfc-proposal 协作：读取 `proposal/` 下的信息表、篇幅与章节边界；Tier2 追加措辞强度与章节边界两项检查。

@@ -9,11 +9,32 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
+import yaml
+
 from candidate_schema import SCHEMA_VERSION
 from rls_contract import CONTRACT_VERSION
 
 
-SEARCH_SKILL_VERSION = "1.0.4"
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.yaml"
+
+
+def read_skill_version(config_path: Path = CONFIG_PATH) -> str:
+    """Return ``skill_info.version`` from the skill's config.yaml, the single source of the version.
+
+    Raises RuntimeError when the file cannot be read or has no version; there is no hard-coded fallback.
+    """
+    try:
+        config = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError) as exc:
+        raise RuntimeError(f"cannot read skill version from {config_path}: {exc}") from exc
+    info = config.get("skill_info") if isinstance(config, dict) else None
+    version = info.get("version") if isinstance(info, dict) else None
+    if version is None or isinstance(version, bool) or not str(version).strip():
+        raise RuntimeError(f"{config_path} has no skill_info.version")
+    return str(version).strip()
+
+
+SEARCH_SKILL_VERSION = read_skill_version()
 ARTIFACT_NAMES = (
     "candidates_raw",
     "candidates_normalized",
