@@ -118,7 +118,7 @@ python3 S/scripts/case.py render --project-root P
 
 **5. 确认点**
 
-按 `references/confirm_prompt.md` 展示 `P/proposal/scientific_case.md` 的要点，然后停下，等申请人回答：
+按 `references/confirm_prompt.md` 展示 `P/proposal/scientific_case.md` 的要点；「我替你拟定」清单还要逐条列出 `P/proposal/assumptions.md`「## AI 拟定项」下的每一行（样本量、终点、分组口径等设计参数），一屏放不下时单独占第二屏。然后停下，等申请人回答：
 
 | 回答 | 动作 |
 |---|---|
