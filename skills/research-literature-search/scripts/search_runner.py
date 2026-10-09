@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 try:
-    from candidate_schema import normalize_doi, normalize_record
+    from candidate_schema import abstract_from_inverted_index, normalize_doi, normalize_record
     from dedupe_papers import dedupe_records
     from manifest import ARTIFACT_NAMES, SEARCH_SKILL_VERSION, build_manifest, write_json
     from normalize_papers import write_jsonl
@@ -32,7 +32,7 @@ try:
     from providers.host_results import load_host_results
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from candidate_schema import normalize_doi, normalize_record
+    from candidate_schema import abstract_from_inverted_index, normalize_doi, normalize_record
     from dedupe_papers import dedupe_records
     from manifest import ARTIFACT_NAMES, SEARCH_SKILL_VERSION, build_manifest, write_json
     from normalize_papers import write_jsonl
@@ -397,6 +397,19 @@ def _same_paper(hit: Mapping[str, Any], *, title: str, doi: str | None) -> bool:
     return difflib.SequenceMatcher(None, own_title, hit_title).ratio() >= ABSTRACT_TITLE_SIMILARITY
 
 
+_JATS_BLOCK_TAG = re.compile(r"</?(?:jats:)?(?:p|title|sec|abstract|br|list-item)\b[^>]*>", re.IGNORECASE)
+_ANY_TAG = re.compile(r"<[^>]+>")
+
+
+def _hit_abstract(item: Mapping[str, Any]) -> str:
+    """Return a provider hit's abstract: plain text, JATS-stripped, or rebuilt from an inverted index."""
+    text = item.get("abstract")
+    if not isinstance(text, str) or not text.strip():
+        text = abstract_from_inverted_index(item.get("abstract_inverted_index"))
+    text = _ANY_TAG.sub("", _JATS_BLOCK_TAG.sub(" ", text))
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 200, min_chars: int = 80, timeout: float = 3, fetchers: Mapping[str, ProviderFn] | None = None) -> dict[str, Any]:
     rows = _read_jsonl(input_path)
     output = [dict(row) for row in rows]
@@ -421,12 +434,13 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
                 provenance["attempts"].append({"source": source, "status": "success", "count": len(hits)})
                 found = None
                 for item in hits:
-                    if not isinstance(item, dict) or not isinstance(item.get("abstract"), str) or len(item["abstract"].strip()) < min_chars:
+                    candidate = _hit_abstract(item) if isinstance(item, dict) else ""
+                    if len(candidate) < min_chars:
                         continue
                     if not _same_paper(item, title=title, doi=doi):
                         provenance["rejected_mismatch"] += 1
                         continue
-                    found = item["abstract"]
+                    found = candidate
                     break
                 if found:
                     row["abstract"] = found.strip()

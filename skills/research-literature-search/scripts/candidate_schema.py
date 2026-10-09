@@ -49,6 +49,17 @@ def _text(value: Any) -> str | None:
     return text or None
 
 
+def abstract_from_inverted_index(index: Any) -> str:
+    """Rebuild an abstract from an OpenAlex word -> positions index; return "" if unusable."""
+    if not isinstance(index, dict):
+        return ""
+    terms: list[tuple[int, str]] = []
+    for token, positions in index.items():
+        if isinstance(positions, list):
+            terms.extend((pos, str(token)) for pos in positions if isinstance(pos, int) and not isinstance(pos, bool))
+    return " ".join(token for _, token in sorted(terms))
+
+
 def _bool_or_none(value: Any) -> bool | None:
     if value is None:
         return None
@@ -160,13 +171,8 @@ def normalize_record(
     year = normalize_year(year_value)
     authors = _authors(raw.get("authors") or raw.get("authorships") or raw.get("author"))
     abstract = _text(raw.get("abstract"))
-    if not abstract and isinstance(raw.get("abstract_inverted_index"), dict):
-        terms: list[tuple[int, str]] = []
-        for token, positions in raw["abstract_inverted_index"].items():
-            if isinstance(positions, list):
-                terms.extend((int(pos), str(token)) for pos in positions if isinstance(pos, int))
-        if terms:
-            abstract = " ".join(token for _, token in sorted(terms))
+    if not abstract:
+        abstract = abstract_from_inverted_index(raw.get("abstract_inverted_index")) or None
     abstract_status = str(raw.get("abstract_status") or ("present" if abstract else "missing"))
     if abstract_status not in {"present", "missing", "attempted", "not_requested"}:
         abstract_status = "present" if abstract else "missing"

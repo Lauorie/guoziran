@@ -11,6 +11,7 @@
 
 ### Fixed（修复）
 - `enrich-abstracts` 只采用与原记录 DOI 一致或标题相似度 ≥ 0.9 的命中摘要，避免填入他篇论文的摘要。
+- `enrich-abstracts` 读取 OpenAlex 的 `abstract_inverted_index` 并拼回摘要（与 `candidate_schema` 共用 `abstract_from_inverted_index`）；采用 CrossRef 摘要前去掉 JATS 标签。
 - 本分支未写 BAC 记录，经负责人同意。
 
 ## [1.0.4] - 2026-09-15
