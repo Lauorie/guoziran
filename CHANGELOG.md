@@ -8,6 +8,7 @@
 
 ## [Unreleased]
 
+- 新增 `nsfc-proposal` 设计文档 `docs/superpowers/specs/2026-10-09-nsfc-proposal-design.md`：以 nsfc-* 为主线并入 nsfc-writer 的科学论证、证据图谱和章节分工，接入 wispaper 检索，修复 `nsfc-justification-writer` 3 处 bug；本轮只写设计，不修改 Skill 源码。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。
 - 修订 Skill 基础设施边界：移除重复 BSK 的 `contract.py` 与自建 completion attestation，通用 evidence/Gate/transition/重放统一交给本地 BSK；research-idea 仅保留边 applicability 与 reviewer receipt 领域适配。
 
