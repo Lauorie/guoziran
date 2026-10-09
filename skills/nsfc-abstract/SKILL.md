@@ -23,6 +23,10 @@ metadata:
 
 按用户请求和配置文件提供必要输入；缺失信息应明确列出并停止依赖该输入的步骤。
 
+由 nsfc-proposal 调用、且 `{project_root}/proposal/` 存在时：信息取自 `proposal/scientific_case.yaml` 和已写成的各章，不再向用户提问；科学问题、假设与术语的表述以科学论证为准；正文不出现内部编号。
+
+没有 `proposal/` 时，行为与此前相同。
+
 ### 执行步骤
 
 - 当用户环境中出现因本 skill 设计缺陷导致的 bug 时，优先使用 `bensz-collect-bugs` 按规范记录到 `~/.bensz-skills/bugs/`，严禁直接修改用户本地 Claude Code / Codex 中已安装的 skill 源码。

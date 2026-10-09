@@ -56,3 +56,10 @@
 ```
 
 若正文不存在、范围不明确或材料不足，状态写为 `needs_input` 并列出缺口，同时基于可用上下文生成最小保守版本；不要臆造审查结论，也不要暂停等待输入。审查完成后直接生成正文 diff 并按自动模式写入，默认保留备份。
+
+## 与 nsfc-proposal 协作时的追加检查
+
+`{project_root}/proposal/` 存在时，Tier2 再加两项，结论归入「事实问题」：
+
+1. **措辞强度**：涉及文献或事实的论断，逐句找到 `proposal/evidence_map.yaml` 中对应的论断，措辞不得超过其 `support` 允许的强度：`multi_verified` 可写「多项研究表明」；`single_verified` 只写「有研究报道」；`unsupported` 不写成事实；`applicant_material` 按材料原样写。
+2. **章节边界**：正文不得出现 `proposal/section_plan.yaml` 中本章 `must_exclude` 列出的内容。越界段落移出本章，并在报告中写明应放到哪一章。

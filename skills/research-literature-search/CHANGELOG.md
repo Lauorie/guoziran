@@ -4,6 +4,12 @@
 
 - 修复 legacy stem 空白归一化、字符串文献类型过滤、query_matches 输入变异、重复 provider 请求及零总量上限；补充回归测试。
 
+## [1.1.0] - 2026-10-09
+
+### Added（新增）
+- `run` 新增 `--host-results`，接收宿主经 MCP 取得的 wispaper 结果（`rls.host_results.v1`），填入 `mcp` 检索源位置；从出版社链接提取 DOI；摘要片段不当作摘要。不传该参数时行为不变。
+- 本分支未写 BAC 记录，经负责人同意。
+
 ## [1.0.4] - 2026-09-15
 
 - 明确恢复拆分前 review 的 priority-fallback-topup 检索语义，并在 manifest/Search Log 固化策略与补召阈值，避免将 fallback 误读为全 provider union 召回。

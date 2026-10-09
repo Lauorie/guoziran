@@ -176,6 +176,8 @@ python skills/nsfc-justification-writer/scripts/run.py rollback \
   --project-root <项目目录> --run-id <run_id> --yes
 ```
 
+多条命令属于同一任务时，加顶层参数 `--task-root .bensz-api/task-<时间>-<描述>/`，备份与日志写入同一目录。不加时，`diff`、`rollback` 和 `list-runs` 会在 `.bensz-api/task-*/nsfc-justification-writer/` 下按 run_id 查找。
+
 ## 常见问题
 
 **如何只做检查而不写文件？**

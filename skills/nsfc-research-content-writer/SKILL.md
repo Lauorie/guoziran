@@ -32,6 +32,15 @@ metadata:
 
 按用户请求和配置文件提供必要输入；缺失信息应明确列出并停止依赖该输入的步骤。
 
+由 nsfc-proposal 调用、且 `{project_root}/proposal/` 存在时：
+
+- 信息表由 nsfc-proposal 生成并给出文件路径。子目标直接取自其中的研究任务：指标对应「指标」，对照对应「对照/基线」与「需控制的混杂」，验证对应「验证」。
+- 「特色与创新」取自信息表的「创新对照坐标系」，即主流路线与本项目切入点。
+- 篇幅和不写的内容以 `proposal/section_plan.yaml` 为准；措辞强度不超过 `proposal/evidence_map.yaml`。
+- 缺失的信息写成可见占位 `【待补充：……】`。
+
+没有 `proposal/` 时，行为与此前相同。
+
 ### 执行步骤
 
 - 当用户环境中出现因本 skill 设计缺陷导致的 bug 时，优先使用 `bensz-collect-bugs` 按规范记录到 `~/.bensz-skills/bugs/`，严禁直接修改用户本地 Claude Code / Codex 中已安装的 skill 源码。

@@ -17,7 +17,8 @@ metadata:
 
 - 必需：`topic` 与显式查询 JSON（`--query-file`/`--queries`）；支持 `{"queries": [...]}`、对象数组或字符串数组。
 - 空查询剔除；有效查询默认 5–25 条，不满足即 fail-closed。
-- 可选：`domain`、年份/文献类型/预印本过滤、provider 顺序、每查询/总量上限、`scope_root`。
+- 可选：`domain`、年份/文献类型/预印本过滤、provider 顺序、每查询/总量上限、`scope_root`、`--host-results`。
+- `--host-results`：宿主经 MCP（当前支持 wispaper）取得的结果，格式为 `rls.host_results.v1`：`{"schema": "rls.host_results.v1", "provider": "wispaper", "queries": [{"query": "<与查询文件中原文一致>", "tool": "quick_search", "papers": [<wispaper 原始返回的论文对象>]}]}`。它填入 `mcp` 检索源位置；结果不足时按补充规则继续用 OpenAlex 等。摘要片段（以「…」开头或结尾）不当作摘要，原文存入 `provenance.host_abstract_snippet`；DOI 为空时从出版社链接中提取。
 - 输出必须位于调用方 `scope_root` 内；拒绝路径穿越和 manifest 外部绝对路径。
 
 ### 执行步骤
@@ -28,7 +29,7 @@ python3 skills/research-literature-search/scripts/search_runner.py enrich-abstra
 python3 skills/research-literature-search/scripts/search_runner.py validate --bundle ./.bensz-api/search-bundle
 ```
 
-`run` 默认不补全全量摘要；选文后按需执行 `enrich-abstracts`。provider 按 `provider_priority` 执行 priority-fallback-topup，达到约 70% 阈值即停止，不承诺全 provider union；`mcp`/`duckduckgo` 在纯 Python runner 中记为 `skipped/host tool required`。每次尝试写入 `attempts`、Search Log、`retrieval_strategy` 和 `topup_threshold`。
+`run` 默认不补全全量摘要；选文后按需执行 `enrich-abstracts`。provider 按 `provider_priority` 执行 priority-fallback-topup，达到约 70% 阈值即停止，不承诺全 provider union；未传 `--host-results` 时，`mcp`/`duckduckgo` 在纯 Python runner 中记为 `skipped/host tool required`；传入后，有结果的查询把 `mcp` 记为 `success` 并标注 `host_tool`。每次尝试写入 `attempts`、Search Log、`retrieval_strategy` 和 `topup_threshold`。
 
 ### 输出
 

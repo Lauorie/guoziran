@@ -12,6 +12,16 @@ metadata:
 
 按用户请求和配置文件提供必要输入；缺失信息应明确列出并停止依赖该输入的步骤。
 
+由 nsfc-proposal 调用、且 `{project_root}/proposal/` 存在时：
+
+- 信息表由 nsfc-proposal 生成，经 `coach --info-form <文件>` 传入，不再自行提取。
+- 篇幅取 `proposal/section_plan.yaml` 中本章的 `length`，不用 `config.yaml` 的 `word_count.target`。
+- Tier2 自审按 `references/tier2_semantic_review.md` 中「与 nsfc-proposal 协作时的追加检查」执行。
+- 每条 CLI 命令都加 `--task-root <任务目录>`，同一任务的 `preview`、`diff`、`rollback` 写入同一目录。
+- 缺失的信息写成可见占位 `【待补充：……】`，不写成 LaTeX 注释。
+
+没有 `proposal/` 时，行为与此前相同。
+
 ### 执行步骤
 
 - 本 skill 设计缺陷导致 bug 时，按 `bensz-collect-bugs` 记录到 `~/.bensz-skills/bugs/`，不要改用户本地已安装 skill；可用 workaround 时先记录再继续。
