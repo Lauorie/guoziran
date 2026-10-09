@@ -14,8 +14,9 @@ import json
 import re
 import shutil
 import sys
+import time
 import unicodedata
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -25,6 +26,7 @@ from urllib.parse import quote
 import requests
 
 from citation_ledger import record_added
+from http_retry import failure_label, get_with_retry
 from latex_files import BibIndex, bib_entry_texts, normalize_doi, read_bib_index, scan_latex_tree
 from proposal_common import ProposalError, append_under_heading, load_config, proposal_paths, resolve_project_root
 
@@ -59,6 +61,9 @@ class Settings:
     doi_title_similarity: float = 0.8
     year_window: int = 1
     timeout: float = 15.0
+    http_retries: int = 3
+    http_backoff_s: float = 2.0
+    sleep: Callable[[float], None] = time.sleep
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any]) -> "Settings":
@@ -68,6 +73,8 @@ class Settings:
             doi_title_similarity=float(lit.get("doi_title_similarity", 0.8)),
             year_window=int(lit.get("year_window", 1)),
             timeout=float(lit.get("http_timeout_s", 15)),
+            http_retries=int(lit.get("http_retries", 3)),
+            http_backoff_s=float(lit.get("http_backoff_s", 2)),
         )
 
 
@@ -95,8 +102,9 @@ class Outcome:
     reason: str | None = None
 
 
-def _get_json(session: HttpSession, url: str, params: Mapping[str, Any] | None, timeout: float) -> Any | None:
-    response = session.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=timeout)
+def _get_json(session: HttpSession, url: str, params: Mapping[str, Any] | None, settings: Settings) -> Any | None:
+    response = get_with_retry(session, url, params=params, headers={"User-Agent": USER_AGENT}, timeout=settings.timeout,
+                              retries=settings.http_retries, backoff_s=settings.http_backoff_s, sleep=settings.sleep)
     if getattr(response, "status_code", 200) == 404:
         return None
     response.raise_for_status()
@@ -226,7 +234,7 @@ def _record_fields(record: Mapping[str, Any]) -> tuple[str | None, str, int | No
 def _authoritative_by_doi(doi: str, title: str, *, session: HttpSession, settings: Settings) -> WorkMeta | None:
     """用 DOI 回 CrossRef 取元数据；查询失败、无此 DOI 或标题不符时返回 None。"""
     try:
-        data = _get_json(session, f"{CROSSREF_WORKS}/{quote(doi, safe='/')}", None, settings.timeout)
+        data = _get_json(session, f"{CROSSREF_WORKS}/{quote(doi, safe='/')}", None, settings)
     except (requests.RequestException, ValueError):
         return None
     meta = crossref_meta((data or {}).get("message") or {}) if data else None
@@ -241,9 +249,9 @@ def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Setting
     failures: list[str] = []
     if doi:
         try:
-            data = _get_json(session, f"{CROSSREF_WORKS}/{quote(doi, safe='/')}", None, settings.timeout)
+            data = _get_json(session, f"{CROSSREF_WORKS}/{quote(doi, safe='/')}", None, settings)
         except (requests.RequestException, ValueError) as exc:
-            failures.append(f"CrossRef DOI 查询失败（{type(exc).__name__}）")
+            failures.append(f"CrossRef DOI 查询失败（{failure_label(exc)}）")
         else:
             meta = crossref_meta((data or {}).get("message") or {}) if data else None
             if meta is None:
@@ -263,9 +271,9 @@ def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Setting
     )
     for label, url, params, items_of, to_meta in searches:
         try:
-            data = _get_json(session, url, params, settings.timeout)
+            data = _get_json(session, url, params, settings)
         except (requests.RequestException, ValueError) as exc:
-            failures.append(f"{label} 标题检索失败（{type(exc).__name__}）")
+            failures.append(f"{label} 标题检索失败（{failure_label(exc)}）")
             continue
         for item in items_of(data):
             meta = to_meta(item) if isinstance(item, Mapping) else None
@@ -349,7 +357,8 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def run(project_root: Path, records_path: Path, task_root: Path, *, session: HttpSession | None = None, dry_run: bool = False) -> dict[str, Any]:
+def run(project_root: Path, records_path: Path, task_root: Path, *, session: HttpSession | None = None, dry_run: bool = False,
+        sleep: Callable[[float], None] | None = None) -> dict[str, Any]:
     root = resolve_project_root(project_root)
     task = Path(task_root).expanduser().resolve()
     if not task.name.startswith("task-") or task.parent.name != ".bensz-api":
@@ -359,8 +368,11 @@ def run(project_root: Path, records_path: Path, task_root: Path, *, session: Htt
     if not tree.bib_files:
         raise ProposalError("main.tex 及其 \\input 文件中没有 \\bibliography，无法确定 .bib")
     target = tree.bib_files[0]
-    outcomes, entries = resolve_records(records, session=session or requests.Session(),
-                                        settings=Settings.from_config(load_config()), index=read_bib_index(tree.bib_files))
+    settings = Settings.from_config(load_config())
+    if sleep is not None:
+        settings = replace(settings, sleep=sleep)
+    outcomes, entries = resolve_records(records, session=session or requests.Session(), settings=settings,
+                                        index=read_bib_index(tree.bib_files))
     out_dir, backup = task / "nsfc-proposal" / "output", None
     if not dry_run:
         backup = append_entries(target, entries, out_dir / "bib_backup")

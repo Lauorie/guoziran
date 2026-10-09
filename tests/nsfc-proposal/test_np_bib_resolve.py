@@ -34,13 +34,14 @@ OPENALEX_ITEM_3 = {
 
 
 class FakeResponse:
-    def __init__(self, status: int, payload: Any = None) -> None:
+    def __init__(self, status: int, payload: Any = None, headers: dict | None = None) -> None:
         self.status_code = status
+        self.headers = headers or {}
         self._payload = payload
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise requests.HTTPError(str(self.status_code))
+            raise requests.HTTPError(str(self.status_code), response=self)
 
     def json(self) -> Any:
         return self._payload
@@ -61,6 +62,20 @@ class FakeSession:
         return value if value is not None else FakeResponse(404)
 
 
+class SequenceSession(FakeSession):
+    """同一 URL 依次返回列表中的响应或抛出其中的异常；用尽后重复最后一项；未登记的 URL 返回 404。"""
+
+    def get(self, url: str, params: Any = None, headers: Any = None, timeout: Any = None) -> FakeResponse:
+        self.calls.append((url, dict(params or {}), dict(headers or {})))
+        queue = self.routes.get(url)
+        if not queue:
+            return FakeResponse(404)
+        value = queue.pop(0) if len(queue) > 1 else queue[0]
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+
 def doi_url(doi: str) -> str:
     return f"{CROSSREF_WORKS}/{doi}"
 
@@ -79,6 +94,7 @@ class ResolveTest(unittest.TestCase):
         (self.root / "proposal" / "literature_leads.md").write_text("# 文献线索\n\n## 检索式\n\n## 未核实线索\n", encoding="utf-8")
         self.task = base / ".bensz-api" / "task-20261009-1200-test"
         self.records = base / "selected.jsonl"
+        self.waits: list[float] = []
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -88,7 +104,7 @@ class ResolveTest(unittest.TestCase):
         return self.records
 
     def _run(self, session: FakeSession, *rows: dict) -> dict:
-        return run(self.root, self._records(*rows), self.task, session=session)
+        return run(self.root, self._records(*rows), self.task, session=session, sleep=self.waits.append)
 
     def test_doi_record_added_with_backup(self) -> None:
         session = FakeSession({doi_url("10.5555/nsfc.test.001"): FakeResponse(200, {"message": CROSSREF_ITEM_1})})
@@ -201,6 +217,46 @@ class ResolveTest(unittest.TestCase):
             self.assertEqual(headers.get("User-Agent"), USER_AGENT)
             self.assertNotIn("mailto", json.dumps([params, headers]))
 
+    def test_rate_limit_then_success_is_added(self) -> None:
+        url = doi_url("10.5555/nsfc.test.001")
+        session = SequenceSession({url: [FakeResponse(429), FakeResponse(200, {"message": CROSSREF_ITEM_1})]})
+        summary = self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
+        self.assertEqual(summary["counts"], {"added": 1, "exists": 0, "unresolved": 0})
+        self.assertEqual(self.waits, [2.0])
+
+    def test_persistent_503_is_unresolved_with_status_in_reason(self) -> None:
+        url = doi_url("10.5555/nsfc.test.001")
+        responses = [FakeResponse(503)] * 4
+        session = SequenceSession({url: responses, CROSSREF_WORKS: [FakeResponse(404)], OPENALEX_WORKS: [FakeResponse(404)]})
+        summary = self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
+        self.assertEqual(summary["counts"]["unresolved"], 1)
+        self.assertIn("503", summary["outcomes"][0]["reason"])
+        self.assertEqual(self.waits, [2.0, 4.0, 8.0])
+        self.assertEqual(sum(1 for c in session.calls if c[0] == url), 4)
+
+    def test_retry_after_header_sets_the_wait(self) -> None:
+        url = doi_url("10.5555/nsfc.test.001")
+        session = SequenceSession({url: [FakeResponse(429, headers={"Retry-After": "5"}), FakeResponse(200, {"message": CROSSREF_ITEM_1})]})
+        self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
+        self.assertEqual(self.waits, [5.0])
+
+    def test_retry_after_over_a_minute_falls_back_to_backoff(self) -> None:
+        url = doi_url("10.5555/nsfc.test.001")
+        session = SequenceSession({url: [FakeResponse(429, headers={"Retry-After": "600"}), FakeResponse(200, {"message": CROSSREF_ITEM_1})]})
+        self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
+        self.assertEqual(self.waits, [2.0])
+
+    def test_timeout_is_retried(self) -> None:
+        url = doi_url("10.5555/nsfc.test.001")
+        session = SequenceSession({url: [requests.Timeout("slow"), FakeResponse(200, {"message": CROSSREF_ITEM_1})]})
+        summary = self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
+        self.assertEqual(summary["counts"]["added"], 1)
+
+    def test_404_is_not_retried(self) -> None:
+        session = SequenceSession({})
+        self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
+        self.assertEqual(self.waits, [])
+
 
 class HelperTest(unittest.TestCase):
     def test_bibkey_collision_and_escape(self) -> None:
@@ -233,7 +289,6 @@ class HelperTest(unittest.TestCase):
         self.assertIn(r"\textasciitilde{}", entry)
         self.assertIn(r"\textasciicircum{}", entry)
         self.assertIn(r"\textbackslash{}", entry)
-
 
 class CliTest(unittest.TestCase):
     def test_task_root_must_be_task_dir(self) -> None:

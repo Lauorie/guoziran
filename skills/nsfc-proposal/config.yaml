@@ -22,6 +22,8 @@ literature:
   doi_title_similarity: 0.8
   year_window: 1
   http_timeout_s: 15
+  http_retries: 3       # 遇 429/500/502/503/504 或连接超时的重试次数
+  http_backoff_s: 2     # 第 n 次重试等待 backoff*2**(n-1) 秒；Retry-After 不超过 60 秒时优先
 
 consistency:
   max_fix_rounds: 2

@@ -18,11 +18,12 @@ LONG = "This study evaluates a radiomics model built on the peritumoral region o
 OTHER = "A completely different abstract about liver imaging, written long enough to pass the minimum character threshold for use."
 
 
-def _run(record: dict, fetchers: dict) -> tuple[dict, dict]:
+def _run(record: dict, fetchers: dict, **kwargs) -> tuple[dict, dict]:
     with tempfile.TemporaryDirectory() as tmp:
         src, dst = Path(tmp) / "in.jsonl", Path(tmp) / "out.jsonl"
         src.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
-        summary = enrich_abstracts(src, dst, fetchers=fetchers)
+        offline = {name: (lambda q, **k: []) for name in ("crossref", "semantic_scholar", "openalex")}
+        summary = enrich_abstracts(src, dst, fetchers={**offline, **fetchers}, **kwargs)
         row = json.loads(dst.read_text(encoding="utf-8").splitlines()[0])
     return summary, row
 
@@ -74,6 +75,32 @@ class EnrichAbstractsMatchTests(unittest.TestCase):
         _, row = _run({"title": TITLE, "doi": "10.5555/x.1"}, {"crossref": lambda q, **k: hits})
         self.assertNotIn("<", row["abstract"])
         self.assertEqual(row["abstract"], f"Abstract {LONG}")
+
+    def test_rate_limited_fetcher_is_retried(self) -> None:
+        calls: list[str] = []
+        waits: list[float] = []
+
+        def flaky(q, **k):
+            calls.append(q)
+            if len(calls) == 1:
+                raise RuntimeError("HTTP 429 Too Many Requests")
+            return [{"title": TITLE, "abstract": LONG}]
+        _, row = _run({"title": TITLE}, {"semantic_scholar": flaky}, sleep=waits.append)
+        self.assertEqual(row["abstract"], LONG)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(waits, [2.0])
+
+    def test_other_errors_are_not_retried(self) -> None:
+        calls: list[str] = []
+        waits: list[float] = []
+
+        def broken(q, **k):
+            calls.append(q)
+            raise ValueError("bad payload")
+        _, row = _run({"title": TITLE}, {"semantic_scholar": broken}, sleep=waits.append)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(waits, [])
+        self.assertEqual(row["abstract_status"], "missing")
 
 
 class InvertedIndexTests(unittest.TestCase):

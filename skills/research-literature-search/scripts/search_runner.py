@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -410,7 +411,30 @@ def _hit_abstract(item: Mapping[str, Any]) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 200, min_chars: int = 80, timeout: float = 3, fetchers: Mapping[str, ProviderFn] | None = None) -> dict[str, Any]:
+_RETRYABLE_STATUS = re.compile(r"(?<!\d)(429|5\d\d)(?!\d)")
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Whether a fetcher error looks like HTTP 429 or 5xx (status attribute, response, or message)."""
+    status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+    if isinstance(status, int):
+        return status == 429 or 500 <= status <= 599
+    return bool(_RETRYABLE_STATUS.search(str(exc)))
+
+
+def _fetch_with_retry(fetch: ProviderFn, query: str, *, timeout: float, retries: int, backoff_s: float, sleep: Callable[[float], None]) -> list[Any]:
+    for attempt in range(retries + 1):
+        try:
+            return fetch(query, max_results=5, timeout=timeout) or []
+        except Exception as exc:  # noqa: BLE001
+            if attempt >= retries or not _is_retryable(exc):
+                raise
+            sleep(backoff_s * 2**attempt)
+    return []
+
+
+def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 200, min_chars: int = 80, timeout: float = 3, fetchers: Mapping[str, ProviderFn] | None = None,
+                     retries: int = 2, backoff_s: float = 2.0, sleep: Callable[[float], None] = time.sleep) -> dict[str, Any]:
     rows = _read_jsonl(input_path)
     output = [dict(row) for row in rows]
     attempted = filled = 0
@@ -430,7 +454,7 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
             if not query or source not in registry:
                 continue
             try:
-                hits = registry[source](query, max_results=5, timeout=timeout) or []
+                hits = _fetch_with_retry(registry[source], query, timeout=timeout, retries=retries, backoff_s=backoff_s, sleep=sleep)
                 provenance["attempts"].append({"source": source, "status": "success", "count": len(hits)})
                 found = None
                 for item in hits:
@@ -493,6 +517,8 @@ def main() -> int:
     enrich.add_argument("--output", required=True, type=Path)
     enrich.add_argument("--max-papers", type=int, default=200)
     enrich.add_argument("--min-abstract-chars", type=int, default=80)
+    enrich.add_argument("--retries", type=int, default=2, help="遇 429/5xx 时的重试次数")
+    enrich.add_argument("--backoff-s", type=float, default=2.0, help="首次重试前等待秒数，之后每次加倍")
     validate = sub.add_parser("validate")
     validate.add_argument("--bundle", required=True, type=Path)
     args = parser.parse_args()
@@ -516,7 +542,7 @@ def main() -> int:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
         return 0 if manifest.get("status") in {"success", "partial_success"} else 1
     if args.command == "enrich-abstracts":
-        print(json.dumps(enrich_abstracts(args.input, args.output, max_papers=args.max_papers, min_chars=args.min_abstract_chars, timeout=3), ensure_ascii=False, indent=2))
+        print(json.dumps(enrich_abstracts(args.input, args.output, max_papers=args.max_papers, min_chars=args.min_abstract_chars, timeout=3, retries=args.retries, backoff_s=args.backoff_s), ensure_ascii=False, indent=2))
         return 0
     errors = validate_bundle(args.bundle)
     if errors:
