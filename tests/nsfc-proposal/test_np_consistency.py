@@ -78,8 +78,13 @@ class ConsistencyTest(unittest.TestCase):
         self.assertEqual(len(report.placeholders), 2)
 
     def test_escaped_percent_is_not_flagged(self) -> None:
-        report = check_project(build(self.base, body_11="占比 50\\% 的病例 多模态。\n"))
+        report = check_project(build(self.base, body_11="占比 50\\% 待补数据 多模态。\n"))
         self.assertFalse([f for f in report.errors if f.kind == "hidden_placeholder"])
+
+    def test_real_comment_after_escaped_percent_is_flagged(self) -> None:
+        report = check_project(build(self.base, body_11="占比 50\\% 多模态 % 待补文献\n"))
+        hidden = [f for f in report.errors if f.kind == "hidden_placeholder"]
+        self.assertEqual([f.line for f in hidden], [1])
 
     def test_unused_term(self) -> None:
         report = check_project(build(self.base, terms=[{"term": "影像基因组", "definition": "X", "source": "user"}]))
