@@ -90,6 +90,37 @@ class EnrichAbstractsMatchTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertEqual(waits, [2.0])
 
+    def test_doi_or_count_ending_in_5xx_is_not_a_rate_limit(self) -> None:
+        for message in ("no match for 10.5555/abc.503", "returned 500 items", "bad payload"):
+            calls: list[str] = []
+
+            def broken(q, _m=message, **k):
+                calls.append(q)
+                raise ValueError(_m)
+            waits: list[float] = []
+            _run({"title": TITLE}, {"semantic_scholar": broken}, sleep=waits.append)
+            self.assertEqual((len(calls), waits), (1, []), message)
+
+    def test_explicit_status_forms_are_retried(self) -> None:
+        for message in ("HTTP 503 Service Unavailable", "status code 502", "Status: 429"):
+            waits: list[float] = []
+            state = {"n": 0}
+
+            def flaky(q, _m=message, **k):
+                state["n"] += 1
+                if state["n"] == 1:
+                    raise RuntimeError(_m)
+                return []
+            _run({"title": TITLE}, {"semantic_scholar": flaky}, sleep=waits.append)
+            self.assertEqual(waits, [2.0], message)
+
+    def test_comparison_signs_in_plain_abstracts_survive(self) -> None:
+        text = "Sensitivity <90% and specificity >80% were seen in the retrospective renal mass cohort of this study."
+        for fetchers in ({"openalex": lambda q, **k: [{"title": TITLE, "abstract": text}]},
+                         {"crossref": lambda q, **k: [{"title": TITLE, "doi": "10.5555/x.1", "abstract": text}]}):
+            _, row = _run({"title": TITLE, "doi": "10.5555/x.1"}, fetchers)
+            self.assertEqual(row.get("abstract"), text)
+
     def test_other_errors_are_not_retried(self) -> None:
         calls: list[str] = []
         waits: list[float] = []

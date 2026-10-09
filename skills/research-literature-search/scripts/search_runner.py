@@ -399,19 +399,20 @@ def _same_paper(hit: Mapping[str, Any], *, title: str, doi: str | None) -> bool:
 
 
 _JATS_BLOCK_TAG = re.compile(r"</?(?:jats:)?(?:p|title|sec|abstract|br|list-item)\b[^>]*>", re.IGNORECASE)
-_ANY_TAG = re.compile(r"<[^>]+>")
+_ANY_TAG = re.compile(r"</?[A-Za-z][^<>]*>")
 
 
-def _hit_abstract(item: Mapping[str, Any]) -> str:
-    """Return a provider hit's abstract: plain text, JATS-stripped, or rebuilt from an inverted index."""
+def _hit_abstract(item: Mapping[str, Any], source: str = "") -> str:
+    """Return a provider hit's abstract: plain text, or rebuilt from an inverted index; only CrossRef (JATS) hits lose markup tags."""
     text = item.get("abstract")
     if not isinstance(text, str) or not text.strip():
         text = abstract_from_inverted_index(item.get("abstract_inverted_index"))
-    text = _ANY_TAG.sub("", _JATS_BLOCK_TAG.sub(" ", text))
+    if source == "crossref":
+        text = _ANY_TAG.sub("", _JATS_BLOCK_TAG.sub(" ", text))
     return re.sub(r"\s+", " ", text).strip()
 
 
-_RETRYABLE_STATUS = re.compile(r"(?<!\d)(429|5\d\d)(?!\d)")
+_RETRYABLE_STATUS = re.compile(r"(?i)\b(?:http|status(?: code)?)[\s:=/]*(?:\d\.\d\s+)?(429|5\d\d)\b")
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -458,7 +459,7 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
                 provenance["attempts"].append({"source": source, "status": "success", "count": len(hits)})
                 found = None
                 for item in hits:
-                    candidate = _hit_abstract(item) if isinstance(item, dict) else ""
+                    candidate = _hit_abstract(item, source) if isinstance(item, dict) else ""
                     if len(candidate) < min_chars:
                         continue
                     if not _same_paper(item, title=title, doi=doi):

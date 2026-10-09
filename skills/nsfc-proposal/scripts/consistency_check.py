@@ -85,7 +85,7 @@ _SPACE_THOUSANDS_RE = re.compile(r"(?<![\d,.])(\d{1,3})[ \u2009\u202f\u00a0](?=\
 _TRAILING_ZEROS_RE = re.compile(r"(?<![\d.])(\d+)\.(\d+)(?!\d|\.\d)")
 _NUMBER_WORDS = {w: str(i) for i, w in enumerate(
     "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty".split())}
-_NUMBER_WORD_RE = re.compile(r"(?<![\w-])(" + "|".join(_NUMBER_WORDS) + r")(?![\w-])", re.IGNORECASE)
+_NUMBER_WORD_RE = re.compile(r"(?<![\w-])(" + "|".join(w for w in _NUMBER_WORDS if w not in ("zero", "one")) + r")(?!\w|-(?:one|two|three|four|five|six|seven|eight|nine)\b)", re.IGNORECASE)
 _LATEX_LENGTH_RE = re.compile(r"\s?(?:em|pt|ex)(?![A-Za-z])")
 
 
@@ -115,25 +115,26 @@ def sentence_numbers(sentence: str) -> list[str]:
     return list(dict.fromkeys(found))
 
 
-def _evidence_text(text: str) -> str:
+def _evidence_readings(text: str) -> list[str]:
+    """摘要的两种读法：原样，以及把空格类千分位并回；数字声称见于任一读法即算有据。"""
     text = re.sub(r"\\%", "%", text).replace("％", "%")
     text = re.sub(r"\s+%", "%", text)
-    text = _SPACE_THOUSANDS_RE.sub(r"\1", _THOUSANDS_RE.sub("", text))
-    return _NUMBER_WORD_RE.sub(lambda m: _NUMBER_WORDS[m.group(1).lower()], text)
+    text = _NUMBER_WORD_RE.sub(lambda m: _NUMBER_WORDS[m.group(1).lower()], _THOUSANDS_RE.sub("", text))
+    return [text, _SPACE_THOUSANDS_RE.sub(r"\1", text)]
 
 
 def _strip_trailing_zeros(text: str) -> str:
-    """0.620 -> 0.62，1.0 -> 1；版本号式的 1.0.2 不动。"""
+    """0.620 -> 0.62，2.50 -> 2.5，2.00 -> 2.0（至少留一位小数，不与整数混同）；版本号式的 1.0.2 不动。"""
     def fix(match: re.Match[str]) -> str:
-        decimals = match.group(2).rstrip("0")
-        return f"{match.group(1)}.{decimals}" if decimals else match.group(1)
+        return f"{match.group(1)}.{match.group(2).rstrip('0') or '0'}"
     return _TRAILING_ZEROS_RE.sub(fix, text)
 
 
 def number_in_text(number: str, text: str) -> bool:
-    """number 是否作为独立数字出现在 text（已规范化）中；不接受 0.91 匹配 0.913 或 10.91；0.62 与 0.620 视为同一数；英文数词 zero 至 twenty 按数字比对。"""
+    """number 是否作为独立数字出现在 text（已规范化）中；不接受 0.91 匹配 0.913 或 10.91；0.62 与 0.620 视为同一数；英文数词 two 至 twenty（含 two-year 写法）按数字比对。"""
     wanted = _strip_trailing_zeros(number)
-    return re.search(r"(?<![\d.])" + re.escape(wanted) + r"(?!\d|\.\d)", _strip_trailing_zeros(_evidence_text(text))) is not None
+    pattern = re.compile(r"(?<![\d.])" + re.escape(wanted) + r"(?!\d|\.\d)")
+    return any(pattern.search(_strip_trailing_zeros(reading)) for reading in _evidence_readings(text))
 
 
 def sentence_containing(line: str, pos: int) -> str:
@@ -200,8 +201,9 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                 if match.group(0) not in assumptions:
                     report.errors.append(Finding("placeholder_unlisted", rel, number, match.group(0)))
             if nonstandard_re:
-                for match in nonstandard_re.finditer(placeholder_re.sub("", body)):
-                    detail = f"{_excerpt(body[body.find(match.group(0)):], 40)}；请改成「【待补充：……】」并列入占位清单"
+                scanned = placeholder_re.sub("", body)
+                for match in nonstandard_re.finditer(scanned):
+                    detail = f"{_excerpt(scanned[match.start():], 40)}；请改成「【待补充：……】」并列入占位清单"
                     report.errors.append(Finding("placeholder_nonstandard", rel, number, detail))
             if process_patterns and entry.get("writer") != PROCESS_DESCRIBING_WRITER:
                 _check_process_text(report, rel, number, placeholder_re.sub("", body), process_patterns)

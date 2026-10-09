@@ -281,6 +281,30 @@ class LedgerConsistencyTest(unittest.TestCase):
         b = "The model reached an AUC of 0.62 in the validation cohort of the multicentre study."
         self.assertEqual(self._number_details("AUC 为 0.620\\cite{wu2021value}。\n", b), [])
 
+    def test_space_thousands_is_read_both_ways(self) -> None:
+        one = "Treatment groups 1 100 patients were compared in the screening programme over many years."
+        self.assertEqual(self._number_details("共 100 名\\cite{wu2021value}。\n", one), [])
+        self.assertEqual(self._number_details("共 1100 名\\cite{wu2021value}。\n", one), [])
+        two = "We enrolled 50 132 adults in the screening programme over many years of follow up."
+        self.assertEqual(self._number_details("共 50132 名\\cite{wu2021value}。\n", two), [])
+        self.assertEqual(self._number_details("共 132 名\\cite{wu2021value}。\n", two), [])
+
+    def test_trailing_zeros_need_a_decimal_point(self) -> None:
+        table = "See Table 2 for the effect sizes reported across the multicentre validation cohort of this study."
+        self.assertEqual(len(self._number_details("效应量为 2.0\\cite{wu2021value}。\n", table)), 1)
+        a = "The hazard ratio was 2.50 across the multicentre validation cohort of this study as reported."
+        self.assertEqual(self._number_details("风险比 2.5\\cite{wu2021value}。\n", a), [])
+        b = "The hazard ratio was 2.5 across the multicentre validation cohort of this study as reported."
+        self.assertEqual(self._number_details("风险比 2.50\\cite{wu2021value}。\n", b), [])
+        c = "The hazard ratio was 2.00 across the multicentre validation cohort of this study as reported."
+        self.assertEqual(self._number_details("风险比 2.0\\cite{wu2021value}。\n", c), [])
+
+    def test_hyphenated_number_words_and_no_one(self) -> None:
+        a = "A two-year follow up of the multicentre validation cohort was completed for this study as planned."
+        self.assertEqual(self._number_details("随访 2 年\\cite{wu2021value}。\n", a), [])
+        b = "One of the models was retained in the multicentre validation cohort of this study as planned."
+        self.assertEqual(len(self._number_details("共 1 个模型\\cite{wu2021value}。\n", b)), 1)
+
     def test_english_number_words_in_abstract(self) -> None:
         a = "Only six features were retained after selection in the final model of the multicentre study."
         self.assertEqual(self._number_details("只有 6 个特征\\cite{wu2021value}。\n", a), [])
@@ -420,6 +444,12 @@ class NonstandardPlaceholderTest(unittest.TestCase):
     def _errors(self, root: Path) -> list:
         return [f for f in check_project(root).errors if f.kind == "placeholder_nonstandard"]
 
+    def test_snippet_comes_from_the_scanned_occurrence(self) -> None:
+        root = self._root("【待补充：见 [TBD later] 说明】然后 [TBD later] 才是占位。\n")
+        found = self._errors(root)
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0].detail.startswith("[TBD later] 才是"), found[0].detail)
+
     def test_english_bracket_placeholder_is_an_error(self) -> None:
         root = self._root("Prior work [to be supplied: prior findings] shows.\n")
         found = self._errors(root)
@@ -443,6 +473,7 @@ class NonstandardPlaceholderTest(unittest.TestCase):
     def test_other_variants_and_config(self) -> None:
         for text in ("数据量 [TBD]。", "结果［待补充］。", "样本 XXX 例。", "【请补充：样本量】"):
             self.assertEqual(len(self._errors(self._root(text + "\n"))), 1, text)
+        self.assertEqual(self._errors(self._root("尺码 XXXL 的口罩。\n")), [])
         self.assertIn("XXX", "".join(load_config()["consistency"]["nonstandard_placeholder_patterns"]))
 
 
