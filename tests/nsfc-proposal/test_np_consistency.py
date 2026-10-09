@@ -477,5 +477,46 @@ class NonstandardPlaceholderTest(unittest.TestCase):
         self.assertIn("XXX", "".join(load_config()["consistency"]["nonstandard_placeholder_patterns"]))
 
 
+class CitationCountTest(unittest.TestCase):
+    """立项依据引用的不同文献数与下限（literature.min_distinct_refs_justification）。"""
+
+    BODY = "\n".join([
+        "已有研究报告了该现象\\cite{wu2021value}。",
+        "另一项研究给出相反结果\\cite{wu2021value,lee2022}。",
+        "% 注释里的引用\\cite{ghost2020}",
+    ]) + "\n"
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = build(Path(self.tmp.name), body_11=self.BODY)
+        bib = self.root / "references" / "refs.bib"
+        bib.write_text(bib.read_text(encoding="utf-8") + "@article{lee2022,\n  title = {Y},\n}\n", encoding="utf-8")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _report(self, floor: int):
+        return check_project(self.root, {"literature": {"min_distinct_refs_justification": floor}})
+
+    def test_distinct_keys_counted_and_below_floor_flagged(self) -> None:
+        report = self._report(3)
+        self.assertEqual(report.citations["extraTex/1.1.立项依据.tex"], 2)
+        self.assertEqual(report.to_dict()["citations"]["extraTex/1.1.立项依据.tex"], 2)
+        few = [f for f in report.needs_review if f.kind == "few_citations"]
+        self.assertEqual(len(few), 1)
+        self.assertIn("2", few[0].detail)
+        self.assertIn("3", few[0].detail)
+
+    def test_at_floor_is_clean(self) -> None:
+        self.assertEqual([f for f in self._report(2).needs_review if f.kind == "few_citations"], [])
+
+    def test_commented_cite_not_counted(self) -> None:
+        self.assertNotIn("ghost2020", json.dumps(self._report(3).to_dict(), ensure_ascii=False))
+        self.assertEqual(self._report(3).citations["extraTex/1.1.立项依据.tex"], 2)
+
+    def test_default_config_has_floor(self) -> None:
+        self.assertEqual(load_config()["literature"]["min_distinct_refs_justification"], 30)
+
+
 if __name__ == "__main__":
     unittest.main()

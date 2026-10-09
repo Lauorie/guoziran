@@ -47,7 +47,9 @@ LABELS = {
     "no_abstract_for_numbers": "引用句含数字，但所引文献在台账中都没有摘要（请 AI 复核）",
     "process_text_in_body": "正文含写作过程说明",
     "placeholder_nonstandard": "占位写法不规范",
+    "few_citations": "立项依据引用偏少",
 }
+JUSTIFICATION_WRITER = "nsfc-justification-writer"
 
 
 @dataclass(frozen=True)
@@ -64,9 +66,12 @@ class Report:
     needs_review: list[Finding] = field(default_factory=list)
     placeholders: list[Finding] = field(default_factory=list)
     numbers: list[Finding] = field(default_factory=list)
+    citations: dict[str, int] = field(default_factory=dict)  # 文件 -> 正文（去掉注释）引用的不同 key 数
 
     def to_dict(self) -> dict[str, Any]:
-        return {name: [asdict(f) for f in getattr(self, name)] for name in ("errors", "needs_review", "placeholders", "numbers")}
+        data: dict[str, Any] = {name: [asdict(f) for f in getattr(self, name)] for name in ("errors", "needs_review", "placeholders", "numbers")}
+        data["citations"] = dict(self.citations)
+        return data
 
 
 def _id_regex(ids: Iterable[str], extra_patterns: Iterable[str]) -> re.Pattern[str] | None:
@@ -172,6 +177,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
     ledger = load_ledger(paths.ledger) if paths.ledger.exists() else None
     entry_texts = bib_entry_texts(tree.bib_files) if ledger is not None else {}
     ledger_flagged: set[tuple[str, str]] = set()
+    min_refs = int(((config or load_config()).get("literature") or {}).get("min_distinct_refs_justification") or 0)
     entries = [e for e in plan.get("files") or [] if isinstance(e, Mapping) and isinstance(e.get("file"), str)]
 
     report = Report()
@@ -184,6 +190,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
         if not path.is_file():
             continue
         is_tex = rel.endswith(".tex")
+        cited: set[str] = set()
         if is_tex and rel not in compiled:
             report.needs_review.append(Finding("file_not_compiled", rel, None, "main.tex 未引用该文件，内容不会进入 PDF"))
         for number, raw in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
@@ -210,12 +217,18 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
             if is_tex:
                 for match in CITE_RE.finditer(body):
                     for key in (k.strip() for k in match.group(1).split(",")):
+                        if key:
+                            cited.add(key)
                         if key and key not in bib_keys:
                             report.errors.append(Finding("missing_bibkey", rel, number, key))
                         elif key and ledger is not None:
                             _check_ledger_key(report, ledger, entry_texts, ledger_flagged, rel, number, key)
                 if ledger is not None:
                     _check_cite_numbers(report, ledger, rel, number, body)
+        if is_tex:
+            report.citations[rel] = len(cited)
+            if entry.get("writer") == JUSTIFICATION_WRITER and len(cited) < min_refs:
+                report.needs_review.append(Finding("few_citations", rel, None, f"引用 {len(cited)} 篇不同文献，下限 {min_refs} 篇"))
 
     text = "\n".join(bodies)
     for term in case.get("terms") or []:
@@ -294,6 +307,8 @@ def _print_human(report: Report) -> None:
     print(f"## 正文占位（{len(report.placeholders)}）")
     for f in report.placeholders:
         print(f"- {f.file}:{f.line} {f.detail}")
+    counts = "；".join(f"{file} {n}" for file, n in report.citations.items())
+    print(f"各章引用的不同文献数：{counts or '无'}")
 
 
 def main(argv: list[str] | None = None) -> int:

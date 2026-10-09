@@ -23,6 +23,7 @@ literature:
   year_window: 1
   http_timeout_s: 15
   http_retries: 3       # 遇 429/500/502/503/504 或连接超时的重试次数
+  min_distinct_refs_justification: 30   # 立项依据引用的不同文献数下限；少于时一致性检查提示复核
   http_backoff_s: 2     # 第 n 次重试等待 backoff*2**(n-1) 秒；Retry-After 不超过 60 秒时优先
 
 consistency:
