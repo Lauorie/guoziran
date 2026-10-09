@@ -9,6 +9,7 @@ outside this module.
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -20,7 +21,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 try:
-    from candidate_schema import normalize_record
+    from candidate_schema import normalize_doi, normalize_record
     from dedupe_papers import dedupe_records
     from manifest import ARTIFACT_NAMES, SEARCH_SKILL_VERSION, build_manifest, write_json
     from normalize_papers import write_jsonl
@@ -31,7 +32,7 @@ try:
     from providers.host_results import load_host_results
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from candidate_schema import normalize_record
+    from candidate_schema import normalize_doi, normalize_record
     from dedupe_papers import dedupe_records
     from manifest import ARTIFACT_NAMES, SEARCH_SKILL_VERSION, build_manifest, write_json
     from normalize_papers import write_jsonl
@@ -47,6 +48,7 @@ DEFAULT_PROVIDER_ORDER = ["mcp", "openalex", "semantic_scholar", "crossref", "du
 SUPPORTED_PROVIDERS = {"openalex", "semantic_scholar", "crossref"}
 RETRIEVAL_STRATEGY = "priority-fallback-topup"
 TOPUP_THRESHOLD = 0.7
+ABSTRACT_TITLE_SIMILARITY = 0.9
 PREPRINT_PROFILES = {
     "computer_science": {"include_preprints": True, "preprint_priority": "high", "published_version_preferred": True},
     "mathematics": {"include_preprints": True, "preprint_priority": "high", "published_version_preferred": True},
@@ -378,6 +380,23 @@ def run_search(
     return manifest
 
 
+def _title_key(value: Any) -> str:
+    return " ".join(re.sub(r"[^\w\s]", " ", str(value or "").lower()).split())
+
+
+def _same_paper(hit: Mapping[str, Any], *, title: str, doi: str | None) -> bool:
+    """True when a provider hit is the record itself: same DOI, else similar title."""
+    ids = hit.get("externalIds") if isinstance(hit.get("externalIds"), Mapping) else {}
+    hit_doi = normalize_doi(hit.get("doi") or hit.get("DOI") or ids.get("DOI"))
+    if doi and hit_doi:
+        return hit_doi == doi
+    hit_title = _title_key(hit.get("title") or hit.get("display_name"))
+    own_title = _title_key(title)
+    if not hit_title or not own_title:
+        return False
+    return difflib.SequenceMatcher(None, own_title, hit_title).ratio() >= ABSTRACT_TITLE_SIMILARITY
+
+
 def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 200, min_chars: int = 80, timeout: float = 3, fetchers: Mapping[str, ProviderFn] | None = None) -> dict[str, Any]:
     rows = _read_jsonl(input_path)
     output = [dict(row) for row in rows]
@@ -390,20 +409,29 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
             continue
         attempted += 1
         row["abstract_status"] = "attempted"
-        provenance: dict[str, Any] = {"method": "post_selection", "attempts": []}
+        provenance: dict[str, Any] = {"method": "post_selection", "attempts": [], "rejected_mismatch": 0}
         title = str(row.get("title") or "")
-        doi = str(row.get("doi") or (row.get("identifiers") or {}).get("doi") or "")
-        for source, query in (("crossref", doi), ("semantic_scholar", title), ("openalex", title)):
+        raw_doi = str(row.get("doi") or (row.get("identifiers") or {}).get("doi") or "")
+        doi = normalize_doi(raw_doi)
+        for source, query in (("crossref", raw_doi), ("semantic_scholar", title), ("openalex", title)):
             if not query or source not in registry:
                 continue
             try:
                 hits = registry[source](query, max_results=5, timeout=timeout) or []
                 provenance["attempts"].append({"source": source, "status": "success", "count": len(hits)})
-                found = next((item.get("abstract") for item in hits if isinstance(item, dict) and isinstance(item.get("abstract"), str) and len(item["abstract"].strip()) >= min_chars), None)
+                found = None
+                for item in hits:
+                    if not isinstance(item, dict) or not isinstance(item.get("abstract"), str) or len(item["abstract"].strip()) < min_chars:
+                        continue
+                    if not _same_paper(item, title=title, doi=doi):
+                        provenance["rejected_mismatch"] += 1
+                        continue
+                    found = item["abstract"]
+                    break
                 if found:
                     row["abstract"] = found.strip()
                     row["abstract_status"] = "present"
-                    row["abstract_provenance"] = {"source": source, "method": "post_selection", "attempts": len(provenance["attempts"])}
+                    row["abstract_provenance"] = {"source": source, "method": "post_selection", "attempts": len(provenance["attempts"]), "rejected_mismatch": provenance["rejected_mismatch"]}
                     filled += 1
                     break
             except Exception as exc:  # noqa: BLE001
