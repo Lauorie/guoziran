@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import difflib
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -19,14 +20,27 @@ class RunInfo:
     path: Path
 
 
+# run_id 形如 auto_20261009093512（见 observability.make_run_id）
+RUN_ID_RE = re.compile(r"^[A-Za-z][\w-]*_\d{14}$")
+# 运行目录内会出现的子目录（备份、日志、信息表、报告）
+RUN_MARKER_DIRS = ("backup", "logs", "inputs", "reports")
+# 任务工作区约定的目录，不是运行记录
+WORKSPACE_DIRS = frozenset({"input", "output", "log", "cache"})
+
+
+def _is_run_dir(path: Path) -> bool:
+    if not path.is_dir() or path.name in WORKSPACE_DIRS:
+        return False
+    if RUN_ID_RE.match(path.name):
+        return True
+    return any((path / marker).is_dir() for marker in RUN_MARKER_DIRS)
+
+
 def list_runs(*, runs_root: Path) -> List[RunInfo]:
     runs_root = Path(runs_root).resolve()
     if not runs_root.is_dir():
         return []
-    items = []
-    for p in runs_root.iterdir():
-        if p.is_dir():
-            items.append(RunInfo(run_id=p.name, path=p))
+    items = [RunInfo(run_id=p.name, path=p) for p in runs_root.iterdir() if _is_run_dir(p)]
     return sorted(items, key=lambda x: x.run_id, reverse=True)
 
 
