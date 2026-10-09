@@ -50,6 +50,7 @@ LABELS = {
     "few_citations": "立项依据引用偏少",
 }
 JUSTIFICATION_WRITER = "nsfc-justification-writer"
+DEFAULT_MIN_REFS_JUSTIFICATION = 30
 
 
 @dataclass(frozen=True)
@@ -177,7 +178,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
     ledger = load_ledger(paths.ledger) if paths.ledger.exists() else None
     entry_texts = bib_entry_texts(tree.bib_files) if ledger is not None else {}
     ledger_flagged: set[tuple[str, str]] = set()
-    min_refs = int(((config or load_config()).get("literature") or {}).get("min_distinct_refs_justification") or 0)
+    min_refs = int(((config or load_config()).get("literature") or {}).get("min_distinct_refs_justification", DEFAULT_MIN_REFS_JUSTIFICATION))
     entries = [e for e in plan.get("files") or [] if isinstance(e, Mapping) and isinstance(e.get("file"), str)]
 
     report = Report()

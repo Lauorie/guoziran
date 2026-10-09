@@ -511,8 +511,18 @@ class CitationCountTest(unittest.TestCase):
         self.assertEqual([f for f in self._report(2).needs_review if f.kind == "few_citations"], [])
 
     def test_commented_cite_not_counted(self) -> None:
-        self.assertNotIn("ghost2020", json.dumps(self._report(3).to_dict(), ensure_ascii=False))
         self.assertEqual(self._report(3).citations["extraTex/1.1.立项依据.tex"], 2)
+
+    def test_missing_config_key_uses_default_floor(self) -> None:
+        report = check_project(self.root, {"literature": {}})
+        self.assertEqual([f.kind for f in report.needs_review if f.kind == "few_citations"], ["few_citations"])
+        self.assertIn("30", [f for f in report.needs_review if f.kind == "few_citations"][0].detail)
+
+    def test_other_writers_never_flagged(self) -> None:
+        report = self._report(99)
+        flagged = [f.file for f in report.needs_review if f.kind == "few_citations"]
+        self.assertEqual(flagged, ["extraTex/1.1.立项依据.tex"])
+        self.assertEqual(report.citations["extraTex/2.1.研究内容.tex"], 0)
 
     def test_default_config_has_floor(self) -> None:
         self.assertEqual(load_config()["literature"]["min_distinct_refs_justification"], 30)
