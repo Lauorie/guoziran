@@ -193,6 +193,23 @@ class HelperTest(unittest.TestCase):
         self.assertFalse(title_matches("Peritumoral texture and invasiveness", "Cardiac strain imaging", 0.92))
         self.assertFalse(title_matches("… short …", "Anything with short in it", 0.92))  # 片段不足 20 字符时不匹配
 
+    def test_escape_markup_and_special_chars(self) -> None:
+        meta = WorkMeta(title="Effect of x<sub>2</sub> when p<0.05 and n>3 {unbalanced", authors=(("Test", "Author"),), journal=None, year=2024, volume=None, issue=None, pages=None, doi=None)
+        entry = to_bibtex(meta, "k")
+        self.assertIn("x2", entry)
+        self.assertIn("p<0.05 and n>3", entry)
+        self.assertIn(r"\{unbalanced", entry)
+        open_count = entry.count("{") - entry.count(r"\{")
+        close_count = entry.count("}") - entry.count(r"\}")
+        self.assertEqual(open_count, close_count)
+
+    def test_escape_tilde_caret_backslash(self) -> None:
+        meta = WorkMeta(title=r"Test ~ caret ^ and backslash \ in title", authors=(("Test", "Author"),), journal=None, year=2024, volume=None, issue=None, pages=None, doi=None)
+        entry = to_bibtex(meta, "k")
+        self.assertIn(r"\textasciitilde{}", entry)
+        self.assertIn(r"\textasciicircum{}", entry)
+        self.assertIn(r"\textbackslash{}", entry)
+
 
 class CliTest(unittest.TestCase):
     def test_task_root_must_be_task_dir(self) -> None:
@@ -202,6 +219,16 @@ class CliTest(unittest.TestCase):
             records.write_text("", encoding="utf-8")
             proc = subprocess.run([sys.executable, str(SCRIPTS / "bib_resolve.py"), "--project-root", tmp, "--records", str(records),
                                    "--task-root", str(Path(tmp) / "notatask")], env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(proc.returncode, 2)
+
+    def test_task_root_parent_must_be_bensz_api(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+            records = Path(tmp) / "r.jsonl"
+            records.write_text("", encoding="utf-8")
+            bad_task = Path(tmp) / "other" / "task-20261009-0000-test"
+            proc = subprocess.run([sys.executable, str(SCRIPTS / "bib_resolve.py"), "--project-root", tmp, "--records", str(records),
+                                   "--task-root", str(bad_task)], env=env, capture_output=True, text=True, timeout=60)
             self.assertEqual(proc.returncode, 2)
 
 

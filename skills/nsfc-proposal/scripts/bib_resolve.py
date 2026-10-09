@@ -33,7 +33,18 @@ OPENALEX_WORKS = "https://api.openalex.org/works"
 ELLIPSIS_RE = re.compile(r"…|\.\.\.")
 MIN_FRAGMENT_CHARS = 20
 STOPWORDS = frozenset({"a", "an", "the", "of", "on", "in", "for", "and", "to", "with", "by", "from", "at", "via", "is", "are"})
-LATEX_SPECIALS = {"&": r"\&", "%": r"\%", "$": r"\$", "#": r"\#", "_": r"\_"}
+LATEX_SPECIALS = {
+    "\\": r"\textbackslash{}",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+}
 
 
 class HttpSession(Protocol):
@@ -179,7 +190,7 @@ def make_bibkey(meta: WorkMeta, taken: set[str]) -> str:
 
 
 def _escape(text: str) -> str:
-    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"</?(?:i|b|em|strong|sub|sup|scp|span|mml:[A-Za-z]+)(?:\s[^>]*)?>", "", text, flags=re.IGNORECASE)
     return "".join(LATEX_SPECIALS.get(ch, ch) for ch in text)
 
 
@@ -324,7 +335,7 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 def run(project_root: Path, records_path: Path, task_root: Path, *, session: HttpSession | None = None, dry_run: bool = False) -> dict[str, Any]:
     root = resolve_project_root(project_root)
     task = Path(task_root).expanduser().resolve()
-    if not task.name.startswith("task-"):
+    if not task.name.startswith("task-") or task.parent.name != ".bensz-api":
         raise ProposalError(f"--task-root 必须指向 .bensz-api/task-*/ 目录：{task}")
     records = _read_jsonl(records_path)
     tree = scan_latex_tree(root)
