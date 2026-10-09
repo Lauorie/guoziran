@@ -123,3 +123,21 @@ def rollback_from_backup(
 
     atomic_write_text(target_path, desired)
     return backup_path
+
+
+SKILL_DIR_NAME = "nsfc-justification-writer"
+
+
+def task_runs_roots(*, search_base: Path) -> List[Path]:
+    """列出 search_base/.bensz-api/task-*/nsfc-justification-writer/，按任务目录名排序。"""
+    base = Path(search_base).resolve() / ".bensz-api"
+    return sorted(p.resolve() for p in base.glob(f"task-*/{SKILL_DIR_NAME}") if p.is_dir())
+
+
+def locate_runs_root(*, run_id: str, search_base: Path) -> Optional[Path]:
+    """在各任务目录中查找包含 run_id 的 runs_root；有多个时取任务目录名最大的一个。"""
+    rid = str(run_id or "").strip()
+    if not rid or rid in {".", ".."} or "/" in rid or "\\" in rid:
+        return None
+    matches = [root for root in task_runs_roots(search_base=search_base) if (root / rid).is_dir()]
+    return matches[-1] if matches else None

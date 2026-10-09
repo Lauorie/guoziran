@@ -24,7 +24,7 @@ sys.dont_write_bytecode = True
 scripts_root_for_import = Path(__file__).resolve().parent
 sys.path.insert(0, str(scripts_root_for_import))
 
-from core.config_loader import load_config, get_runs_dir, validate_config
+from core.config_loader import RUNS_DIR_ENV, load_config, get_runs_dir, validate_config
 from core.config_access import get_bool, get_mapping, get_seq_str, get_str
 from core.bib_manager_integration import BibFixSuggestion
 from core.change_guard import inspect_proposal
@@ -37,7 +37,7 @@ from core.observability import ensure_run_dir, make_run_id
 from core.reference_validator import check_citations
 from core.security import validate_target_file
 from core.editor import apply_new_content
-from core.versioning import find_backup_for_run_v2, list_runs, rollback_from_backup, unified_diff
+from core.versioning import find_backup_for_run_v2, list_runs, locate_runs_root, rollback_from_backup, task_runs_roots, unified_diff
 
 logger = logging.getLogger(__name__)
 
@@ -684,11 +684,30 @@ def cmd_examples(args: argparse.Namespace) -> int:
     return 0
 
 
+def _runs_root_for_run(skill_root: Path, config: Dict[str, Any], run_id: str) -> Path:
+    """返回包含 run_id 的 runs_root；未指定 --task-root 时到各任务目录中查找。"""
+    runs_root = get_runs_dir(skill_root, config)
+    if os.environ.get(RUNS_DIR_ENV) or (runs_root / run_id).is_dir():
+        return runs_root
+    return locate_runs_root(run_id=run_id, search_base=Path.cwd()) or runs_root
+
+
+def _runs_roots_for_listing(skill_root: Path, config: Dict[str, Any]) -> list[Path]:
+    current = get_runs_dir(skill_root, config)
+    if os.environ.get(RUNS_DIR_ENV):
+        return [current]
+    roots = task_runs_roots(search_base=Path.cwd())
+    return roots if current in roots else [*roots, current]
+
+
 def cmd_list_runs(args: argparse.Namespace) -> int:
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
-    runs_root = get_runs_dir(skill_root, config)
-    runs = list_runs(runs_root=runs_root)
+    by_id = {}
+    for root in _runs_roots_for_listing(skill_root, config):
+        for run in list_runs(runs_root=root):
+            by_id[run.run_id] = run
+    runs = sorted(by_id.values(), key=lambda r: r.run_id, reverse=True)
     if not runs:
         print("（暂无 runs 记录）")
         return 0
@@ -701,7 +720,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
     coord = HybridCoordinator(skill_root=skill_root, config=config)
-    runs_root = get_runs_dir(skill_root, config)
+    runs_root = _runs_root_for_run(skill_root, config, str(args.run_id))
     target = coord.target_path(project_root=Path(args.project_root))
     try:
         target_relpath = target.relative_to(Path(args.project_root).resolve()).as_posix()
@@ -737,7 +756,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
     coord = HybridCoordinator(skill_root=skill_root, config=config)
-    runs_root = get_runs_dir(skill_root, config)
+    runs_root = _runs_root_for_run(skill_root, config, str(args.run_id))
     target = coord.target_path(project_root=Path(args.project_root))
     try:
         target_relpath = target.relative_to(Path(args.project_root).resolve()).as_posix()
@@ -766,6 +785,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--preset", help="加载学科预设 assets/presets/<name>.yaml（兼容旧路径 config/presets/，可选）")
     p.add_argument("--override", help="额外配置覆盖文件（yaml，可选，优先级最高）")
     p.add_argument("--no-user-override", action="store_true", help="不加载 ~/.config/nsfc-justification-writer/override.yaml")
+    p.add_argument("--task-root", help="本任务的 .bensz-api/task-*/ 目录；所有子命令的 runs_dir 固定为其下的 nsfc-justification-writer/")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     p_diag = sub.add_parser("diagnose", help="Tier1/Tier2 诊断（结构/引用/字数/表述）")
@@ -875,6 +895,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(verbose=bool(getattr(args, "verbose", False)))
+    task_root = getattr(args, "task_root", None)
+    if task_root:
+        root = Path(task_root).expanduser().resolve()
+        if not root.name.startswith("task-"):
+            logger.error("❌ --task-root 必须指向 .bensz-api/task-*/ 目录：%s", root)
+            return 2
+        os.environ[RUNS_DIR_ENV] = str(root / "nsfc-justification-writer")
     try:
         return int(args.func(args))
     except SystemExit:
