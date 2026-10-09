@@ -10,6 +10,7 @@ import argparse
 import fnmatch
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -24,6 +25,7 @@ from proposal_common import (
     resolve_project_root,
     write_yaml,
 )
+from case_render import WRITERS, info_form, render_case_md
 from case_validate import validate_all
 
 ASSUMPTIONS_TEMPLATE = "# 假设与待核实清单\n\n## 确认点状态\n\n## AI 拟定项\n\n## 待核实项\n\n## 占位清单\n"
@@ -163,6 +165,71 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if not problems else 1
 
 
+def _render(root: Path) -> Path:
+    case, evidence, plan = _load_shared(root)
+    paths = proposal_paths(root)
+    paths.case_md.write_text(render_case_md(case, evidence, plan), encoding="utf-8")
+    return paths.case_md
+
+
+def cmd_render(args: argparse.Namespace) -> int:
+    print(f"已生成：{_render(resolve_project_root(args.project_root))}")
+    return 0
+
+
+def cmd_to_info_form(args: argparse.Namespace) -> int:
+    root = resolve_project_root(args.project_root)
+    case, _, plan = _load_shared(root)
+    out = Path(args.out).expanduser().resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(info_form(case, plan, args.writer), encoding="utf-8")
+    print(f"已生成：{out}")
+    return 0
+
+
+def cmd_bump(args: argparse.Namespace) -> int:
+    root = resolve_project_root(args.project_root)
+    paths = proposal_paths(root)
+    case = read_yaml(paths.case)
+    version = case.get("version")
+    if not isinstance(version, int) or isinstance(version, bool):
+        raise ProposalError("scientific_case.yaml 的 version 不是整数，无法加一")
+    case["version"] = version + 1
+    case["status"] = "draft"
+    write_yaml(paths.case, case)
+    _render(root)
+    print(f"科学论证升至第 {case['version']} 版")
+    return 0
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    root = resolve_project_root(args.project_root)
+    paths = proposal_paths(root)
+    case = read_yaml(paths.case)
+    case["status"] = args.set
+    write_yaml(paths.case, case)
+    label = "已确认" if args.set == "confirmed" else "未确认（先继续）"
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    append_under_heading(paths.assumptions, "## 确认点状态", f"- {stamp} 第 {case.get('version')} 版：{label}")
+    _render(root)
+    print(f"确认点状态：{label}")
+    return 0
+
+
+def cmd_mark_written(args: argparse.Namespace) -> int:
+    root = resolve_project_root(args.project_root)
+    paths = proposal_paths(root)
+    case = read_yaml(paths.case)
+    plan = read_yaml(paths.plan)
+    for entry in plan.get("files") or []:
+        if isinstance(entry, dict) and entry.get("file") == args.file:
+            entry["written_with_case_version"] = case.get("version")
+            write_yaml(paths.plan, plan)
+            print(f"{args.file} 依据第 {case.get('version')} 版科学论证")
+            return 0
+    raise ProposalError(f"section_plan.yaml 中没有文件 {args.file}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="case.py", description="nsfc-proposal 共享文件工具")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -177,6 +244,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate = sub.add_parser("validate", help="校验 proposal/ 下的三份 YAML")
     p_validate.add_argument("--project-root", required=True)
     p_validate.set_defaults(func=cmd_validate)
+
+    p_render = sub.add_parser("render", help="由 scientific_case.yaml 生成 scientific_case.md")
+    p_render.add_argument("--project-root", required=True)
+    p_render.set_defaults(func=cmd_render)
+
+    p_form = sub.add_parser("to-info-form", help="为某个写作 skill 生成信息表")
+    p_form.add_argument("--project-root", required=True)
+    p_form.add_argument("--writer", required=True, choices=list(WRITERS))
+    p_form.add_argument("--out", required=True)
+    p_form.set_defaults(func=cmd_to_info_form)
+
+    p_bump = sub.add_parser("bump", help="修改科学论证后：版本加一、状态置为 draft")
+    p_bump.add_argument("--project-root", required=True)
+    p_bump.set_defaults(func=cmd_bump)
+
+    p_status = sub.add_parser("status", help="记录确认点的回答")
+    p_status.add_argument("--project-root", required=True)
+    p_status.add_argument("--set", required=True, choices=["confirmed", "bypassed"])
+    p_status.set_defaults(func=cmd_status)
+
+    p_mark = sub.add_parser("mark-written", help="记录某章依据的科学论证版本")
+    p_mark.add_argument("--project-root", required=True)
+    p_mark.add_argument("--file", required=True)
+    p_mark.set_defaults(func=cmd_mark_written)
 
     return parser
 
