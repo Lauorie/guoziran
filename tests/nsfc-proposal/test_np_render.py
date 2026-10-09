@@ -51,6 +51,14 @@ class InfoFormTest(unittest.TestCase):
         self.assertIn("需控制的混杂：病灶大小", form)
         self.assertNotIn("T1", form)
 
+    def test_content_form_with_unresolved_dependencies_and_constraints(self) -> None:
+        case = valid_case()
+        case["tasks"][0]["depends_on"] = ["T9"]  # Unresolved dependency
+        form = info_form(case, valid_plan(), "nsfc-research-content-writer")
+        self.assertNotIn("T9", form)  # Unresolved ID should not appear
+        self.assertIn("数据来源与验证：独立外部队列", form)  # Updated label
+        self.assertNotIn("见第 7 项", form)  # Item 10 should show constraints, not reference
+
     def test_foundation_form_marks_missing_items_as_placeholders(self) -> None:
         form = info_form(valid_case(), valid_plan(), "nsfc-research-foundation-writer")
         self.assertIn("## 4. 风险清单", form)

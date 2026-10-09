@@ -185,8 +185,9 @@ def _content_form(case: Mapping[str, Any], plan: Mapping[str, Any] | None) -> st
         subgoals.append(
             f"子目标：{_t(task.get('aim')) or NONE}；对应科学问题：{questions.get(_t(task.get('question')), NONE)}；"
             f"指标：{_t(task.get('indicator')) or NONE}；对照/基线：{'、'.join(_strs(task.get('baselines'))) or NONE}；"
-            f"需控制的混杂：{'、'.join(_strs(task.get('confounders'))) or NONE}；验证：{_t(task.get('validation')) or NONE}")
-        deps = "、".join(aims.get(d, d) for d in _strs(task.get("depends_on")))
+            f"需控制的混杂：{'、'.join(_strs(task.get('confounders'))) or NONE}；数据来源与验证：{_t(task.get('validation')) or NONE}")
+        resolved_deps = [aims.get(d) for d in _strs(task.get("depends_on")) if d in aims]
+        deps = "、".join(resolved_deps)
         breakdown.append(f"{_t(task.get('aim')) or NONE}：{'；'.join(_strs(task.get('subtasks'))) or NONE}" + (f"（依赖：{deps}）" if deps else ""))
         validations.append(f"{_t(task.get('aim')) or NONE}：{_t(task.get('validation')) or NONE}")
     routes = [f"{_t(r.get('name'))}：{_t(r.get('limitation'))}" for r in _items(case, "mainstream_routes")]
@@ -205,7 +206,7 @@ def _content_form(case: Mapping[str, Any], plan: Mapping[str, Any] | None) -> st
         "7. **年度资源约束**：", _bullets(constraints, "   "),
         "8. **任务分解**：", _bullets(breakdown, "   "),
         "9. **创新对照坐标系**：", _bullets(routes, "   "),
-        "10. **三年计划的硬约束**：见第 7 项",
+        "10. **三年计划的硬约束**：", _bullets(constraints, "   "),
         "11. **关键风险与备选路线**：", _bullets(risks, "   "),
         "", "## 可选补充", _bullets(_section_notes(plan, "nsfc-research-content-writer") + ["子目标编号只用于内部规划，正文用自然语言指代"]),
     ]
