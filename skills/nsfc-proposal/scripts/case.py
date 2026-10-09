@@ -136,7 +136,10 @@ def init_proposal(
         result.created.append(paths.ledger)
         registered = register_user_entries(root)
         if registered:
-            result.warnings.append(f"已有 {len(registered)} 条文献按申请人提供登记")
+            note = f"已有 {len(registered)} 条文献按申请人提供登记"
+            result.warnings.append(note)
+            if paths.assumptions not in result.created:
+                append_under_heading(paths.assumptions, "## 待核实项", f"- {note}")
     if paths.assumptions in result.created:
         for warning in result.warnings:
             append_under_heading(paths.assumptions, "## 待核实项", f"- {warning}")

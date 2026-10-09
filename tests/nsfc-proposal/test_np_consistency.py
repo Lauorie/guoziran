@@ -236,6 +236,37 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertEqual(self._number_details("2021 年的研究\\cite{wu2021value}。\n"), [])
         self.assertEqual(self._number_details("自 1998年起\\cite{wu2021value}。\n"), [])
 
+    def test_thousands_separator_in_sentence(self) -> None:
+        for abstract in ("The cohort had 1200 patients in total, enrolled over a long period at several centers.",
+                         "The cohort had 1,200 patients in total, enrolled over a long period at several centers."):
+            self.assertEqual(self._number_details("共纳入 1,200 例\\cite{wu2021value}。\n", abstract), [])
+        details = self._number_details("共纳入 1,200 例\\cite{wu2021value}。\n", "Only 90 patients were enrolled in a small single center pilot study.")
+        self.assertEqual(len(details), 1)
+        self.assertTrue(details[0].startswith("1200："), details)
+        self.assertEqual(self._number_details("共纳入 1{,}200 例\\cite{wu2021value}，1\\,200 例。\n",
+                                              "A total of 1200 patients were enrolled across all of the participating centers."), [])
+
+    def test_fullwidth_percent_and_ci_suffix(self) -> None:
+        self.assertEqual(self._number_details("灵敏度达 95％\\cite{wu2021value}。\n"), [])
+        self.assertEqual(len(self._number_details("灵敏度达 97％\\cite{wu2021value}。\n")), 1)
+        self.assertEqual(self._number_details("灵敏度 95\\%CI 见\\cite{wu2021value}。\n"), [])
+        details = self._number_details("灵敏度 97\\%CI\\cite{wu2021value}。\n")
+        self.assertTrue(details and details[0].startswith("97%："), details)
+
+    def test_range_with_percent_keeps_leading_decimal_plain(self) -> None:
+        details = self._number_details("AUC 0.91 至 95\\%\\cite{wu2021value}。\n", "AUC 0.91 was reported in an earlier version of this study.")
+        self.assertEqual([d.split("：")[0] for d in details], ["95%"])
+
+    def test_month_after_year_is_not_extracted(self) -> None:
+        from consistency_check import sentence_numbers
+        self.assertEqual(sentence_numbers("2021年3月的研究\\cite{k}"), [])
+        self.assertEqual(sentence_numbers("随访 3月\\cite{k}"), ["3"])
+
+    def test_latex_lengths_are_not_extracted(self) -> None:
+        from consistency_check import sentence_numbers
+        self.assertEqual(sentence_numbers("\\hspace{1.5em}\\vspace{2.5pt}\\kern 0.5ex 结果\\cite{k}"), [])
+        self.assertEqual(sentence_numbers("AUC 为 0.5\\cite{k}"), ["0.5"])
+
     def test_cite_key_digits_are_ignored(self) -> None:
         self.assertEqual(self._number_details("AUC 为 0.86\\cite{wu2021value}。\n"), [])
 

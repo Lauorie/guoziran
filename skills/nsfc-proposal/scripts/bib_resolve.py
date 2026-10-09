@@ -24,7 +24,7 @@ from urllib.parse import quote
 
 import requests
 
-from citation_ledger import add_event, append_event, register_user_entries
+from citation_ledger import record_added
 from latex_files import BibIndex, bib_entry_texts, normalize_doi, read_bib_index, scan_latex_tree
 from proposal_common import ProposalError, append_under_heading, load_config, proposal_paths, resolve_project_root
 
@@ -33,7 +33,6 @@ CROSSREF_WORKS = "https://api.crossref.org/works"
 OPENALEX_WORKS = "https://api.openalex.org/works"
 ELLIPSIS_RE = re.compile(r"…|\.\.\.")
 MIN_FRAGMENT_CHARS = 20
-MIN_ABSTRACT_CHARS = 80
 STOPWORDS = frozenset({"a", "an", "the", "of", "on", "in", "for", "and", "to", "with", "by", "from", "at", "via", "is", "are"})
 LATEX_SPECIALS = {
     "\\": r"\textbackslash{}",
@@ -332,35 +331,6 @@ def append_entries(bib_path: Path, entries: list[str], backup_dir: Path) -> Path
     return backup
 
 
-def _ledger_provenance(record: Mapping[str, Any], outcome: Outcome) -> dict[str, Any]:
-    provenance = record.get("provenance") if isinstance(record.get("provenance"), Mapping) else {}
-    sources = record.get("sources") if isinstance(record.get("sources"), list) else []
-    first = sources[0] if sources and isinstance(sources[0], Mapping) else {}
-    matches = record.get("query_matches")
-    return {"record_id": outcome.record_id, "record_title": record.get("title"),
-            "query_matches": matches if isinstance(matches, list) else [],
-            "host_tool": provenance.get("host_tool"), "provider": first.get("provider")}
-
-
-def _ledger_abstract(record: Mapping[str, Any]) -> str | None:
-    abstract = record.get("abstract")
-    if record.get("abstract_status") == "present" and isinstance(abstract, str) and len(abstract.strip()) >= MIN_ABSTRACT_CHARS:
-        return abstract.strip()
-    return None
-
-
-def record_added(root: Path, bib_files: list[Path], records: list[dict[str, Any]], outcomes: list[Outcome]) -> None:
-    """给每个 added 结果追加 add 事件；哈希取实际写入 .bib 的条目文本。台账不存在时，先把原有条目登记为申请人提供。"""
-    texts = bib_entry_texts(bib_files)
-    ledger_path = proposal_paths(root).ledger
-    for record, outcome in zip(records, outcomes):
-        if outcome.status != "added" or outcome.bibkey not in texts:
-            continue
-        append_event(ledger_path, add_event(
-            outcome.bibkey, source=outcome.source or "crossref", entry_text=texts[outcome.bibkey], doi=outcome.doi,
-            abstract=_ledger_abstract(record), provenance=_ledger_provenance(record, outcome)))
-
-
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     rows = []
     try:
@@ -391,17 +361,13 @@ def run(project_root: Path, records_path: Path, task_root: Path, *, session: Htt
     target = tree.bib_files[0]
     outcomes, entries = resolve_records(records, session=session or requests.Session(),
                                         settings=Settings.from_config(load_config()), index=read_bib_index(tree.bib_files))
-    out_dir = task / "nsfc-proposal" / "output"
-    backup = None
+    out_dir, backup = task / "nsfc-proposal" / "output", None
     if not dry_run:
-        if entries and not proposal_paths(root).ledger.exists():
-            register_user_entries(root, tree.bib_files)
         backup = append_entries(target, entries, out_dir / "bib_backup")
-        record_added(root, tree.bib_files, records, outcomes)
-        leads = proposal_paths(root).leads
+        record_added(proposal_paths(root).ledger, tree.bib_files, records, outcomes)
         for outcome in outcomes:
             if outcome.status == "unresolved":
-                append_under_heading(leads, "## 未核实线索", f"- [unverified] {outcome.title or outcome.record_id}；原因：{outcome.reason}；记录：{outcome.record_id}")
+                append_under_heading(proposal_paths(root).leads, "## 未核实线索", f"- [unverified] {outcome.title or outcome.record_id}；原因：{outcome.reason}；记录：{outcome.record_id}")
     summary = {
         "bib_file": str(target),
         "backup": str(backup) if backup else None,

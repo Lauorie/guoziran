@@ -29,7 +29,6 @@ SENTENCE_END = "。；！？"
 SENTENCE_SPLIT_RE = re.compile(f"[{SENTENCE_END}]")
 REF_RE = re.compile(r"\\(?:ref|eqref|autoref|cref|label|pageref)\{[^}]*\}")
 DECIMAL_RE = re.compile(r"(?<![\d.])\d+\.\d+(?!\d)")
-DIGITS_RE = re.compile(r"\d+(?:\.\d+)?")
 YEAR_RE = re.compile(r"(?:19|20)\d\d")
 DEFAULT_PLACEHOLDER = "【待补充：[^】]*】"
 LABELS = {
@@ -75,29 +74,44 @@ def _id_regex(ids: Iterable[str], extra_patterns: Iterable[str]) -> re.Pattern[s
     return re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(patterns) + r")(?![A-Za-z0-9])")
 
 
+_CITED_NUMBER_RE = re.compile(
+    r"(?<![\d.])(?P<a>\d+(?:\.\d+)?)(?:\s?(?:---|--|[–\-~～至到])\s?(?P<b>\d+(?:\.\d+)?))?[\s~]?(?:\\)?"
+    r"(?:(?P<pct>[%％])|(?P<unit>mm|cm|毫米|厘米|例(?!如)|名|家|年|个月|月|HU|kV|mAs|层|项|个(?!别))(?![A-Za-z]))"
+)
+_THOUSANDS_RE = re.compile(r"(?<=\d)(?:\{,\}|\\,|,)(?=\d{3}(?!\d))")
+_LATEX_LENGTH_RE = re.compile(r"\s?(?:em|pt|ex)(?![A-Za-z])")
+
+
 def sentence_numbers(sentence: str) -> list[str]:
-    """引用句中需要对照摘要的数字：百分数（含 %）、小数、带单位的整数；排除 19xx/20xx 年份。"""
-    text = REF_RE.sub("", CITE_RE.sub("", sentence))
+    """引用句中需要对照摘要的数字：百分数（含 %）、小数、带单位的整数；排除年份、年后的月份、LaTeX 长度。"""
+    text = _THOUSANDS_RE.sub("", REF_RE.sub("", CITE_RE.sub("", sentence)))
     found: list[str] = []
     spans: list[tuple[int, int]] = []
-    for match in NUMBER_RE.finditer(text):
+    for match in _CITED_NUMBER_RE.finditer(text):
         spans.append(match.span())
         unit = match.group("unit")
-        for digits in DIGITS_RE.findall(match.group(0)[: match.start("unit") - match.start()]):
-            if unit == "%":
-                found.append(digits + "%")
+        if unit == "月" and text[: match.start()].endswith("年"):
+            continue
+        for group in ("a", "b"):
+            digits = match.group(group)
+            if not digits:
+                continue
+            if match.group("pct"):
+                is_leading_decimal = group == "a" and match.group("b") and "." in digits
+                found.append(digits if is_leading_decimal else digits + "%")
             elif not (YEAR_RE.fullmatch(digits) and unit == "年"):
                 found.append(digits)
     for match in DECIMAL_RE.finditer(text):
-        if not any(a <= match.start() < b for a, b in spans):
-            found.append(match.group(0))
+        if any(a <= match.start() < b for a, b in spans) or _LATEX_LENGTH_RE.match(text, match.end()):
+            continue
+        found.append(match.group(0))
     return list(dict.fromkeys(found))
 
 
 def _evidence_text(text: str) -> str:
-    text = re.sub(r"\\%", "%", text)
+    text = re.sub(r"\\%", "%", text).replace("％", "%")
     text = re.sub(r"\s+%", "%", text)
-    return re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text)
+    return _THOUSANDS_RE.sub("", text)
 
 
 def number_in_text(number: str, text: str) -> bool:

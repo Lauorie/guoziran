@@ -22,6 +22,7 @@ from latex_files import DOI_FIELD_RE, bib_entry_texts, normalize_doi, scan_latex
 from proposal_common import ProposalError, proposal_paths, resolve_project_root
 
 EVENTS = ("add", "register_user", "drop")
+MIN_ABSTRACT_CHARS = 80
 
 
 def entry_sha256(text: str) -> str:
@@ -90,10 +91,38 @@ def dropped_keys(path: Path) -> set[str]:
     return {key for key, kind in last.items() if kind == "drop"}
 
 
-def add_event(bibkey: str, *, source: str, entry_text: str, doi: str | None, abstract: str | None,
+def add_event(bibkey: str, *, source: str | None, entry_text: str, doi: str | None, abstract: str | None,
               provenance: Mapping[str, Any]) -> dict[str, Any]:
     return {"event": "add", "bibkey": bibkey, "time": now_iso(), "source": source, "doi": doi,
             "entry_sha256": entry_sha256(entry_text), "abstract": abstract, "provenance": dict(provenance), "reason": None}
+
+
+def _record_provenance(record: Mapping[str, Any], record_id: str) -> dict[str, Any]:
+    provenance = record.get("provenance") if isinstance(record.get("provenance"), Mapping) else {}
+    sources = record.get("sources") if isinstance(record.get("sources"), list) else []
+    first = sources[0] if sources and isinstance(sources[0], Mapping) else {}
+    matches = record.get("query_matches")
+    return {"record_id": record_id, "record_title": record.get("title"),
+            "query_matches": matches if isinstance(matches, list) else [],
+            "host_tool": provenance.get("host_tool"), "provider": first.get("provider")}
+
+
+def _record_abstract(record: Mapping[str, Any]) -> str | None:
+    abstract = record.get("abstract")
+    if record.get("abstract_status") == "present" and isinstance(abstract, str) and len(abstract.strip()) >= MIN_ABSTRACT_CHARS:
+        return abstract.strip()
+    return None
+
+
+def record_added(ledger_path: Path, bib_files: list[Path], records: list[dict[str, Any]], outcomes: list[Any]) -> None:
+    """给每个 status 为 added 的结果追加 add 事件；哈希取实际写入 .bib 的条目文本，来源缺失时记 null。"""
+    texts = bib_entry_texts(bib_files)
+    for record, outcome in zip(records, outcomes):
+        if outcome.status != "added" or outcome.bibkey not in texts:
+            continue
+        append_event(ledger_path, add_event(
+            outcome.bibkey, source=outcome.source, entry_text=texts[outcome.bibkey], doi=outcome.doi,
+            abstract=_record_abstract(record), provenance=_record_provenance(record, outcome.record_id)))
 
 
 def register_user_entries(project_root: Path, bib_files: list[Path] | None = None) -> list[str]:
@@ -150,7 +179,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.key not in load_ledger(ledger_path):
                 raise ProposalError(f"台账中没有有效记录：{args.key}")
             append_event(ledger_path, {"event": "drop", "bibkey": args.key, "time": now_iso(), "reason": args.reason})
-            print(f"已作废：{args.key}")
+            print(f"已作废：{args.key}。下一步：从 .bib 中删除该条目，再重跑 bib_resolve 重新写入"
+                  "（仍留在 .bib 中的 key 会被 bib_resolve 判为 exists，不会重新入账）。")
         elif args.command == "show":
             for key, rec in load_ledger(ledger_path).items():
                 print(f"{key}\t{rec.get('source')}\t{rec.get('doi') or '-'}\t{'有摘要' if rec.get('abstract') else '无摘要'}")

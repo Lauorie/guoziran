@@ -137,18 +137,20 @@ class CliTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def _cli(self, *args: str) -> subprocess.CompletedProcess:
-        env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
-        return subprocess.run([sys.executable, str(SCRIPTS / "citation_ledger.py"), *args, "--project-root", str(self.root)],
-                              env=env, capture_output=True, text=True, timeout=60)
+    ENV = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+
+    def _cli(self, *args: str, root: Path | None = None) -> subprocess.CompletedProcess:
+        return subprocess.run([sys.executable, str(SCRIPTS / "citation_ledger.py"), *args, "--project-root", str(root or self.root)],
+                              env=self.ENV, capture_output=True, text=True, timeout=60)
 
     def test_register_user_show_and_drop(self) -> None:
         self.assertEqual(self._cli("register-user").returncode, 0)
         shown = self._cli("show")
         self.assertIn("a2020\tuser\t10.5555/a\t无摘要", shown.stdout)
-        dropped = subprocess.run([sys.executable, str(SCRIPTS / "citation_ledger.py"), "drop", "--project-root", str(self.root),
-                                  "--key", "a2020", "--reason", "元数据有误"], capture_output=True, text=True, timeout=60)
+        dropped = self._cli("drop", "--key", "a2020", "--reason", "元数据有误")
         self.assertEqual(dropped.returncode, 0, dropped.stderr)
+        self.assertIn("从 .bib 中删除", dropped.stdout)
+        self.assertIn("bib_resolve", dropped.stdout)
         self.assertNotIn("a2020", self._cli("show").stdout)
 
     def test_audit_lists_handwritten_and_modified(self) -> None:
@@ -165,9 +167,7 @@ class CliTest(unittest.TestCase):
 
     def test_errors_exit_2(self) -> None:
         self.assertEqual(self._cli("drop", "--key", "nope", "--reason", "r").returncode, 2)
-        bad = subprocess.run([sys.executable, str(SCRIPTS / "citation_ledger.py"), "audit", "--project-root", str(Path(self.tmp.name) / "absent")],
-                             capture_output=True, text=True, timeout=60)
-        self.assertEqual(bad.returncode, 2)
+        self.assertEqual(self._cli("audit", root=Path(self.tmp.name) / "absent").returncode, 2)
         proposal_paths(self.root).ledger.parent.mkdir()
         proposal_paths(self.root).ledger.write_text("oops\n", encoding="utf-8")
         self.assertEqual(self._cli("audit").returncode, 2)
@@ -204,7 +204,16 @@ class ResolveLedgerTest(unittest.TestCase):
         self.assertEqual(rec["abstract"], ABSTRACT)
         self.assertEqual(rec["provenance"], {"record_id": "r1", "record_title": TITLE_1, "query_matches": ["Q-a"],
                                              "host_tool": "wispaper", "provider": "wispaper-test"})
-        self.assertEqual(ledger["b2021"]["event"], "register_user")
+        self.assertEqual({r["event"] for r in ledger.values()}, {"add"})
+        self.assertNotIn("b2021", ledger)
+
+    def test_missing_source_is_recorded_as_null(self) -> None:
+        from bib_resolve import Outcome
+        from citation_ledger import record_added
+        path = proposal_paths(self.root).ledger
+        outcome = Outcome("r1", "B", "added", bibkey="b2021", doi=None, source=None)
+        record_added(path, [self.root / "references" / "refs.bib"], [{"title": "B"}], [outcome])
+        self.assertIsNone(load_ledger(path)["b2021"]["source"])
 
     def test_short_or_missing_abstract_is_null(self) -> None:
         self._run({**self.row, "abstract": "too short", "provenance": None, "sources": None, "query_matches": None})
@@ -243,6 +252,26 @@ class InitLedgerTest(unittest.TestCase):
             again = init_proposal(root, title="T", project_type="青年科学基金")
             self.assertEqual(len(proposal_paths(root).ledger.read_text(encoding="utf-8").splitlines()), 2)
             self.assertFalse([w for w in again.warnings if "登记" in w])
+
+    def test_registration_is_noted_in_assumptions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(Path(tmp))
+            (root / "references" / "myexample.bib").write_text(ENTRY_A, encoding="utf-8")
+            init_proposal(root, title="T", project_type="青年科学基金")
+            self.assertIn("已有 1 条文献按申请人提供登记", proposal_paths(root).assumptions.read_text(encoding="utf-8"))
+
+    def test_note_added_when_proposal_dir_exists_without_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = make_project(Path(tmp))
+            init_proposal(root, title="T", project_type="青年科学基金")
+            paths = proposal_paths(root)
+            paths.ledger.unlink()
+            (root / "references" / "myexample.bib").write_text(ENTRY_A + "\n" + ENTRY_B, encoding="utf-8")
+            result = init_proposal(root, title="T", project_type="青年科学基金")
+            self.assertIn("已有 2 条文献按申请人提供登记", result.warnings)
+            text = paths.assumptions.read_text(encoding="utf-8")
+            self.assertEqual(text.count("已有 2 条文献按申请人提供登记"), 1)
+            self.assertIn("## 待核实项", text)
 
     def test_empty_bib_creates_empty_ledger_without_warning(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
