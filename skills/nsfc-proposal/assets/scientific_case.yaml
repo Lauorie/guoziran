@@ -1,0 +1,31 @@
+version: 1
+status: draft
+project:
+  type: ""
+  title: ""
+  sections: []
+research_object:
+  object: ""
+  target_population: ""
+  sample_source: ""
+  sample_vs_target_gap: ""
+  bias_handling: ""
+  source: user
+terms: []
+importance: []
+gaps: []
+mainstream_routes: []
+questions: []
+hypothesis:
+  statement: ""
+  rationale: []
+  predictions: []
+  falsification:
+    condition: ""
+    metric: ""
+entry_point: ""
+aim: ""
+tasks: []
+constraints: []
+feasibility: []
+risks: []

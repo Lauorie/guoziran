@@ -1,0 +1,75 @@
+skill_info:
+  name: nsfc-proposal
+  version: 0.1.0
+  description: "国自然申请书正文的统一入口：先建立科学论证、证据图谱和章节分工，再调用 nsfc-* 写作 skill 分章写作，并做跨章一致性检查。"
+  category: writing
+  author: "Lauorie"
+
+workspace:
+  task_root: .bensz-api/task-{yyyymmdd-hhmm}-{简短描述}
+
+confirm:
+  # ask：在确认点停下等申请人回答；auto：不停，按「先继续」处理并记录
+  mode: ask
+
+literature:
+  use_wispaper: true
+  quick_search_top_n: 20
+  deep_search_top_n: 10
+  keyword_queries: {min: 5, max: 25}
+  bundle_max_queries: 25
+  title_similarity: 0.92
+  doi_title_similarity: 0.8
+  year_window: 1
+  http_timeout_s: 15
+
+consistency:
+  max_fix_rounds: 2
+  hidden_placeholder_words: [待补, 待核实, 待确认, 待填写, TODO]
+  extra_internal_id_patterns: ['S\d+']
+  placeholder_pattern: '【待补充：[^】]*】'
+
+guardrails:
+  # 本 skill 自己写入的正文文件；proposal/ 下的文件；.bib 只追加、写前备份（目标由 main.tex 解析）
+  allowed_write_files:
+    - extraTex/4.5.生成式人工智能.tex
+  allowed_write_dirs:
+    - proposal
+
+# 篇幅预算的唯一来源；按文件名与其中 match 通配符匹配
+length_budget_source: ../nsfc-length-aligner/config.yaml
+
+sections:
+  - name: 立项依据
+    file: extraTex/1.1.立项依据.tex
+    writer: nsfc-justification-writer
+    must_exclude: [实验步骤, 技术路线, 样本量设计, 年度安排, 研究方案细节]
+  - name: 研究内容
+    file: extraTex/2.1.研究内容.tex
+    writer: nsfc-research-content-writer
+    must_exclude: [国内外研究现状的展开综述]
+  - name: 特色与创新
+    file: extraTex/2.2.特色与创新.tex
+    writer: nsfc-research-content-writer
+    must_exclude: [首次, 国际领先, 填补空白]
+  - name: 年度研究计划
+    file: extraTex/2.3.年度研究计划.tex
+    writer: nsfc-research-content-writer
+    must_exclude: [研究背景]
+  - name: 研究基础
+    file: extraTex/3.1.研究基础.tex
+    writer: nsfc-research-foundation-writer
+    must_exclude: [申请人未提供的论文、数据或预实验结果]
+  - name: 工作条件
+    file: extraTex/3.2.工作条件.tex
+    writer: nsfc-research-foundation-writer
+    must_exclude: [申请人未提供的平台或设备]
+  - name: 摘要
+    file: NSFC-ABSTRACTS.md
+    writer: nsfc-abstract
+    must_exclude: [内部编号]
+  - name: 生成式人工智能使用说明
+    file: extraTex/4.5.生成式人工智能.tex
+    fallback_file: proposal/ai_declaration.md
+    writer: nsfc-proposal
+    must_exclude: [运行日志中没有记录的 AI 使用]
