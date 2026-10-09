@@ -264,6 +264,29 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertEqual(sentence_numbers("AUC 0.5至0.7%\\cite{k}"), ["0.5", "0.7%"])
         self.assertEqual(sentence_numbers("AUC 0.5到0.7%\\cite{k}"), ["0.5", "0.7%"])
 
+    def test_abstract_space_thousands_separators(self) -> None:
+        for sep in (" ", "\u2009", "\u202f", "\u00a0"):
+            abstract = f"We enrolled 50{sep}132 asymptomatic adults in the screening programme over several years."
+            self.assertEqual(self._number_details("共纳入 50132 名\\cite{wu2021value}。\n", abstract), [], repr(sep))
+        wrong = "We enrolled 50 133 asymptomatic adults in the screening programme over several years."
+        self.assertEqual(len(self._number_details("共纳入 50132 名\\cite{wu2021value}。\n", wrong)), 1)
+        year = "In 2021 132 asymptomatic adults were enrolled in the screening programme over several years."
+        self.assertEqual(len(self._number_details("共纳入 2021132 名\\cite{wu2021value}。\n", year)), 1)
+
+    def test_decimal_equivalence_ignores_trailing_zeros(self) -> None:
+        a = "The model reached an AUC of 0.620 in the validation cohort of the multicentre study."
+        self.assertEqual(self._number_details("AUC 为 0.62\\cite{wu2021value}。\n", a), [])
+        self.assertEqual(len(self._number_details("AUC 为 0.623\\cite{wu2021value}。\n", a)), 1)
+        self.assertEqual(len(self._number_details("AUC 为 0.6\\cite{wu2021value}。\n", "AUC was 0.62 in the validation cohort of the multicentre study.")), 1)
+        b = "The model reached an AUC of 0.62 in the validation cohort of the multicentre study."
+        self.assertEqual(self._number_details("AUC 为 0.620\\cite{wu2021value}。\n", b), [])
+
+    def test_english_number_words_in_abstract(self) -> None:
+        a = "Only six features were retained after selection in the final model of the multicentre study."
+        self.assertEqual(self._number_details("只有 6 个特征\\cite{wu2021value}。\n", a), [])
+        self.assertEqual(len(self._number_details("只有 7 个特征\\cite{wu2021value}。\n", a)), 1)
+        self.assertEqual(self._number_details("共 20 项\\cite{wu2021value}。\n", "TWENTY items were retained after selection in the final model of the study."), [])
+
     def test_month_after_year_is_not_extracted(self) -> None:
         from consistency_check import sentence_numbers
         self.assertEqual(sentence_numbers("2021年3月的研究\\cite{k}"), [])
@@ -360,6 +383,16 @@ class ProcessTextTest(unittest.TestCase):
         hits = [f for f in check_project(root, config).needs_review if f.kind == "process_text_in_body"]
         self.assertEqual(len(hits), 1)
         self.assertEqual([f for f in check_project(root, {"consistency": {}}).needs_review if f.kind == "process_text_in_body"], [])
+
+    def test_ai_declaration_is_exempt_but_body_is_not(self) -> None:
+        wording = "本稿经核实的文献均已入台账。\n"
+        root = build(self.base, body_11="多模态。\n" + wording)
+        (root / "proposal" / "ai_declaration.md").write_text(wording, encoding="utf-8")
+        write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
+            {"file": "proposal/ai_declaration.md", "writer": "nsfc-proposal", "written_with_case_version": None}]})
+        hits = [f for f in check_project(root).needs_review if f.kind == "process_text_in_body"]
+        self.assertEqual([f.file for f in hits], ["extraTex/1.1.立项依据.tex"])
 
     def test_process_wording_from_e2e_is_flagged(self) -> None:
         for sentence in ("建议申请人在补充时优先给出论文。", "以下各处保留占位，由申请人按实际情况补充；不补充的条目应在提交前删去。",

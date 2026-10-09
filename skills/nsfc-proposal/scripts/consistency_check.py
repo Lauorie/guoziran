@@ -30,6 +30,7 @@ SENTENCE_SPLIT_RE = re.compile(f"[{SENTENCE_END}]")
 REF_RE = re.compile(r"\\(?:ref|eqref|autoref|cref|label|pageref)\{[^}]*\}")
 DECIMAL_RE = re.compile(r"(?<![\d.])\d+\.\d+(?!\d)")
 YEAR_RE = re.compile(r"(?:19|20)\d\d")
+PROCESS_DESCRIBING_WRITER = "nsfc-proposal"  # 生成式人工智能使用说明本就描述过程，不查过程说明
 DEFAULT_PLACEHOLDER = "【待补充：[^】]*】"
 LABELS = {
     "hidden_placeholder": "注释中的隐藏占位",
@@ -80,6 +81,11 @@ _CITED_NUMBER_RE = re.compile(
     r"(?:(?P<pct>[%％])|(?P<unit>mm|cm|毫米|厘米|例(?!如)|名|家|年|个月|月|HU|kV|mAs|层|项|个(?!别))(?![A-Za-z]))"
 )
 _THOUSANDS_RE = re.compile(r"(?<=\d)(?:\{,\}|\\,|,)(?=\d{3}(?!\d))")
+_SPACE_THOUSANDS_RE = re.compile(r"(?<![\d,.])(\d{1,3})[ \u2009\u202f\u00a0](?=\d{3}(?!\d))")
+_TRAILING_ZEROS_RE = re.compile(r"(?<![\d.])(\d+)\.(\d+)(?!\d|\.\d)")
+_NUMBER_WORDS = {w: str(i) for i, w in enumerate(
+    "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty".split())}
+_NUMBER_WORD_RE = re.compile(r"(?<![\w-])(" + "|".join(_NUMBER_WORDS) + r")(?![\w-])", re.IGNORECASE)
 _LATEX_LENGTH_RE = re.compile(r"\s?(?:em|pt|ex)(?![A-Za-z])")
 
 
@@ -112,12 +118,22 @@ def sentence_numbers(sentence: str) -> list[str]:
 def _evidence_text(text: str) -> str:
     text = re.sub(r"\\%", "%", text).replace("％", "%")
     text = re.sub(r"\s+%", "%", text)
-    return _THOUSANDS_RE.sub("", text)
+    text = _SPACE_THOUSANDS_RE.sub(r"\1", _THOUSANDS_RE.sub("", text))
+    return _NUMBER_WORD_RE.sub(lambda m: _NUMBER_WORDS[m.group(1).lower()], text)
+
+
+def _strip_trailing_zeros(text: str) -> str:
+    """0.620 -> 0.62，1.0 -> 1；版本号式的 1.0.2 不动。"""
+    def fix(match: re.Match[str]) -> str:
+        decimals = match.group(2).rstrip("0")
+        return f"{match.group(1)}.{decimals}" if decimals else match.group(1)
+    return _TRAILING_ZEROS_RE.sub(fix, text)
 
 
 def number_in_text(number: str, text: str) -> bool:
-    """number 是否作为独立数字出现在 text（已规范化）中；不接受 0.91 匹配 0.910 或 10.91。"""
-    return re.search(r"(?<![\d.])" + re.escape(number) + r"(?!\d|\.\d)", _evidence_text(text)) is not None
+    """number 是否作为独立数字出现在 text（已规范化）中；不接受 0.91 匹配 0.913 或 10.91；0.62 与 0.620 视为同一数；英文数词 zero 至 twenty 按数字比对。"""
+    wanted = _strip_trailing_zeros(number)
+    return re.search(r"(?<![\d.])" + re.escape(wanted) + r"(?!\d|\.\d)", _strip_trailing_zeros(_evidence_text(text))) is not None
 
 
 def sentence_containing(line: str, pos: int) -> str:
@@ -187,7 +203,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                 for match in nonstandard_re.finditer(placeholder_re.sub("", body)):
                     detail = f"{_excerpt(body[body.find(match.group(0)):], 40)}；请改成「【待补充：……】」并列入占位清单"
                     report.errors.append(Finding("placeholder_nonstandard", rel, number, detail))
-            if process_patterns:
+            if process_patterns and entry.get("writer") != PROCESS_DESCRIBING_WRITER:
                 _check_process_text(report, rel, number, placeholder_re.sub("", body), process_patterns)
             if is_tex:
                 for match in CITE_RE.finditer(body):
