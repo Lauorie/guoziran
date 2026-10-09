@@ -14,8 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from citation_ledger import register_user_entries
-from latex_files import read_bib_index, relpath, scan_latex_tree
+from citation_ledger import load_ledger
+from latex_files import bib_entry_texts, read_bib_index, relpath, scan_latex_tree
 from proposal_common import (
     SKILL_ROOT,
     ProposalError,
@@ -75,6 +75,12 @@ def _select_sections(config: Mapping[str, Any], names: Sequence[str] | None) -> 
     return [s for s in sections if s["name"] in names]
 
 
+def unledgered_note(keys: Sequence[str]) -> str:
+    """init 时 .bib 中已有、未入台账的条目：提示申请人逐条确认，未入账的不得引用。"""
+    return (f"`.bib` 中已有 {len(keys)} 条文献未入引用台账：{'、'.join(keys)}。确认由申请人提供后运行 "
+            "`citation_ledger.py register-user --key K`；不是申请人的（如模板示例）从 `.bib` 删去。未入账的条目不得引用。")
+
+
 def init_proposal(
     project_root: Path,
     *,
@@ -83,12 +89,17 @@ def init_proposal(
     sections: Sequence[str] | None = None,
     config: Mapping[str, Any] | None = None,
 ) -> InitResult:
-    """在 project_root/proposal/ 下建立共享文件骨架；已存在的文件不覆盖。"""
+    """在 project_root/proposal/ 下建立共享文件骨架；已存在的文件不覆盖。
+
+    引用台账只建空文件，不登记 .bib 中已有的条目；这些条目列入警告和「## 待核实项」，经申请人确认后用
+    citation_ledger.py register-user --key 登记。
+    """
     cfg = config or load_config()
     root = resolve_project_root(project_root)
     if not (root / "extraTex").is_dir():
         raise ProposalError(f"project_root 缺少 extraTex/，不是 NSFC 正文项目：{root}")
-    compiled = {relpath(root, p) for p in scan_latex_tree(root).tex_files}
+    tree = scan_latex_tree(root)
+    compiled = {relpath(root, p) for p in tree.tex_files}
     chosen = _select_sections(cfg, sections)
     budgets = load_length_budgets(cfg)
     result = InitResult()
@@ -134,9 +145,9 @@ def init_proposal(
     if not paths.ledger.exists():
         paths.ledger.write_text("", encoding="utf-8")
         result.created.append(paths.ledger)
-        registered = register_user_entries(root)
-        if registered:
-            note = f"已有 {len(registered)} 条文献按申请人提供登记"
+        existing = list(bib_entry_texts(tree.bib_files))
+        if existing:
+            note = unledgered_note(existing)
             result.warnings.append(note)
             if paths.assumptions not in result.created:
                 append_under_heading(paths.assumptions, "## 待核实项", f"- {note}")
@@ -168,7 +179,9 @@ def cmd_validate(args: argparse.Namespace) -> int:
     root = resolve_project_root(args.project_root)
     case, evidence, plan = _load_shared(root)
     bib = read_bib_index(scan_latex_tree(root).bib_files)
-    problems = validate_all(case, evidence, plan, bib_keys=set(bib.keys))
+    ledger_path = proposal_paths(root).ledger
+    ledger = load_ledger(ledger_path) if ledger_path.exists() else None
+    problems = validate_all(case, evidence, plan, bib_keys=set(bib.keys), ledger=ledger)
     for problem in problems:
         print(f"✗ {problem}")
     print("✅ 校验通过" if not problems else f"共 {len(problems)} 处不通过")

@@ -21,6 +21,10 @@
 1. ……
 2. ……
 
+项目参考文献中原有、尚未确认来源的文献（没有就不列）：
+1. Smith2020：……（标题）
+请指出哪些由你提供；没指出的不引用。
+
 你可以回答：同意 / 修改：（写明要改什么）/ 先继续。
 也可以只答其中几条，例如「同意，第 2 条改成……」。
 ```
@@ -33,5 +37,6 @@
 - 同意并改其中几条（如「同意，第 2 条改成……」）：按修改处理，未提到的条目视为同意。顺序：改 YAML，`case.py bump`，`case.py validate`；改动涉及科学问题、假设或术语时重新展示，否则 validate 通过后 `case.py status --set confirmed`。不在 `bump` 之前设 confirmed，`bump` 会把状态重置为 draft。
 - 修改：改 YAML，`case.py bump`，`case.py validate`，重新展示。可以多次修改。
 - 先继续：`case.py status --set bypassed`，进入写作；收尾报告中再次列出未确认的内容。
+- 原有文献：申请人指出由其提供的，逐条 `citation_ledger.py register-user --key K`；没指出的不登记、不引用，留在 `assumptions.md` 的「## 待核实项」。
 - 申请人只答「同意」、没有逐条回应时：AI 拟定项照样在收尾报告中再列一次，标「申请人未逐条回应」。
 - 无人值守（`confirm.mode: auto`，或用户要求全自动）：不展示、不停，按「先继续」处理。

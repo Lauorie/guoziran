@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import subprocess
 import sys
@@ -188,6 +189,71 @@ class EvidenceRuleTest(unittest.TestCase):
         self.assertTrue(any("C1" in e and "multi_verified" in e for e in errors), errors)
 
 
+def ledger_record(event: str, abstract: str | None = None) -> dict:
+    return {"event": event, "bibkey": "k", "source": "user" if event == "register_user" else "crossref", "abstract": abstract}
+
+
+ABSTRACT = "A multicentre cohort study reported the incremental value of peritumoral features for invasiveness."
+
+
+def two_ref_claim(basis: str = "full_abstract", support: str = "multi_verified", claim_type: str = "background") -> dict:
+    return {"version": 1, "claims": [
+        {"id": "C1", "text": "瘤周特征有增量价值", "sections": ["立项依据"], "type": claim_type, "support": support,
+         "evidence": [{"ref": "a2020", "role": "supporting", "basis": basis},
+                      {"ref": "b2021", "role": "supporting", "basis": basis}]}]}
+
+
+class EvidenceLedgerTest(unittest.TestCase):
+    BIB = {"a2020", "b2021"}
+
+    def test_register_user_refs_do_not_reach_multi_verified(self) -> None:
+        ledger = {"a2020": ledger_record("register_user"), "b2021": ledger_record("register_user")}
+        errors = validate_evidence(two_ref_claim(), self.BIB, ledger)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("只够 unsupported", errors[0])
+        for key in ("a2020", "b2021"):
+            self.assertIn(key, errors[0])
+        self.assertIn("register_user", errors[0])
+
+    def test_register_user_refs_do_not_reach_single_verified(self) -> None:
+        ledger = {"a2020": ledger_record("register_user"), "b2021": ledger_record("register_user")}
+        errors = validate_evidence(two_ref_claim(support="single_verified"), self.BIB, ledger)
+        self.assertTrue(any("只够 unsupported" in e for e in errors), errors)
+
+    def test_two_add_refs_with_abstracts_reach_multi_verified(self) -> None:
+        ledger = {"a2020": ledger_record("add", ABSTRACT), "b2021": ledger_record("add", ABSTRACT)}
+        self.assertEqual(validate_evidence(two_ref_claim(), self.BIB, ledger), [])
+
+    def test_full_abstract_basis_needs_ledger_abstract(self) -> None:
+        ledger = {"a2020": ledger_record("add", ABSTRACT), "b2021": ledger_record("add", None)}
+        errors = validate_evidence(two_ref_claim(), self.BIB, ledger)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("只够 single_verified", errors[0])
+        self.assertIn("b2021", errors[0])
+        self.assertIn("摘要", errors[0])
+        self.assertNotIn("a2020", errors[0])
+
+    def test_fulltext_basis_counts_add_without_abstract(self) -> None:
+        ledger = {"a2020": ledger_record("add", None), "b2021": ledger_record("add", None)}
+        self.assertEqual(validate_evidence(two_ref_claim(basis="fulltext"), self.BIB, ledger), [])
+
+    def test_ref_missing_from_ledger_is_not_counted(self) -> None:
+        ledger = {"a2020": ledger_record("add", ABSTRACT)}
+        errors = validate_evidence(two_ref_claim(), self.BIB, ledger)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("b2021", errors[0])
+        self.assertIn("台账", errors[0])
+
+    def test_register_user_still_backs_applicant_results(self) -> None:
+        ledger = {"a2020": ledger_record("register_user"), "b2021": ledger_record("register_user")}
+        evidence = two_ref_claim(support="applicant_material", claim_type="applicant_result")
+        self.assertEqual(validate_evidence(evidence, self.BIB, ledger), [])
+
+    def test_without_ledger_behavior_is_unchanged(self) -> None:
+        self.assertEqual(validate_evidence(two_ref_claim(), self.BIB), [])
+        self.assertEqual(validate_evidence(two_ref_claim(), self.BIB, None), [])
+
+
 class PlanRuleTest(unittest.TestCase):
     def test_unknown_must_include(self) -> None:
         plan = valid_plan()
@@ -228,6 +294,26 @@ class ValidateCliTest(unittest.TestCase):
             bad = self._run(root)
             self.assertEqual(bad.returncode, 1)
             self.assertIn("[scientific_case]", bad.stdout)
+
+    def test_ledger_is_used_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "proj"
+            (root / "references").mkdir(parents=True)
+            (root / "main.tex").write_text("\\bibliography{references/refs}\n", encoding="utf-8")
+            (root / "references" / "refs.bib").write_text("@article{wu2021value,\n title={X},\n}\n", encoding="utf-8")
+            write_yaml(root / "proposal" / "scientific_case.yaml", valid_case())
+            write_yaml(root / "proposal" / "evidence_map.yaml", valid_evidence())
+            write_yaml(root / "proposal" / "section_plan.yaml", valid_plan())
+            ledger = root / "proposal" / "citation_ledger.jsonl"
+            ledger.write_text(json.dumps({"event": "register_user", "bibkey": "wu2021value", "source": "user", "abstract": None}) + "\n",
+                              encoding="utf-8")
+            bad = self._run(root)
+            self.assertEqual(bad.returncode, 1, bad.stdout + bad.stderr)
+            self.assertIn("wu2021value", bad.stdout)
+            ledger.write_text(json.dumps({"event": "add", "bibkey": "wu2021value", "source": "crossref", "abstract": ABSTRACT}) + "\n",
+                              encoding="utf-8")
+            ok = self._run(root)
+            self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
 
 
 if __name__ == "__main__":

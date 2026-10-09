@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """跨章确定性检查（设计文档 4.7 节）。语义一致性由 AI 判断，不在本脚本内。
 
-errors：必须修正。needs_review：交给 AI 复核，例如疑似内部编号可能是「T1 加权」这类误报。
+errors：必须修正（含没有引用台账）。needs_review：交给 AI 复核，例如疑似内部编号可能是「T1 加权」这类误报。
 placeholders：正文中全部可见占位。numbers：各章带单位的数值清单，供 AI 跨章对照，不是错误，不影响退出码。退出码：0 无 errors；1 有 errors；2 输入或路径错误。
 """
 
@@ -40,7 +40,7 @@ LABELS = {
     "stale_section": "章节依据旧版科学论证",
     "internal_id": "疑似内部编号（请 AI 复核）",
     "file_not_compiled": "文件未被 main.tex 引用",
-    "no_citation_ledger": "没有引用台账（旧项目；无法核对条目来源）",
+    "no_citation_ledger": "没有引用台账（无法核对条目来源）",
     "cite_not_in_ledger": "引用的文献不在引用台账中（手写条目？）",
     "bib_entry_modified": ".bib 条目与引用台账哈希不一致（被手改？）",
     "number_not_in_evidence": "引用句中的数字不见于所引文献摘要（请 AI 复核）",
@@ -183,7 +183,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
 
     report = Report()
     if ledger is None:
-        report.needs_review.append(Finding("no_citation_ledger", "proposal/citation_ledger.jsonl", None, "没有引用台账，未核对 .bib 条目来源与引用句中的数字"))
+        report.errors.append(Finding("no_citation_ledger", "proposal/citation_ledger.jsonl", None, "没有引用台账，未核对 .bib 条目来源与引用句中的数字"))
     bodies: list[str] = []
     for entry in entries:
         rel = entry["file"]

@@ -128,6 +128,26 @@ class RegisterUserTest(unittest.TestCase):
         self.assertEqual(register_user_entries(self.root), [])
         self.assertNotIn("b2021", load_ledger(self.ledger))
 
+    def test_named_keys_only(self) -> None:
+        self.assertEqual(register_user_entries(self.root, ["b2021"]), ["b2021"])
+        self.assertEqual(set(load_ledger(self.ledger)), {"b2021"})
+        self.assertEqual(register_user_entries(self.root, ["b2021", "a2020", "a2020"]), ["a2020"])
+        self.assertEqual(set(load_ledger(self.ledger)), {"a2020", "b2021"})
+
+    def test_named_key_not_in_bib_is_rejected_before_writing(self) -> None:
+        with self.assertRaises(ProposalError) as ctx:
+            register_user_entries(self.root, ["a2020", "nope2099"])
+        self.assertIn("nope2099", str(ctx.exception))
+        self.assertFalse(self.ledger.exists())
+
+    def test_named_dropped_key_is_rejected(self) -> None:
+        register_user_entries(self.root, ["a2020"])
+        append_event(self.ledger, {"event": "drop", "bibkey": "a2020", "time": "t", "reason": "r"})
+        with self.assertRaises(ProposalError) as ctx:
+            register_user_entries(self.root, ["a2020"])
+        self.assertIn("作废", str(ctx.exception))
+        self.assertNotIn("a2020", load_ledger(self.ledger))
+
 
 class CliTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -144,7 +164,7 @@ class CliTest(unittest.TestCase):
                               env=self.ENV, capture_output=True, text=True, timeout=60)
 
     def test_register_user_show_and_drop(self) -> None:
-        self.assertEqual(self._cli("register-user").returncode, 0)
+        self.assertEqual(self._cli("register-user", "--all").returncode, 0)
         shown = self._cli("show")
         self.assertIn("a2020\tuser\t10.5555/a\t无摘要", shown.stdout)
         dropped = self._cli("drop", "--key", "a2020", "--reason", "元数据有误")
@@ -154,7 +174,7 @@ class CliTest(unittest.TestCase):
         self.assertNotIn("a2020", self._cli("show").stdout)
 
     def test_audit_lists_handwritten_and_modified(self) -> None:
-        self.assertEqual(self._cli("register-user").returncode, 0)
+        self.assertEqual(self._cli("register-user", "--all").returncode, 0)
         self.assertEqual(self._cli("audit").returncode, 0)
         bib = self.root / "references" / "refs.bib"
         bib.write_text(bib.read_text(encoding="utf-8").replace("Alpha", "Alpha, revised") + "\n@article{hand2024,\n  title = {H},\n}\n", encoding="utf-8")
@@ -164,6 +184,39 @@ class CliTest(unittest.TestCase):
         self.assertIn("hand2024", missing)
         self.assertIn("a2020", modified)
         self.assertNotIn("b2021", proc.stdout)
+
+    def test_register_user_needs_key_or_all(self) -> None:
+        proc = self._cli("register-user")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("--key", proc.stderr)
+        self.assertFalse(proposal_paths(self.root).ledger.exists())
+
+    def test_register_user_single_and_repeated_key(self) -> None:
+        one = self._cli("register-user", "--key", "a2020")
+        self.assertEqual(one.returncode, 0, one.stderr)
+        self.assertEqual(set(load_ledger(proposal_paths(self.root).ledger)), {"a2020"})
+        both = self._cli("register-user", "--key", "a2020", "--key", "b2021")
+        self.assertEqual(both.returncode, 0, both.stderr)
+        self.assertIn("b2021", both.stdout)
+        ledger = load_ledger(proposal_paths(self.root).ledger)
+        self.assertEqual({k: v["event"] for k, v in ledger.items()}, {"a2020": "register_user", "b2021": "register_user"})
+        self.assertEqual(len(proposal_paths(self.root).ledger.read_text(encoding="utf-8").splitlines()), 2)
+
+    def test_register_user_key_errors_exit_2(self) -> None:
+        missing = self._cli("register-user", "--key", "nope2099")
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("nope2099", missing.stderr)
+        self.assertEqual(self._cli("register-user", "--key", "a2020").returncode, 0)
+        self.assertEqual(self._cli("drop", "--key", "a2020", "--reason", "不是申请人的").returncode, 0)
+        dropped = self._cli("register-user", "--key", "a2020")
+        self.assertEqual(dropped.returncode, 2)
+        self.assertIn("作废", dropped.stderr)
+
+    def test_register_user_all_registers_every_unledgered_entry(self) -> None:
+        proc = self._cli("register-user", "--all")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("登记 2 条", proc.stdout)
+        self.assertEqual(set(load_ledger(proposal_paths(self.root).ledger)), {"a2020", "b2021"})
 
     def test_errors_exit_2(self) -> None:
         self.assertEqual(self._cli("drop", "--key", "nope", "--reason", "r").returncode, 2)
@@ -240,25 +293,34 @@ class ResolveLedgerTest(unittest.TestCase):
         self.assertFalse(proposal_paths(self.root).ledger.exists())
 
 
+def unledgered_note(keys: list[str]) -> str:
+    return (f"`.bib` 中已有 {len(keys)} 条文献未入引用台账：{'、'.join(keys)}。确认由申请人提供后运行 "
+            "`citation_ledger.py register-user --key K`；不是申请人的（如模板示例）从 `.bib` 删去。未入账的条目不得引用。")
+
+
 class InitLedgerTest(unittest.TestCase):
-    def test_existing_entries_registered_as_user(self) -> None:
+    def test_existing_entries_are_listed_not_registered(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = make_project(Path(tmp))
             (root / "references" / "myexample.bib").write_text(ENTRY_A + "\n" + ENTRY_B, encoding="utf-8")
             result = init_proposal(root, title="T", project_type="青年科学基金")
-            ledger = load_ledger(proposal_paths(root).ledger)
-            self.assertEqual({k: v["source"] for k, v in ledger.items()}, {"a2020": "user", "b2021": "user"})
-            self.assertIn("已有 2 条文献按申请人提供登记", result.warnings)
+            paths = proposal_paths(root)
+            self.assertTrue(paths.ledger.is_file())
+            self.assertEqual(paths.ledger.read_text(encoding="utf-8"), "")
+            self.assertEqual(load_ledger(paths.ledger), {})
+            self.assertIn(unledgered_note(["a2020", "b2021"]), result.warnings)
             again = init_proposal(root, title="T", project_type="青年科学基金")
-            self.assertEqual(len(proposal_paths(root).ledger.read_text(encoding="utf-8").splitlines()), 2)
-            self.assertFalse([w for w in again.warnings if "登记" in w])
+            self.assertEqual(paths.ledger.read_text(encoding="utf-8"), "")
+            self.assertFalse([w for w in again.warnings if "未入引用台账" in w])
 
-    def test_registration_is_noted_in_assumptions(self) -> None:
+    def test_unledgered_entries_are_listed_under_pending_checks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = make_project(Path(tmp))
             (root / "references" / "myexample.bib").write_text(ENTRY_A, encoding="utf-8")
             init_proposal(root, title="T", project_type="青年科学基金")
-            self.assertIn("已有 1 条文献按申请人提供登记", proposal_paths(root).assumptions.read_text(encoding="utf-8"))
+            text = proposal_paths(root).assumptions.read_text(encoding="utf-8")
+            pending = text.split("## 待核实项", 1)[1].split("\n## ", 1)[0]
+            self.assertIn(f"- {unledgered_note(['a2020'])}", pending)
 
     def test_note_added_when_proposal_dir_exists_without_ledger(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -268,9 +330,12 @@ class InitLedgerTest(unittest.TestCase):
             paths.ledger.unlink()
             (root / "references" / "myexample.bib").write_text(ENTRY_A + "\n" + ENTRY_B, encoding="utf-8")
             result = init_proposal(root, title="T", project_type="青年科学基金")
-            self.assertIn("已有 2 条文献按申请人提供登记", result.warnings)
+            note = unledgered_note(["a2020", "b2021"])
+            self.assertIn(note, result.warnings)
+            self.assertEqual(result.created, [paths.ledger])
+            self.assertEqual(load_ledger(paths.ledger), {})
             text = paths.assumptions.read_text(encoding="utf-8")
-            self.assertEqual(text.count("已有 2 条文献按申请人提供登记"), 1)
+            self.assertEqual(text.count(note), 1)
             self.assertIn("## 待核实项", text)
 
     def test_empty_bib_creates_empty_ledger_without_warning(self) -> None:
@@ -279,7 +344,8 @@ class InitLedgerTest(unittest.TestCase):
             result = init_proposal(root, title="T", project_type="青年科学基金")
             self.assertTrue(proposal_paths(root).ledger.is_file())
             self.assertEqual(load_ledger(proposal_paths(root).ledger), {})
-            self.assertFalse([w for w in result.warnings if "登记" in w])
+            self.assertFalse([w for w in result.warnings if "台账" in w])
+            self.assertNotIn("未入引用台账", proposal_paths(root).assumptions.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

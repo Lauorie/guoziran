@@ -23,4 +23,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 执行说明接入引用台账。
 - 离线或缺文献时，现状论断集中成段并附一处待补文献占位，不逐句写成推测；正文不写写作过程说明；摘要在申请人没有前期结果时不留前期发现占位；分组口径计入 AI 拟定项（来源：盲评）。
 - 参照 2026 版中标申请书：立项依据单列科学技术价值，现状各条以局限收尾；研究方案统一小标题；给出最小样本量；方法注明出处；研究框架图占位；收尾报告列出各章引用数（来源：申请人提供的中标书）。
+- `init` 不再把 `.bib` 中已有的条目登记入账：只建空台账，并把这些条目列入警告与「待核实项」；`citation_ledger.py register-user` 改为 `--key K`（可重复）逐条登记，全部登记须显式加 `--all`；有台账时 `case.py validate` 只把台账记录为 `add` 的文献计入 `single_verified`、`multi_verified` 的篇数（`basis: full_abstract` 还要求台账摘要非空）；没有台账（`no_citation_ledger`）改为必须修正（来源：终审）。
 - 本分支未写 BAC 记录，经负责人同意。

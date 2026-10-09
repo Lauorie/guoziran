@@ -11,12 +11,12 @@
 
 | support | 条件 | 正文写法 |
 |---|---|---|
-| `multi_verified` | 至少 2 条支持证据，`ref` 为 bibkey，`basis` 为全文或完整摘要 | 可写「多项研究表明」 |
+| `multi_verified` | 至少 2 条支持证据，`ref` 为台账记录为 `add` 的 bibkey，`basis` 为全文或完整摘要（完整摘要须在台账中有摘要） | 可写「多项研究表明」 |
 | `single_verified` | 恰好 1 条这样的证据 | 只写「有研究报道」，不写成共识 |
 | `unsupported` | 没有已核实证据 | 不写成事实。缺口类写「尚不清楚」「尚未检验」；背景类集中成段并附待补文献占位，不逐句写「可能」；或删去。见下节「无证据时的现状论断」 |
 | `applicant_material` | 申请人提供的材料（只用于 `applicant_result` 类论断） | 按材料原样写，不夸大 |
 
-`case.py validate` 会检查 `support` 是否超出证据实际能支撑的程度。
+`case.py validate` 会检查 `support` 是否超出证据实际能支撑的程度。有引用台账时，只有台账记录为 `add`（经 `bib_resolve` 核对）的文献计入篇数；`basis: full_abstract` 还要求台账中有该文献的摘要。`register-user` 登记的申请人文献不计数，只能支持 `applicant_material` 论断。
 
 ## 例句
 
@@ -39,7 +39,7 @@
 
 ## 哪些句子必须引用
 
-下列句子必须 `\cite` 可引用的 bibkey，否则按上一节 `unsupported` 的两类处理，或删去。可引用的 bibkey 同时满足：(a) 经 `bib_resolve.py` 进入 `.bib`（`added` 或 `exists`）；(b) 列在这句话所表达的论断的 `evidence` 中，`role` 为 supporting；(c) 措辞不超过该论断的 `support`。句子内容没有对应论断时，先把论断补进 `evidence_map.yaml`，或按 `unsupported` 的两类处理、删去。
+下列句子必须 `\cite` 可引用的 bibkey，否则按上一节 `unsupported` 的两类处理，或删去。可引用的 bibkey 同时满足：(a) 是 `bib_resolve.py` 的 `added`，或 `exists` 且该 key 在引用台账中有有效记录；(b) 列在这句话所表达的论断的 `evidence` 中，`role` 为 supporting；(c) 措辞不超过该论断的 `support`。句子内容没有对应论断时，先把论断补进 `evidence_map.yaml`，或按 `unsupported` 的两类处理、删去。
 
 - 叙述研究现状的句子。正例：有研究报道，重建核改变后部分纹理特征的重复性下降\cite{c}。反例：目前纹理特征的重复性普遍较差。
 - 叙述他人方法的句子。正例：文献\cite{d}用 3 mm 环带提取瘤周特征。反例：已有方法大多采用固定环带提取瘤周特征。

@@ -3,8 +3,8 @@
 
 每条进入 .bib 的文献留一条记录：来自哪条检索记录、元数据出自 CrossRef 还是 OpenAlex、
 写入 .bib 的条目文本哈希、可用的摘要原文。一致性检查据此拒绝手写或手改的条目。
-事件：add（bib_resolve 写入）、register_user（申请人原有条目）、drop（作废）。不做 revise：
-要改一条文献，先 drop，再用 bib_resolve 重新解析。
+事件：add（bib_resolve 写入）、register_user（申请人确认由其提供、用 register-user --key 登记的条目）、
+drop（作废）。case.py init 只建空台账，不登记任何条目。不做 revise：要改一条文献，先 drop，再用 bib_resolve 重新解析。
 退出码：0 正常；1 audit 发现问题；2 输入或路径错误。
 """
 
@@ -16,7 +16,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from latex_files import DOI_FIELD_RE, bib_entry_texts, normalize_doi, scan_latex_tree
 from proposal_common import ProposalError, proposal_paths, resolve_project_root
@@ -125,16 +125,32 @@ def record_added(ledger_path: Path, bib_files: list[Path], records: list[dict[st
             abstract=_record_abstract(record), provenance=_record_provenance(record, outcome.record_id)))
 
 
-def register_user_entries(project_root: Path, bib_files: list[Path] | None = None) -> list[str]:
-    """把 .bib 中尚未在台账里的条目登记为 register_user；返回新登记的 bibkey。已 drop 的条目不重新登记。"""
+def register_user_entries(project_root: Path, keys: Sequence[str] | None = None, bib_files: list[Path] | None = None) -> list[str]:
+    """把申请人确认的 .bib 条目登记为 register_user，返回新登记的 bibkey。
+
+    keys 为 None 时登记 .bib 中全部未入账条目（CLI 的 --all），已 drop 的跳过。给出 keys 时只登记这些 key：
+    有 key 不在 .bib 中或已作废时报 ProposalError，一条也不写；已有有效记录的 key 跳过。
+    """
     root = resolve_project_root(project_root)
     ledger_path = proposal_paths(root).ledger
     files = scan_latex_tree(root).bib_files if bib_files is None else bib_files
-    known = set(load_ledger(ledger_path)) | dropped_keys(ledger_path)
+    texts = bib_entry_texts(files)
+    active, dropped = set(load_ledger(ledger_path)), dropped_keys(ledger_path)
+    if keys is None:
+        wanted = [key for key in texts if key not in dropped]
+    else:
+        wanted = list(dict.fromkeys(keys))
+        absent = [key for key in wanted if key not in texts]
+        if absent:
+            raise ProposalError(f".bib 中没有这些条目：{'、'.join(absent)}")
+        voided = [key for key in wanted if key in dropped]
+        if voided:
+            raise ProposalError(f"这些条目已作废，不能再登记：{'、'.join(voided)}；要恢复，先从 .bib 删去，再用 bib_resolve 重新解析")
     registered: list[str] = []
-    for key, text in bib_entry_texts(files).items():
-        if key in known:
+    for key in wanted:
+        if key in active:
             continue
+        text = texts[key]
         doi_match = DOI_FIELD_RE.search(text)
         append_event(ledger_path, {
             "event": "register_user", "bibkey": key, "time": now_iso(), "source": "user",
@@ -161,8 +177,12 @@ def audit(project_root: Path) -> tuple[list[str], list[str]]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="citation_ledger.py", description="引用台账：登记、作废、查看、审计")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name, help_text in (("register-user", "把 .bib 中尚未入账的条目登记为申请人提供"), ("show", "列出有效条目"),
-                            ("audit", "对照 .bib 与台账")):
+    register = sub.add_parser("register-user", help="把申请人确认由其提供的 .bib 条目登记入账")
+    register.add_argument("--project-root", required=True)
+    which = register.add_mutually_exclusive_group(required=True)
+    which.add_argument("--key", action="append", help="要登记的 bibkey；可重复。key 不在 .bib 中或已作废时退出 2")
+    which.add_argument("--all", action="store_true", help="登记 .bib 中全部未入账条目（已作废的除外）")
+    for name, help_text in (("show", "列出有效条目"), ("audit", "对照 .bib 与台账")):
         sub.add_parser(name, help=help_text).add_argument("--project-root", required=True)
     drop = sub.add_parser("drop", help="作废一条记录")
     drop.add_argument("--project-root", required=True)
@@ -173,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
         root = resolve_project_root(Path(args.project_root))
         ledger_path = proposal_paths(root).ledger
         if args.command == "register-user":
-            keys = register_user_entries(root)
+            keys = register_user_entries(root, None if args.all else args.key)
             print(f"登记 {len(keys)} 条：{'、'.join(keys) if keys else '无'}")
         elif args.command == "drop":
             if args.key not in load_ledger(ledger_path):

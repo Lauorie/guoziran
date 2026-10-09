@@ -174,7 +174,21 @@ def validate_case(case: Mapping[str, Any], evidence: Mapping[str, Any] | None) -
     return errors
 
 
-def validate_evidence(evidence: Mapping[str, Any], bib_keys: set[str] | None) -> list[str]:
+def _ledger_reason(ref: str, basis: Any, ledger: Mapping[str, Mapping[str, Any]]) -> str | None:
+    """台账存在时，supporting 证据不计入已核实篇数的原因；计数时返回 None。"""
+    record = ledger.get(ref)
+    if record is None:
+        return f"{ref} 在引用台账中没有有效记录"
+    if record.get("event") != "add":
+        return f"{ref} 的台账记录是 {record.get('event')}（申请人登记，未经 bib_resolve 核对），不是 add"
+    if basis == "full_abstract" and not _text(record.get("abstract")):
+        return f"{ref} 的台账记录没有摘要，basis 为 full_abstract 时不计数"
+    return None
+
+
+def validate_evidence(evidence: Mapping[str, Any], bib_keys: set[str] | None,
+                      ledger: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:
+    """ledger 为引用台账的有效记录（citation_ledger.load_ledger）；None 表示没有台账，不按台账核对。"""
     errors: list[str] = []
     seen: set[str] = set()
     for claim in _items(evidence, "claims", errors):
@@ -196,6 +210,7 @@ def validate_evidence(evidence: Mapping[str, Any], bib_keys: set[str] | None) ->
             errors.append(f"论断 {cid} 的 evidence 必须是列表")
             entries = []
         verified_refs: set[str] = set()
+        uncounted: dict[str, str] = {}
         for entry in entries:
             if not isinstance(entry, Mapping):
                 errors.append(f"论断 {cid} 的 evidence 条目必须是映射")
@@ -207,7 +222,11 @@ def validate_evidence(evidence: Mapping[str, Any], bib_keys: set[str] | None) ->
             if ref and not is_lead and bib_keys is not None and ref not in bib_keys:
                 errors.append(f"论断 {cid} 的证据 {ref} 不在 .bib 中")
             if entry.get("role") == "supporting" and ref and not is_lead and _in(entry.get("basis"), EVIDENCE_BASES):
-                verified_refs.add(ref)
+                reason = _ledger_reason(ref, entry.get("basis"), ledger) if ledger is not None else None
+                if reason is None:
+                    verified_refs.add(ref)
+                else:
+                    uncounted.setdefault(ref, reason)
         verified = len(verified_refs)
         if support == "applicant_material":
             if claim_type != "applicant_result":
@@ -215,7 +234,9 @@ def validate_evidence(evidence: Mapping[str, Any], bib_keys: set[str] | None) ->
             continue
         allowed = "multi_verified" if verified >= 2 else ("single_verified" if verified == 1 else "unsupported")
         if SUPPORT_RANK[support] > SUPPORT_RANK[allowed]:
-            errors.append(f"论断 {cid} 记为 {support}，但已核实的支持证据只够 {allowed}")
+            notes = [reason for ref, reason in uncounted.items() if ref not in verified_refs]
+            detail = f"；不计数：{'；'.join(notes)}" if notes else ""
+            errors.append(f"论断 {cid} 记为 {support}，但已核实的支持证据只够 {allowed}{detail}")
     return errors
 
 
@@ -259,10 +280,11 @@ def validate_all(
     plan: Mapping[str, Any] | None,
     *,
     bib_keys: set[str] | None = None,
+    ledger: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> list[str]:
     problems = [f"[scientific_case] {e}" for e in validate_case(case, evidence)]
     if evidence is not None:
-        problems += [f"[evidence_map] {e}" for e in validate_evidence(evidence, bib_keys)]
+        problems += [f"[evidence_map] {e}" for e in validate_evidence(evidence, bib_keys, ledger)]
     if plan is not None:
         problems += [f"[section_plan] {e}" for e in validate_plan(plan, case)]
     return problems

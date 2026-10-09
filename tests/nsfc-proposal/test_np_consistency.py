@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,7 @@ SCRIPTS = ROOT / "skills/nsfc-proposal/scripts"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from case import init_proposal  # noqa: E402
 from citation_ledger import add_event, append_event, register_user_entries  # noqa: E402
 from consistency_check import check_project  # noqa: E402
 from latex_files import bib_entry_texts  # noqa: E402
@@ -32,7 +34,8 @@ BODY_11 = "\n".join([
 ]) + "\n"
 
 
-def build(base: Path, *, body_11: str = BODY_11, terms: list | None = None) -> Path:
+def build(base: Path, *, body_11: str = BODY_11, terms: list | None = None, ledger: bool = True) -> Path:
+    """搭一个最小项目；ledger 为 True 时，wu2021value 在台账中有 add 记录（无摘要），与 init 之后 bib_resolve 写入的状态相同。"""
     root = base / "proj"
     (root / "extraTex").mkdir(parents=True)
     (root / "references").mkdir()
@@ -53,6 +56,10 @@ def build(base: Path, *, body_11: str = BODY_11, terms: list | None = None) -> P
         {"file": "NSFC-ABSTRACTS.md", "writer": "nsfc-abstract", "written_with_case_version": None},
     ]})
     (root / "proposal" / "assumptions.md").write_text("# 假设与待核实清单\n\n## 占位清单\n\n- extraTex/1.1.立项依据.tex：【待补充：预实验结果】\n", encoding="utf-8")
+    if ledger:
+        text = bib_entry_texts([root / "references" / "refs.bib"])["wu2021value"]
+        append_event(proposal_paths(root).ledger, add_event(
+            "wu2021value", source="crossref", entry_text=text, doi=None, abstract=None, provenance={"record_id": "r0"}))
     return root
 
 
@@ -162,17 +169,30 @@ class LedgerConsistencyTest(unittest.TestCase):
 
     def _ledgered(self, body: str, abstract: str | None = ABSTRACT, key: str = "wu2021value") -> Path:
         self.count = getattr(self, "count", 0) + 1
-        root = build(self.base / f"n{self.count}", body_11=body)
+        root = build(self.base / f"n{self.count}", body_11=body, ledger=False)
         text = bib_entry_texts([root / "references" / "refs.bib"])[key]
         append_event(proposal_paths(root).ledger, add_event(
             key, source="crossref", entry_text=text, doi=None, abstract=abstract, provenance={"record_id": "r1"}))
         return root
 
-    def test_no_ledger_is_reported_and_other_checks_run(self) -> None:
-        report = check_project(build(self.base))
-        self.assertIn("no_citation_ledger", kinds(report.needs_review))
+    def test_no_ledger_is_an_error_and_other_checks_run(self) -> None:
+        report = check_project(build(self.base, ledger=False))
+        self.assertIn("no_citation_ledger", kinds(report.errors))
+        self.assertNotIn("no_citation_ledger", kinds(report.needs_review))
         self.assertIn("missing_bibkey", kinds(report.errors))
         self.assertFalse(kinds(report.errors) & {"cite_not_in_ledger", "bib_entry_modified"})
+
+    def test_no_ledger_cli_exits_1(self) -> None:
+        env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+        root = build(self.base, body_11="多模态影像信息\\cite{wu2021value}。\n【待补充：预实验结果】\n", ledger=False)
+        write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2}]})
+        cmd = [sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(root)]
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertEqual([f["kind"] for f in json.loads(subprocess.run(cmd + ["--json"], env=env, capture_output=True, text=True,
+                                                                         timeout=60).stdout)["errors"]], ["no_citation_ledger"])
+        self.assertIn("没有引用台账", proc.stdout.split("## 需要复核")[0])
 
     def test_handwritten_entry_not_in_ledger(self) -> None:
         root = self._ledgered("研究表明\\cite{wu2021value,hand2024}。\n")
@@ -183,7 +203,7 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertNotIn("no_citation_ledger", kinds(report.needs_review))
 
     def test_not_in_ledger_reported_once_per_key(self) -> None:
-        root = build(self.base, body_11="甲\\cite{wu2021value}。\n乙\\cite{wu2021value}。\n")
+        root = build(self.base, body_11="甲\\cite{wu2021value}。\n乙\\cite{wu2021value}。\n", ledger=False)
         (proposal_paths(root).ledger).write_text("", encoding="utf-8")
         self.assertEqual(len([f for f in check_project(root).errors if f.kind == "cite_not_in_ledger"]), 1)
 
@@ -199,8 +219,8 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertFalse(kinds(report.errors) & {"cite_not_in_ledger", "bib_entry_modified"})
 
     def test_register_user_entry_is_accepted(self) -> None:
-        root = build(self.base, body_11="多模态\\cite{wu2021value}。\n")
-        register_user_entries(root)
+        root = build(self.base, body_11="多模态\\cite{wu2021value}。\n", ledger=False)
+        register_user_entries(root, ["wu2021value"])
         self.assertFalse(kinds(check_project(root).errors) & {"cite_not_in_ledger", "bib_entry_modified"})
 
     def test_dropped_entry_cited_is_error(self) -> None:
@@ -347,7 +367,7 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertNotIn("number_not_in_evidence", kinds(report.needs_review))
 
     def test_no_number_checks_without_ledger(self) -> None:
-        report = check_project(build(self.base, body_11="AUC 为 0.91\\cite{wu2021value}。\n"))
+        report = check_project(build(self.base, body_11="AUC 为 0.91\\cite{wu2021value}。\n", ledger=False))
         self.assertFalse(kinds(report.needs_review) & {"number_not_in_evidence", "no_abstract_for_numbers"})
 
     def test_cli_exit_code_follows_errors(self) -> None:
@@ -362,6 +382,31 @@ class LedgerConsistencyTest(unittest.TestCase):
         bad = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(bad.returncode, 1)
         self.assertIn("手改", bad.stdout)
+
+
+class TemplateBibTest(unittest.TestCase):
+    """projects/NSFC_Young 的副本：模板自带的示例文献在 init 之后仍未入账，引用它们报 cite_not_in_ledger。"""
+
+    def test_template_sample_entries_cannot_be_cited_after_init(self) -> None:
+        template = ROOT / "projects" / "NSFC_Young"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "proj"
+            shutil.copytree(template / "extraTex", root / "extraTex")
+            shutil.copytree(template / "references", root / "references")
+            shutil.copy2(template / "main.tex", root / "main.tex")
+            body = root / "extraTex" / "1.1.立项依据.tex"
+            body.write_text(body.read_text(encoding="utf-8") + "\n职业发展理论\\cite{Smith1900}。\n", encoding="utf-8")
+            result = init_proposal(root, title="T", project_type="青年科学基金")
+            self.assertTrue(any("未入引用台账" in w and "Smith1900" in w for w in result.warnings), result.warnings)
+            report = check_project(root)
+            flagged = {f.detail for f in report.errors if f.kind == "cite_not_in_ledger"}
+            self.assertIn("Smith1900", flagged)
+            self.assertTrue({"Smith2020", "Super1957", "Johnson2019"} <= flagged, flagged)
+            env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+            proc = subprocess.run([sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(root)],
+                                  env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(proc.returncode, 1)
+            self.assertIn("Smith1900", proc.stdout)
 
 
 class ProcessTextTest(unittest.TestCase):
