@@ -29,7 +29,8 @@
 
 ## 处理回答
 
-- 同意（含只答其中几条）：未提到的条目视为同意，`case.py status --set confirmed`，进入写作。提到的修改先改 YAML，`case.py bump`，`case.py validate`。
+- 同意：`case.py status --set confirmed`，进入写作。
+- 同意并改其中几条（如「同意，第 2 条改成……」）：按修改处理，未提到的条目视为同意。顺序：改 YAML，`case.py bump`，`case.py validate`；改动涉及科学问题、假设或术语时重新展示，否则 validate 通过后 `case.py status --set confirmed`。不在 `bump` 之前设 confirmed，`bump` 会把状态重置为 draft。
 - 修改：改 YAML，`case.py bump`，`case.py validate`，重新展示。可以多次修改。
 - 先继续：`case.py status --set bypassed`，进入写作；收尾报告中再次列出未确认的内容。
 - 申请人只答「同意」、没有逐条回应时：AI 拟定项照样在收尾报告中再列一次，标「申请人未逐条回应」。
