@@ -134,6 +134,30 @@ class ResolveTest(unittest.TestCase):
         self.assertIn("author = {Sample, Carol}", text)
         self.assertIn("doi = {10.5555/nsfc.test.003}", text)
 
+    def _openalex_only_routes(self) -> dict:
+        unrelated = dict(CROSSREF_ITEM_1, title=["Something else entirely about cardiac imaging"])
+        return {
+            CROSSREF_WORKS: FakeResponse(200, {"message": {"items": [unrelated]}}),
+            OPENALEX_WORKS: FakeResponse(200, {"results": [OPENALEX_ITEM_3]}),
+        }
+
+    def test_openalex_doi_goes_back_to_crossref_for_metadata(self) -> None:
+        routes = self._openalex_only_routes()
+        authoritative = {"DOI": "10.5555/NSFC.TEST.003", "title": [OPENALEX_ITEM_3["title"]],
+                         "author": [{"family": "Sample", "given": "Carol"}], "container-title": ["Test Physics Letters"],
+                         "issued": {"date-parts": [[2023]]}, "type": "journal-article"}
+        routes[doi_url("10.5555/nsfc.test.003")] = FakeResponse(200, {"message": authoritative})
+        summary = self._run(FakeSession(routes), {"record_id": "r3", "title": OPENALEX_ITEM_3["title"], "year": 2022})
+        outcome = summary["outcomes"][0]
+        self.assertEqual((outcome["status"], outcome["source"]), ("added", "crossref"))
+        self.assertIn("year = {2023}", self.bib.read_text(encoding="utf-8"))
+
+    def test_openalex_doi_crossref_404_keeps_openalex_metadata(self) -> None:
+        summary = self._run(FakeSession(self._openalex_only_routes()), {"record_id": "r3", "title": OPENALEX_ITEM_3["title"], "year": 2022})
+        outcome = summary["outcomes"][0]
+        self.assertEqual((outcome["status"], outcome["source"]), ("added", "openalex"))
+        self.assertIn("year = {2022}", self.bib.read_text(encoding="utf-8"))
+
     def test_network_failure_goes_to_leads_and_bib_untouched(self) -> None:
         before = self.bib.read_text(encoding="utf-8")
         error = requests.ConnectionError("offline")

@@ -222,6 +222,18 @@ def _record_fields(record: Mapping[str, Any]) -> tuple[str | None, str, int | No
     return doi, title, year if isinstance(year, int) and not isinstance(year, bool) else None
 
 
+def _authoritative_by_doi(doi: str, title: str, *, session: HttpSession, settings: Settings) -> WorkMeta | None:
+    """用 DOI 回 CrossRef 取元数据；查询失败、无此 DOI 或标题不符时返回 None。"""
+    try:
+        data = _get_json(session, f"{CROSSREF_WORKS}/{quote(doi, safe='/')}", None, settings.timeout)
+    except (requests.RequestException, ValueError):
+        return None
+    meta = crossref_meta((data or {}).get("message") or {}) if data else None
+    if meta is None or not title_matches(title, meta.title, settings.doi_title_similarity):
+        return None
+    return meta
+
+
 def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Settings) -> tuple[WorkMeta | None, str | None, str | None]:
     """返回 (元数据, 来源, 失败原因)；元数据为 None 时原因非空。"""
     doi, title, year = _record_fields(record)
@@ -257,6 +269,10 @@ def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Setting
         for item in items_of(data):
             meta = to_meta(item) if isinstance(item, Mapping) else None
             if meta and title_matches(title, meta.title, settings.title_similarity) and year_ok(year, meta.year, settings.year_window):
+                if label == "OpenAlex" and meta.doi:
+                    authoritative = _authoritative_by_doi(meta.doi, title, session=session, settings=settings)
+                    if authoritative:
+                        return authoritative, "crossref", None
                 return meta, label.lower(), None
         failures.append(f"{label} 无标题匹配的条目")
     return None, None, "；".join(failures)
