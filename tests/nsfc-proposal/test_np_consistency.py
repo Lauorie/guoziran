@@ -14,8 +14,10 @@ SCRIPTS = ROOT / "skills/nsfc-proposal/scripts"
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from citation_ledger import add_event, append_event, register_user_entries  # noqa: E402
 from consistency_check import check_project  # noqa: E402
-from proposal_common import write_yaml  # noqa: E402
+from latex_files import bib_entry_texts  # noqa: E402
+from proposal_common import load_config, proposal_paths, write_yaml  # noqa: E402
 from test_np_validate import valid_case, valid_evidence  # noqa: E402
 
 BODY_11 = "\n".join([
@@ -141,6 +143,184 @@ class ConsistencyTest(unittest.TestCase):
         self.assertIn("### mm", with_numbers.stdout)
         as_json = subprocess.run(cmd + ["--json"], env=env, capture_output=True, text=True, timeout=60)
         self.assertTrue(json.loads(as_json.stdout)["numbers"])
+
+
+ABSTRACT = "We report an AUC of 0.86 and sensitivity of 95% in 1,200 patients, with a margin of 5 mm in the test cohort."
+
+
+def kinds(findings: list) -> set[str]:
+    return {f.kind for f in findings}
+
+
+class LedgerConsistencyTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self.tmp.name)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _ledgered(self, body: str, abstract: str | None = ABSTRACT, key: str = "wu2021value") -> Path:
+        self.count = getattr(self, "count", 0) + 1
+        root = build(self.base / f"n{self.count}", body_11=body)
+        text = bib_entry_texts([root / "references" / "refs.bib"])[key]
+        append_event(proposal_paths(root).ledger, add_event(
+            key, source="crossref", entry_text=text, doi=None, abstract=abstract, provenance={"record_id": "r1"}))
+        return root
+
+    def test_no_ledger_is_reported_and_other_checks_run(self) -> None:
+        report = check_project(build(self.base))
+        self.assertIn("no_citation_ledger", kinds(report.needs_review))
+        self.assertIn("missing_bibkey", kinds(report.errors))
+        self.assertFalse(kinds(report.errors) & {"cite_not_in_ledger", "bib_entry_modified"})
+
+    def test_handwritten_entry_not_in_ledger(self) -> None:
+        root = self._ledgered("研究表明\\cite{wu2021value,hand2024}。\n")
+        bib = root / "references" / "refs.bib"
+        bib.write_text(bib.read_text(encoding="utf-8") + "\n@article{hand2024,\n  title = {H},\n}\n", encoding="utf-8")
+        report = check_project(root)
+        self.assertEqual([(f.kind, f.detail) for f in report.errors if f.kind == "cite_not_in_ledger"], [("cite_not_in_ledger", "hand2024")])
+        self.assertNotIn("no_citation_ledger", kinds(report.needs_review))
+
+    def test_not_in_ledger_reported_once_per_key(self) -> None:
+        root = build(self.base, body_11="甲\\cite{wu2021value}。\n乙\\cite{wu2021value}。\n")
+        (proposal_paths(root).ledger).write_text("", encoding="utf-8")
+        self.assertEqual(len([f for f in check_project(root).errors if f.kind == "cite_not_in_ledger"]), 1)
+
+    def test_modified_entry(self) -> None:
+        root = self._ledgered("多模态\\cite{wu2021value}。\n")
+        bib = root / "references" / "refs.bib"
+        bib.write_text(bib.read_text(encoding="utf-8").replace("{X}", "{Y}"), encoding="utf-8")
+        report = check_project(root)
+        self.assertEqual([f.detail for f in report.errors if f.kind == "bib_entry_modified"], ["wu2021value"])
+
+    def test_unmodified_entry_is_clean(self) -> None:
+        report = check_project(self._ledgered("多模态\\cite{wu2021value}。\n"))
+        self.assertFalse(kinds(report.errors) & {"cite_not_in_ledger", "bib_entry_modified"})
+
+    def test_register_user_entry_is_accepted(self) -> None:
+        root = build(self.base, body_11="多模态\\cite{wu2021value}。\n")
+        register_user_entries(root)
+        self.assertFalse(kinds(check_project(root).errors) & {"cite_not_in_ledger", "bib_entry_modified"})
+
+    def test_dropped_entry_cited_is_error(self) -> None:
+        root = self._ledgered("多模态\\cite{wu2021value}。\n")
+        append_event(proposal_paths(root).ledger, {"event": "drop", "bibkey": "wu2021value", "time": "t", "reason": "r"})
+        self.assertIn("cite_not_in_ledger", kinds(check_project(root).errors))
+
+    def _number_details(self, body: str, abstract: str | None = ABSTRACT) -> list[str]:
+        report = check_project(self._ledgered(body, abstract))
+        return [f.detail for f in report.needs_review if f.kind == "number_not_in_evidence"]
+
+    def test_decimal_not_in_abstract_is_flagged(self) -> None:
+        details = self._number_details("某研究报道 AUC 为 0.91\\cite{wu2021value}。\n")
+        self.assertEqual(len(details), 1)
+        self.assertTrue(details[0].startswith("0.91："))
+        self.assertIn("某研究报道", details[0])
+
+    def test_decimal_in_abstract_is_not_flagged(self) -> None:
+        self.assertEqual(self._number_details("某研究报道 AUC 为 0.86\\cite{wu2021value}。\n"), [])
+
+    def test_prefix_of_longer_number_is_not_a_match(self) -> None:
+        self.assertEqual(len(self._number_details("某研究报道 AUC 为 0.8\\cite{wu2021value}。\n")), 1)
+
+    def test_escaped_percent_matches_plain_percent(self) -> None:
+        self.assertEqual(self._number_details("灵敏度达 95\\%\\cite{wu2021value}。\n"), [])
+        self.assertEqual(len(self._number_details("灵敏度达 96\\%\\cite{wu2021value}。\n")), 1)
+
+    def test_thousands_separator_and_unit_integer(self) -> None:
+        self.assertEqual(self._number_details("共纳入 1200 例\\cite{wu2021value}，边界 5 mm。\n"), [])
+        self.assertEqual(len(self._number_details("共纳入 800 例\\cite{wu2021value}。\n")), 1)
+
+    def test_year_is_not_a_number_to_check(self) -> None:
+        self.assertEqual(self._number_details("2021 年的研究\\cite{wu2021value}。\n"), [])
+        self.assertEqual(self._number_details("自 1998年起\\cite{wu2021value}。\n"), [])
+
+    def test_cite_key_digits_are_ignored(self) -> None:
+        self.assertEqual(self._number_details("AUC 为 0.86\\cite{wu2021value}。\n"), [])
+
+    def test_number_in_sentence_without_cite_is_ignored(self) -> None:
+        self.assertEqual(self._number_details("本项目拟纳入 300 例。AUC 为 0.86\\cite{wu2021value}。\n"), [])
+
+    def test_number_is_checked_per_sentence(self) -> None:
+        details = self._number_details("AUC 为 0.86\\cite{wu2021value}；另一结果 0.5 未引用。\n")
+        self.assertEqual(details, [])
+
+    def test_any_cited_abstract_is_enough(self) -> None:
+        root = self._ledgered("AUC 为 0.77\\cite{wu2021value,other2020}。\n")
+        bib = root / "references" / "refs.bib"
+        bib.write_text(bib.read_text(encoding="utf-8") + "\n@article{other2020,\n  title = {O},\n}\n", encoding="utf-8")
+        text = bib_entry_texts([bib])["other2020"]
+        append_event(proposal_paths(root).ledger, add_event("other2020", source="openalex", entry_text=text, doi=None,
+                                                              abstract="The AUC was 0.77 overall.", provenance={}))
+        self.assertNotIn("number_not_in_evidence", kinds(check_project(root).needs_review))
+
+    def test_no_abstract_at_all_gets_own_review_kind(self) -> None:
+        report = check_project(self._ledgered("AUC 为 0.91\\cite{wu2021value}。无数字句\\cite{wu2021value}。\n", abstract=None))
+        found = [f for f in report.needs_review if f.kind == "no_abstract_for_numbers"]
+        self.assertEqual(len(found), 1)
+        self.assertNotIn("number_not_in_evidence", kinds(report.needs_review))
+
+    def test_no_number_checks_without_ledger(self) -> None:
+        report = check_project(build(self.base, body_11="AUC 为 0.91\\cite{wu2021value}。\n"))
+        self.assertFalse(kinds(report.needs_review) & {"number_not_in_evidence", "no_abstract_for_numbers"})
+
+    def test_cli_exit_code_follows_errors(self) -> None:
+        env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+        root = self._ledgered("多模态\\cite{wu2021value}。\n")
+        write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "writer": "w", "written_with_case_version": 2}]})
+        cmd = [sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(root)]
+        self.assertEqual(subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60).returncode, 0)
+        bib = root / "references" / "refs.bib"
+        bib.write_text(bib.read_text(encoding="utf-8").replace("{X}", "{Z}"), encoding="utf-8")
+        bad = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("手改", bad.stdout)
+
+
+class ProcessTextTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self.tmp.name)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _hits(self, body: str) -> list:
+        return [f for f in check_project(build(self.base, body_11=body)).needs_review if f.kind == "process_text_in_body"]
+
+    def test_default_patterns_come_from_config(self) -> None:
+        self.assertIn("经核实", load_config()["consistency"]["process_text_patterns"])
+
+    def test_body_text_is_flagged_with_hit_and_sentence(self) -> None:
+        hits = self._hits("多模态影像信息。\n这一推测没有经核实的文献支持。\n")
+        self.assertEqual(len(hits), 1)
+        self.assertEqual((hits[0].file, hits[0].line), ("extraTex/1.1.立项依据.tex", 2))
+        self.assertIn("经核实", hits[0].detail)
+        self.assertIn("这一推测没有经核实的文献支持", hits[0].detail)
+
+    def test_text_inside_placeholder_is_not_flagged(self) -> None:
+        self.assertEqual(self._hits("多模态。【待补充：经检索核实的文献】\n"), [])
+
+    def test_text_in_latex_comment_is_not_flagged(self) -> None:
+        self.assertEqual(self._hits("多模态。 % 此处未经核实，见 assumptions.md\n"), [])
+
+    def test_text_after_placeholder_on_same_line_is_flagged(self) -> None:
+        self.assertEqual(len(self._hits("【待补充：预实验结果】已见台账记录。\n")), 1)
+
+    def test_markdown_file_scanned_in_full(self) -> None:
+        root = build(self.base, body_11="多模态。\n")
+        (root / "NSFC-ABSTRACTS.md").write_text("<!-- 见 evidence_map.yaml -->\n摘要正文。\n", encoding="utf-8")
+        hits = [f for f in check_project(root).needs_review if f.kind == "process_text_in_body"]
+        self.assertEqual([(f.file, f.line) for f in hits], [("NSFC-ABSTRACTS.md", 1)])
+
+    def test_patterns_are_configurable(self) -> None:
+        root = build(self.base, body_11="多模态。\n这里有哨兵词。\n")
+        config = {"consistency": {"process_text_patterns": ["哨兵词"]}}
+        hits = [f for f in check_project(root, config).needs_review if f.kind == "process_text_in_body"]
+        self.assertEqual(len(hits), 1)
+        self.assertEqual([f for f in check_project(root, {"consistency": {}}).needs_review if f.kind == "process_text_in_body"], [])
 
 
 if __name__ == "__main__":

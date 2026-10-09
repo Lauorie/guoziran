@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from case_validate import case_ids, claim_ids
-from latex_files import read_bib_index, relpath, scan_latex_tree
+from citation_ledger import entry_sha256, load_ledger
+from latex_files import bib_entry_texts, read_bib_index, relpath, scan_latex_tree
 from proposal_common import ProposalError, load_config, project_path, proposal_paths, read_yaml, resolve_project_root, split_latex_comment
 
 CITE_RE = re.compile(r"\\[A-Za-z]*cite[A-Za-z]*\*?(?:\[[^\]]*\]){0,2}\{([^}]*)\}")
@@ -24,6 +25,12 @@ NUMBER_RE = re.compile(
     r"\d+(?:\.\d+)?(?:\s?(?:---|--|[–\-~～至到])\s?\d+(?:\.\d+)?)?[\s~]?(?:\\(?=%))?"
     r"(?P<unit>mm|cm|毫米|厘米|例(?!如)|名|家|年|个月|月|%|HU|kV|mAs|层|项|个(?!别))(?![A-Za-z])"
 )
+SENTENCE_END = "。；！？"
+SENTENCE_SPLIT_RE = re.compile(f"[{SENTENCE_END}]")
+REF_RE = re.compile(r"\\(?:ref|eqref|autoref|cref|label|pageref)\{[^}]*\}")
+DECIMAL_RE = re.compile(r"(?<![\d.])\d+\.\d+(?!\d)")
+DIGITS_RE = re.compile(r"\d+(?:\.\d+)?")
+YEAR_RE = re.compile(r"(?:19|20)\d\d")
 DEFAULT_PLACEHOLDER = "【待补充：[^】]*】"
 LABELS = {
     "hidden_placeholder": "注释中的隐藏占位",
@@ -33,6 +40,12 @@ LABELS = {
     "stale_section": "章节依据旧版科学论证",
     "internal_id": "疑似内部编号（请 AI 复核）",
     "file_not_compiled": "文件未被 main.tex 引用",
+    "no_citation_ledger": "没有引用台账（旧项目；无法核对条目来源）",
+    "cite_not_in_ledger": "引用的文献不在引用台账中（手写条目？）",
+    "bib_entry_modified": ".bib 条目与引用台账哈希不一致（被手改？）",
+    "number_not_in_evidence": "引用句中的数字不见于所引文献摘要（请 AI 复核）",
+    "no_abstract_for_numbers": "引用句含数字，但所引文献在台账中都没有摘要（请 AI 复核）",
+    "process_text_in_body": "正文含写作过程说明",
 }
 
 
@@ -62,6 +75,47 @@ def _id_regex(ids: Iterable[str], extra_patterns: Iterable[str]) -> re.Pattern[s
     return re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(patterns) + r")(?![A-Za-z0-9])")
 
 
+def sentence_numbers(sentence: str) -> list[str]:
+    """引用句中需要对照摘要的数字：百分数（含 %）、小数、带单位的整数；排除 19xx/20xx 年份。"""
+    text = REF_RE.sub("", CITE_RE.sub("", sentence))
+    found: list[str] = []
+    spans: list[tuple[int, int]] = []
+    for match in NUMBER_RE.finditer(text):
+        spans.append(match.span())
+        unit = match.group("unit")
+        for digits in DIGITS_RE.findall(match.group(0)[: match.start("unit") - match.start()]):
+            if unit == "%":
+                found.append(digits + "%")
+            elif not (YEAR_RE.fullmatch(digits) and unit == "年"):
+                found.append(digits)
+    for match in DECIMAL_RE.finditer(text):
+        if not any(a <= match.start() < b for a, b in spans):
+            found.append(match.group(0))
+    return list(dict.fromkeys(found))
+
+
+def _evidence_text(text: str) -> str:
+    text = re.sub(r"\\%", "%", text)
+    text = re.sub(r"\s+%", "%", text)
+    return re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text)
+
+
+def number_in_text(number: str, text: str) -> bool:
+    """number 是否作为独立数字出现在 text（已规范化）中；不接受 0.91 匹配 0.910 或 10.91。"""
+    return re.search(r"(?<![\d.])" + re.escape(number) + r"(?!\d|\.\d)", _evidence_text(text)) is not None
+
+
+def sentence_containing(line: str, pos: int) -> str:
+    start = max(line.rfind(c, 0, pos) for c in SENTENCE_END) + 1
+    ends = [i for i in (line.find(c, pos) for c in SENTENCE_END) if i >= 0]
+    return line[start: min(ends) if ends else len(line)].strip()
+
+
+def _excerpt(text: str, limit: int = 80) -> str:
+    text = re.sub(r"\s+", " ", text).strip()
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
 def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -> Report:
     settings = (config or load_config()).get("consistency") or {}
     hidden_words = [str(w) for w in settings.get("hidden_placeholder_words") or []]
@@ -76,9 +130,15 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
     bib_keys = read_bib_index(tree.bib_files).keys
     assumptions = paths.assumptions.read_text(encoding="utf-8") if paths.assumptions.exists() else ""
     id_re = _id_regex(case_ids(case) | claim_ids(evidence), settings.get("extra_internal_id_patterns") or [])
+    process_patterns = [str(w) for w in settings.get("process_text_patterns") or [] if str(w)]
+    ledger = load_ledger(paths.ledger) if paths.ledger.exists() else None
+    entry_texts = bib_entry_texts(tree.bib_files) if ledger is not None else {}
+    ledger_flagged: set[tuple[str, str]] = set()
     entries = [e for e in plan.get("files") or [] if isinstance(e, Mapping) and isinstance(e.get("file"), str)]
 
     report = Report()
+    if ledger is None:
+        report.needs_review.append(Finding("no_citation_ledger", "proposal/citation_ledger.jsonl", None, "没有引用台账，未核对 .bib 条目来源与引用句中的数字"))
     bodies: list[str] = []
     for entry in entries:
         rel = entry["file"]
@@ -102,11 +162,17 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                 report.placeholders.append(Finding("placeholder", rel, number, match.group(0)))
                 if match.group(0) not in assumptions:
                     report.errors.append(Finding("placeholder_unlisted", rel, number, match.group(0)))
+            if process_patterns:
+                _check_process_text(report, rel, number, placeholder_re.sub("", body), process_patterns)
             if is_tex:
                 for match in CITE_RE.finditer(body):
                     for key in (k.strip() for k in match.group(1).split(",")):
                         if key and key not in bib_keys:
                             report.errors.append(Finding("missing_bibkey", rel, number, key))
+                        elif key and ledger is not None:
+                            _check_ledger_key(report, ledger, entry_texts, ledger_flagged, rel, number, key)
+                if ledger is not None:
+                    _check_cite_numbers(report, ledger, rel, number, body)
 
     text = "\n".join(bodies)
     for term in case.get("terms") or []:
@@ -119,6 +185,49 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
         if isinstance(written, int) and isinstance(version, int) and written < version:
             report.errors.append(Finding("stale_section", entry["file"], None, f"依据第 {written} 版科学论证，当前为第 {version} 版"))
     return report
+
+
+def _check_ledger_key(report: Report, ledger: Mapping[str, Mapping[str, Any]], entry_texts: Mapping[str, str],
+                      flagged: set[tuple[str, str]], rel: str, number: int, key: str) -> None:
+    """被引 key 必须在台账有效记录中，且 .bib 条目哈希与台账一致；每个 key 只报一次。"""
+    if key not in ledger:
+        kind, detail = "cite_not_in_ledger", key
+    elif ledger[key].get("entry_sha256") != entry_sha256(entry_texts.get(key, "")):
+        kind, detail = "bib_entry_modified", key
+    else:
+        return
+    if (kind, key) not in flagged:
+        flagged.add((kind, key))
+        report.errors.append(Finding(kind, rel, number, detail))
+
+
+def _check_cite_numbers(report: Report, ledger: Mapping[str, Mapping[str, Any]], rel: str, number: int, body: str) -> None:
+    for sentence in SENTENCE_SPLIT_RE.split(body):
+        keys = [k.strip() for m in CITE_RE.finditer(sentence) for k in m.group(1).split(",") if k.strip()]
+        numbers = sentence_numbers(sentence) if keys else []
+        if not numbers:
+            continue
+        abstracts = [str(ledger[k]["abstract"]) for k in keys if k in ledger and ledger[k].get("abstract")]
+        excerpt = _excerpt(sentence)
+        if not abstracts:
+            report.needs_review.append(Finding("no_abstract_for_numbers", rel, number, f"{'、'.join(numbers)}：{excerpt}"))
+            continue
+        for value in numbers:
+            if not any(number_in_text(value, text) for text in abstracts):
+                report.needs_review.append(Finding("number_not_in_evidence", rel, number, f"{value}：{excerpt}"))
+
+
+def _check_process_text(report: Report, rel: str, number: int, text: str, patterns: list[str]) -> None:
+    """正文（占位已删）里的写作过程说明；同一句的多个命中合并为一条。"""
+    reported: set[str] = set()
+    for pattern in patterns:
+        for match in re.finditer(re.escape(pattern), text):
+            sentence = sentence_containing(text, match.start())
+            if sentence in reported:
+                continue
+            reported.add(sentence)
+            hits = [p for p in patterns if p in sentence]
+            report.needs_review.append(Finding("process_text_in_body", rel, number, f"命中「{'、'.join(hits)}」：{_excerpt(sentence)}"))
 
 
 def _print_numbers(report: Report) -> None:

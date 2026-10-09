@@ -28,6 +28,8 @@ consistency:
   hidden_placeholder_words: [待补, 待核实, 待确认, 待填写, TODO]
   extra_internal_id_patterns: ['S\d+']
   placeholder_pattern: '【待补充：[^】]*】'
+  # 正文中不应出现的写作过程说明（占位 【待补充：……】 内的文字不计）
+  process_text_patterns: ["经核实", "已核实", "未经核实", "核实的文献", "检索核实", "未检索", "文献支持", "本次未", "台账", "assumptions.md", "evidence_map", "scientific_case", "proposal/"]
 
 guardrails:
   # 本 skill 自己写入的正文文件；proposal/ 下的文件；.bib 只追加、写前备份（目标由 main.tex 解析）
