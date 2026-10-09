@@ -11,9 +11,10 @@ import argparse
 import json
 import re
 import sys
+from bisect import bisect_right
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 from case_validate import case_ids, claim_ids
 from citation_ledger import entry_sha256, load_ledger
@@ -73,6 +74,41 @@ class Report:
         data: dict[str, Any] = {name: [asdict(f) for f in getattr(self, name)] for name in ("errors", "needs_review", "placeholders", "numbers")}
         data["citations"] = dict(self.citations)
         return data
+
+
+@dataclass(frozen=True)
+class JoinedText:
+    """一个文件逐行去注释后用换行拼接的文本。\\cite 和引用句可以跨行，在这上面查。
+
+    starts：各行在 text 中的起点偏移；breaks：原文空行（段落分隔）的起点偏移。只含注释的行不算空行。
+    """
+
+    text: str
+    starts: list[int]
+    breaks: list[int]
+
+    @classmethod
+    def from_lines(cls, raw_lines: Sequence[str], bodies: Sequence[str]) -> "JoinedText":
+        starts: list[int] = []
+        offset = 0
+        for body in bodies:
+            starts.append(offset)
+            offset += len(body) + 1
+        breaks = [start for start, raw in zip(starts, raw_lines) if not raw.strip()]
+        return cls("\n".join(bodies), starts, breaks)
+
+    def line_of(self, pos: int) -> int:
+        """偏移 pos 所在的行号（从 1 起）。"""
+        return bisect_right(self.starts, pos)
+
+    def sentences(self) -> Iterator[tuple[int, str]]:
+        """按句末标点和原文空行切句，返回（句首偏移，句子）；句子可以跨行。"""
+        cuts = sorted([(m.start(), m.end()) for m in SENTENCE_SPLIT_RE.finditer(self.text)] + [(b, b) for b in self.breaks])
+        start = 0
+        for end, resume in cuts:
+            yield start, self.text[start:end]
+            start = resume
+        yield start, self.text[start:]
 
 
 def _id_regex(ids: Iterable[str], extra_patterns: Iterable[str]) -> re.Pattern[str] | None:
@@ -191,12 +227,13 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
         if not path.is_file():
             continue
         is_tex = rel.endswith(".tex")
-        cited: set[str] = set()
         if is_tex and rel not in compiled:
             report.needs_review.append(Finding("file_not_compiled", rel, None, "main.tex 未引用该文件，内容不会进入 PDF"))
-        for number, raw in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        raw_lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        file_bodies: list[str] = []
+        for number, raw in enumerate(raw_lines, 1):
             body, comment = split_latex_comment(raw) if is_tex else (raw, "")
-            bodies.append(body)
+            file_bodies.append(body)
             if comment and any(word in comment for word in hidden_words):
                 report.errors.append(Finding("hidden_placeholder", rel, number, comment.strip()[:80]))
             for match in NUMBER_RE.finditer(body):
@@ -215,18 +252,21 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                     report.errors.append(Finding("placeholder_nonstandard", rel, number, detail))
             if process_patterns and entry.get("writer") != PROCESS_DESCRIBING_WRITER:
                 _check_process_text(report, rel, number, placeholder_re.sub("", body), process_patterns)
-            if is_tex:
-                for match in CITE_RE.finditer(body):
-                    for key in (k.strip() for k in match.group(1).split(",")):
-                        if key:
-                            cited.add(key)
-                        if key and key not in bib_keys:
-                            report.errors.append(Finding("missing_bibkey", rel, number, key))
-                        elif key and ledger is not None:
-                            _check_ledger_key(report, ledger, entry_texts, ledger_flagged, rel, number, key)
-                if ledger is not None:
-                    _check_cite_numbers(report, ledger, rel, number, body)
+        bodies.extend(file_bodies)
         if is_tex:
+            joined = JoinedText.from_lines(raw_lines, file_bodies)
+            cited: set[str] = set()
+            for match in CITE_RE.finditer(joined.text):
+                number = joined.line_of(match.start())
+                for key in (k.strip() for k in match.group(1).split(",")):
+                    if key:
+                        cited.add(key)
+                    if key and key not in bib_keys:
+                        report.errors.append(Finding("missing_bibkey", rel, number, key))
+                    elif key and ledger is not None:
+                        _check_ledger_key(report, ledger, entry_texts, ledger_flagged, rel, number, key)
+            if ledger is not None:
+                _check_cite_numbers(report, ledger, rel, joined)
             report.citations[rel] = len(cited)
             if entry.get("writer") == JUSTIFICATION_WRITER and len(cited) < min_refs:
                 report.needs_review.append(Finding("few_citations", rel, None, f"引用 {len(cited)} 篇不同文献，下限 {min_refs} 篇"))
@@ -258,12 +298,14 @@ def _check_ledger_key(report: Report, ledger: Mapping[str, Mapping[str, Any]], e
         report.errors.append(Finding(kind, rel, number, detail))
 
 
-def _check_cite_numbers(report: Report, ledger: Mapping[str, Mapping[str, Any]], rel: str, number: int, body: str) -> None:
-    for sentence in SENTENCE_SPLIT_RE.split(body):
+def _check_cite_numbers(report: Report, ledger: Mapping[str, Mapping[str, Any]], rel: str, joined: JoinedText) -> None:
+    """逐句（可跨行）对照引用句中的数字与所引文献的台账摘要；行号取句首所在行。"""
+    for start, sentence in joined.sentences():
         keys = [k.strip() for m in CITE_RE.finditer(sentence) for k in m.group(1).split(",") if k.strip()]
         numbers = sentence_numbers(sentence) if keys else []
         if not numbers:
             continue
+        number = joined.line_of(start + len(sentence) - len(sentence.lstrip()))
         abstracts = [str(ledger[k]["abstract"]) for k in keys if k in ledger and ledger[k].get("abstract")]
         excerpt = _excerpt(sentence)
         if not abstracts:

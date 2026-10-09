@@ -384,6 +384,64 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertIn("手改", bad.stdout)
 
 
+class MultiLineCiteTest(unittest.TestCase):
+    """跨行的 \\cite：key 列表或右花括号在下一行，引用句跨行。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self.tmp.name)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _report(self, body: str, abstract: str | None = None):
+        self.count = getattr(self, "count", 0) + 1
+        root = build(self.base / f"n{self.count}", body_11=body)
+        if abstract is not None:
+            text = bib_entry_texts([root / "references" / "refs.bib"])["wu2021value"]
+            append_event(proposal_paths(root).ledger, add_event(
+                "wu2021value", source="crossref", entry_text=text, doi=None, abstract=abstract, provenance={}))
+        return check_project(root)
+
+    def _missing(self, report) -> list[tuple[str, int]]:
+        return [(f.detail, f.line) for f in report.errors if f.kind == "missing_bibkey"]
+
+    def test_key_list_continues_on_next_line(self) -> None:
+        report = self._report("多模态影像信息。\n已有研究\\cite{wu2021value,\n  fake2099}。\n")
+        self.assertEqual(self._missing(report), [("fake2099", 2)])
+        self.assertEqual(report.citations["extraTex/1.1.立项依据.tex"], 2)
+
+    def test_key_starts_on_next_line(self) -> None:
+        report = self._report("多模态影像信息。\n灵敏度达 95\\%\\cite{\nfake2098}。\n")
+        self.assertEqual(self._missing(report), [("fake2098", 2)])
+
+    def test_comment_inside_cite_is_stripped(self) -> None:
+        report = self._report("多模态\\cite{wu2021value,% 第二篇\n  fake2097}。\n")
+        self.assertEqual(self._missing(report), [("fake2097", 1)])
+
+    def test_unledgered_key_on_next_line(self) -> None:
+        root = build(self.base, body_11="多模态\\cite{wu2021value,\nhand2024}。\n")
+        bib = root / "references" / "refs.bib"
+        bib.write_text(bib.read_text(encoding="utf-8") + "\n@article{hand2024,\n  title = {H},\n}\n", encoding="utf-8")
+        found = [(f.detail, f.line) for f in check_project(root).errors if f.kind == "cite_not_in_ledger"]
+        self.assertEqual(found, [("hand2024", 1)])
+
+    def _number_findings(self, body: str) -> list:
+        return [f for f in self._report(body, ABSTRACT).needs_review if f.kind == "number_not_in_evidence"]
+
+    def test_number_and_cite_on_different_lines(self) -> None:
+        self.assertEqual(self._number_findings("多模态。某研究报道灵敏度达\n95\\%\\cite{wu2021value}。\n"), [])
+        found = self._number_findings("多模态。\n某研究报道灵敏度达 96\\%\n\\cite{wu2021value}。\n")
+        self.assertEqual([(f.detail.split("：")[0], f.line) for f in found], [("96%", 2)])
+
+    def test_comment_line_does_not_end_the_sentence(self) -> None:
+        found = self._number_findings("多模态。灵敏度达 96\\%\n% 出处见下\n\\cite{wu2021value}。\n")
+        self.assertEqual([f.detail.split("：")[0] for f in found], ["96%"])
+
+    def test_blank_line_ends_the_sentence(self) -> None:
+        self.assertEqual(self._number_findings("共纳入 800 例\n\n多模态影像信息\\cite{wu2021value}。\n"), [])
+
+
 class TemplateBibTest(unittest.TestCase):
     """projects/NSFC_Young 的副本：模板自带的示例文献在 init 之后仍未入账，引用它们报 cite_not_in_ledger。"""
 
