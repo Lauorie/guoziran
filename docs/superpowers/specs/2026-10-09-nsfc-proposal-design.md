@@ -28,7 +28,7 @@
 
 1. 新建 skill `nsfc-proposal`，作为写国自然正文的统一入口。
 2. 写正文前建立三份共享文件：科学论证、证据图谱、章节分工。三个写作 skill 从这里取输入。
-3. 文献经检索、元数据经 CrossRef 或 OpenAlex 核对后才进入 `.bib`。正文措辞的强度受证据约束。
+3. 文献经检索、元数据经 CrossRef 或 OpenAlex 核对后才进入 `.bib`。正文措辞的强度受证据约束。借用 academic-literature 的引用台账做法，记录每条文献的来源。
 4. D1–D7 在新流程的产出中不再出现。
 5. 修复 nsfc-justification-writer 的 3 处 bug。
 
@@ -97,6 +97,7 @@
 - AI 填写 `section_plan.yaml`：每个目标文件必写哪些编号、不写哪些内容、篇幅、必须留的占位。
 - 各章默认的「不写」清单来自 `references/section_boundaries.md`。例如立项依据不写实验步骤、技术路线、样本量设计、年度安排（针对 D1）。
 - 科学论证中 `source: missing` 的可行性条目，必须进入研究基础的占位清单（针对 D5）。
+- 离线或缺文献时，认知缺口写「尚不清楚」；背景与现状论断集中成段，段末放一处列出待补文献的可见占位，不逐句写成「可能」，也不写凭记忆的研究名称、作者、年份和数字。
 
 ### 4.5 确认点
 
@@ -133,6 +134,9 @@
 - `\cite` 的 key 不在 `.bib` 中。
 - `terms` 中定义过的术语没有在任何一章出现。
 - 某章依据的科学论证版本低于当前版本。
+- 引用台账：`\cite` 的 key 不在台账中，或 `.bib` 条目与台账记录的哈希不符（手改）。
+- 引用句中的数字不见于所引文献的台账摘要；所引文献没有摘要可核。
+- 项目没有台账；正文中出现写作过程说明；占位写法不是 `【待补充：……】`。
 
 AI 做语义检查：各章的科学问题和假设表述一致；研究内容的任务与科学问题一一对应；研究基础覆盖每个任务的可行性。
 
@@ -160,6 +164,7 @@ AI 做语义检查：各章的科学问题和假设表述一致；研究内容�
     ├── evidence_map.yaml               证据图谱
     ├── section_plan.yaml               章节分工
     ├── assumptions.md                  确认点状态、AI 拟定项、待核实项、占位清单
+    ├── citation_ledger.jsonl           引用台账，只追加；记录每条文献的来源与条目哈希
     └── literature_leads.md             检索式和未核实的文献线索
 
 ./.bensz-api/task-…/nsfc-proposal/      wispaper 原始返回、检索 bundle、运行日志
@@ -353,6 +358,7 @@ python3 skills/research-literature-search/scripts/search_runner.py run \
 5. **写入 `.bib`**：目标文件取 `main.tex` 及其 `\input` 文件中 `\bibliography{}` 指向的文件。写入前备份；DOI 已存在的条目跳过。`--task-root` 必须是 `.bensz-api/task-*/` 目录，其父目录名为 `.bensz-api`。BibTeX 转义只剥离已知标记标签（i、b、em、strong、sub、sup、scp、span、mml:*），并在 title、author、journal 中转义 `\ { } ~ ^ & % $ # _`；doi 字段保持原样。
 6. **未匹配的**：写入 `literature_leads.md`，标 `[unverified]`，正文不引用。
 7. **请求规范**：请求中不附带个人邮箱或其他身份信息。
+8. **写台账**：写入 `.bib` 的同时向 `proposal/citation_ledger.jsonl` 追加 `add` 事件；`bib_resolve` 不登记申请人提供的条目。
 
 ### 6.5 证据判断
 

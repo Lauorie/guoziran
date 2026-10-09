@@ -25,6 +25,7 @@
 - 各章正文，写进项目的 `extraTex/`；摘要写进 `NSFC-ABSTRACTS.md`。
 - `proposal/` 目录：科学论证、证据图谱、章节分工、待核实清单、文献线索。正文里缺的内容都写成 `【待补充：……】`，并列在 `proposal/assumptions.md` 里。
 - 核对过的参考文献，追加到项目的 `.bib`。查不到的只进线索清单，正文不引用。
+- 每条文献的来源记在 `proposal/citation_ledger.jsonl`；手写或改动过的文献会被检查拦下。
 
 ## 流程中你需要做什么
 
