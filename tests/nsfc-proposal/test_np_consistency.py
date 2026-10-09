@@ -104,6 +104,35 @@ class ConsistencyTest(unittest.TestCase):
                             env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
 
+    def _build_numbers(self) -> Path:
+        root = build(self.base, body_11="最佳瘤周宽度 2–10 mm，共纳入 120 例。 % 注释里的 99 mm\n多模态影像信息。\n")
+        (root / "extraTex" / "2.1.研究内容.tex").write_text("最佳宽度 0–3 mm。\n", encoding="utf-8")
+        return root
+
+    def test_numbers_listed_per_file(self) -> None:
+        report = check_project(self._build_numbers())
+        mm = [f for f in report.numbers if f.detail.endswith("mm")]
+        self.assertEqual({(f.file, f.detail) for f in mm}, {("extraTex/1.1.立项依据.tex", "2–10 mm"), ("extraTex/2.1.研究内容.tex", "0–3 mm")})
+        self.assertTrue(all(f.kind == "number" for f in report.numbers))
+        self.assertIn("120 例", {f.detail for f in report.numbers})
+
+    def test_numbers_in_latex_comment_are_ignored(self) -> None:
+        report = check_project(self._build_numbers())
+        self.assertFalse([f for f in report.numbers if "99" in f.detail])
+
+    def test_cli_numbers_flag_keeps_exit_code(self) -> None:
+        env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+        root = self._build_numbers()
+        cmd = [sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(root)]
+        plain = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
+        with_numbers = subprocess.run(cmd + ["--numbers"], env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(with_numbers.returncode, plain.returncode)
+        self.assertNotIn("## 数值清单", plain.stdout)
+        self.assertIn("## 数值清单", with_numbers.stdout)
+        self.assertIn("### mm", with_numbers.stdout)
+        as_json = subprocess.run(cmd + ["--json"], env=env, capture_output=True, text=True, timeout=60)
+        self.assertTrue(json.loads(as_json.stdout)["numbers"])
+
 
 if __name__ == "__main__":
     unittest.main()

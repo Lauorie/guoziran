@@ -2,7 +2,7 @@
 """跨章确定性检查（设计文档 4.7 节）。语义一致性由 AI 判断，不在本脚本内。
 
 errors：必须修正。needs_review：交给 AI 复核，例如疑似内部编号可能是「T1 加权」这类误报。
-placeholders：正文中全部可见占位。退出码：0 无 errors；1 有 errors；2 输入或路径错误。
+placeholders：正文中全部可见占位。numbers：各章带单位的数值清单，供 AI 跨章对照，不是错误，不影响退出码。退出码：0 无 errors；1 有 errors；2 输入或路径错误。
 """
 
 from __future__ import annotations
@@ -20,6 +20,10 @@ from latex_files import read_bib_index, relpath, scan_latex_tree
 from proposal_common import ProposalError, load_config, project_path, proposal_paths, read_yaml, resolve_project_root, split_latex_comment
 
 CITE_RE = re.compile(r"\\[A-Za-z]*cite[A-Za-z]*\*?(?:\[[^\]]*\]){0,2}\{([^}]*)\}")
+NUMBER_RE = re.compile(
+    r"\d+(?:\.\d+)?(?:\s?[–\-~～至到]\s?\d+(?:\.\d+)?)?\s?"
+    r"(?P<unit>mm|cm|毫米|厘米|例|名|家|年|个月|月|%|HU|kV|mAs|层|项|个)(?![A-Za-z])"
+)
 DEFAULT_PLACEHOLDER = "【待补充：[^】]*】"
 LABELS = {
     "hidden_placeholder": "注释中的隐藏占位",
@@ -45,9 +49,10 @@ class Report:
     errors: list[Finding] = field(default_factory=list)
     needs_review: list[Finding] = field(default_factory=list)
     placeholders: list[Finding] = field(default_factory=list)
+    numbers: list[Finding] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        return {name: [asdict(f) for f in getattr(self, name)] for name in ("errors", "needs_review", "placeholders")}
+        return {name: [asdict(f) for f in getattr(self, name)] for name in ("errors", "needs_review", "placeholders", "numbers")}
 
 
 def _id_regex(ids: Iterable[str], extra_patterns: Iterable[str]) -> re.Pattern[str] | None:
@@ -88,6 +93,8 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
             bodies.append(body)
             if comment and any(word in comment for word in hidden_words):
                 report.errors.append(Finding("hidden_placeholder", rel, number, comment.strip()[:80]))
+            for match in NUMBER_RE.finditer(body):
+                report.numbers.append(Finding("number", rel, number, match.group(0)))
             if id_re:
                 for match in id_re.finditer(body):
                     report.needs_review.append(Finding("internal_id", rel, number, match.group(0)))
@@ -114,6 +121,18 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
     return report
 
 
+def _print_numbers(report: Report) -> None:
+    groups: dict[str, list[Finding]] = {}
+    for f in report.numbers:
+        match = NUMBER_RE.search(f.detail)
+        groups.setdefault(match.group("unit") if match else "?", []).append(f)
+    print(f"## 数值清单（{len(report.numbers)}）")
+    for unit, items in groups.items():
+        print(f"### {unit}（{len(items)}）")
+        for f in items:
+            print(f"- {f.file}:{f.line} {f.detail}")
+
+
 def _print_human(report: Report) -> None:
     for title, items in (("必须修正", report.errors), ("需要复核", report.needs_review)):
         print(f"## {title}（{len(items)}）")
@@ -128,7 +147,8 @@ def _print_human(report: Report) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="consistency_check.py", description="nsfc-proposal 跨章一致性检查")
     parser.add_argument("--project-root", required=True)
-    parser.add_argument("--json", action="store_true", help="以 JSON 输出")
+    parser.add_argument("--json", action="store_true", help="以 JSON 输出（numbers 总在其中）")
+    parser.add_argument("--numbers", action="store_true", help="人类可读输出末尾追加数值清单")
     args = parser.parse_args(argv)
     try:
         report = check_project(Path(args.project_root))
@@ -139,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
     else:
         _print_human(report)
+        if args.numbers:
+            _print_numbers(report)
     return 1 if report.errors else 0
 
 
