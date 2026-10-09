@@ -257,6 +257,13 @@ class LedgerConsistencyTest(unittest.TestCase):
         details = self._number_details("AUC 0.91 至 95\\%\\cite{wu2021value}。\n", "AUC 0.91 was reported in an earlier version of this study.")
         self.assertEqual([d.split("：")[0] for d in details], ["95%"])
 
+    def test_percent_range_leading_decimal_by_connector(self) -> None:
+        from consistency_check import sentence_numbers
+        self.assertEqual(sentence_numbers("AUC 0.5-0.7%\\cite{k}"), ["0.5%", "0.7%"])
+        self.assertEqual(sentence_numbers("AUC 0.5～0.7%\\cite{k}"), ["0.5%", "0.7%"])
+        self.assertEqual(sentence_numbers("AUC 0.5至0.7%\\cite{k}"), ["0.5", "0.7%"])
+        self.assertEqual(sentence_numbers("AUC 0.5到0.7%\\cite{k}"), ["0.5", "0.7%"])
+
     def test_month_after_year_is_not_extracted(self) -> None:
         from consistency_check import sentence_numbers
         self.assertEqual(sentence_numbers("2021年3月的研究\\cite{k}"), [])
@@ -319,7 +326,8 @@ class ProcessTextTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def _hits(self, body: str) -> list:
-        return [f for f in check_project(build(self.base, body_11=body)).needs_review if f.kind == "process_text_in_body"]
+        self.count = getattr(self, "count", 0) + 1
+        return [f for f in check_project(build(self.base / f"n{self.count}", body_11=body)).needs_review if f.kind == "process_text_in_body"]
 
     def test_default_patterns_come_from_config(self) -> None:
         self.assertIn("经核实", load_config()["consistency"]["process_text_patterns"])
@@ -352,6 +360,57 @@ class ProcessTextTest(unittest.TestCase):
         hits = [f for f in check_project(root, config).needs_review if f.kind == "process_text_in_body"]
         self.assertEqual(len(hits), 1)
         self.assertEqual([f for f in check_project(root, {"consistency": {}}).needs_review if f.kind == "process_text_in_body"], [])
+
+    def test_process_wording_from_e2e_is_flagged(self) -> None:
+        for sentence in ("建议申请人在补充时优先给出论文。", "以下各处保留占位，由申请人按实际情况补充；不补充的条目应在提交前删去。",
+                         "申请人提出的原始口径是三年。"):
+            self.assertGreaterEqual(len(self._hits(f"多模态。\n{sentence}\n")), 1, sentence)
+
+
+class NonstandardPlaceholderTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self.tmp.name)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _root(self, abstracts: str, body_11: str = "多模态影像信息\\cite{wu2021value}。\n") -> Path:
+        self.count = getattr(self, "count", 0) + 1
+        root = build(self.base / f"n{self.count}", body_11=body_11)
+        (root / "NSFC-ABSTRACTS.md").write_text(abstracts, encoding="utf-8")
+        write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
+            {"file": "NSFC-ABSTRACTS.md", "writer": "nsfc-abstract", "written_with_case_version": None}]})
+        return root
+
+    def _errors(self, root: Path) -> list:
+        return [f for f in check_project(root).errors if f.kind == "placeholder_nonstandard"]
+
+    def test_english_bracket_placeholder_is_an_error(self) -> None:
+        root = self._root("Prior work [to be supplied: prior findings] shows.\n")
+        found = self._errors(root)
+        self.assertEqual([(f.file, f.line) for f in found], [("NSFC-ABSTRACTS.md", 1)])
+        self.assertIn("[to be supplied: prior findings]", found[0].detail)
+        self.assertIn("【待补充", found[0].detail)
+        env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+        proc = subprocess.run([sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(root)],
+                              env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("占位写法不规范", proc.stdout)
+
+    def test_standard_listed_placeholder_is_clean(self) -> None:
+        root = self._root("前期结果【待补充：预实验结果】已有报道。\n")
+        self.assertEqual(self._errors(root), [])
+
+    def test_latex_comment_is_left_to_hidden_placeholder(self) -> None:
+        root = self._root("摘要。\n", body_11="多模态影像信息\\cite{wu2021value}。 % [TBD later\n")
+        self.assertEqual(self._errors(root), [])
+
+    def test_other_variants_and_config(self) -> None:
+        for text in ("数据量 [TBD]。", "结果［待补充］。", "样本 XXX 例。", "【请补充：样本量】"):
+            self.assertEqual(len(self._errors(self._root(text + "\n"))), 1, text)
+        self.assertIn("XXX", "".join(load_config()["consistency"]["nonstandard_placeholder_patterns"]))
 
 
 if __name__ == "__main__":

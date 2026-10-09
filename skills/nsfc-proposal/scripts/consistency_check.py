@@ -45,6 +45,7 @@ LABELS = {
     "number_not_in_evidence": "引用句中的数字不见于所引文献摘要（请 AI 复核）",
     "no_abstract_for_numbers": "引用句含数字，但所引文献在台账中都没有摘要（请 AI 复核）",
     "process_text_in_body": "正文含写作过程说明",
+    "placeholder_nonstandard": "占位写法不规范",
 }
 
 
@@ -75,7 +76,7 @@ def _id_regex(ids: Iterable[str], extra_patterns: Iterable[str]) -> re.Pattern[s
 
 
 _CITED_NUMBER_RE = re.compile(
-    r"(?<![\d.])(?P<a>\d+(?:\.\d+)?)(?:\s?(?:---|--|[–\-~～至到])\s?(?P<b>\d+(?:\.\d+)?))?[\s~]?(?:\\)?"
+    r"(?<![\d.])(?P<a>\d+(?:\.\d+)?)(?:\s?(?P<sep>---|--|[–\-~～至到])\s?(?P<b>\d+(?:\.\d+)?))?[\s~]?(?:\\)?"
     r"(?:(?P<pct>[%％])|(?P<unit>mm|cm|毫米|厘米|例(?!如)|名|家|年|个月|月|HU|kV|mAs|层|项|个(?!别))(?![A-Za-z]))"
 )
 _THOUSANDS_RE = re.compile(r"(?<=\d)(?:\{,\}|\\,|,)(?=\d{3}(?!\d))")
@@ -97,7 +98,7 @@ def sentence_numbers(sentence: str) -> list[str]:
             if not digits:
                 continue
             if match.group("pct"):
-                is_leading_decimal = group == "a" and match.group("b") and "." in digits
+                is_leading_decimal = group == "a" and match.group("sep") in ("至", "到") and "." in digits
                 found.append(digits if is_leading_decimal else digits + "%")
             elif not (YEAR_RE.fullmatch(digits) and unit == "年"):
                 found.append(digits)
@@ -130,6 +131,11 @@ def _excerpt(text: str, limit: int = 80) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
+def _any_of(patterns: Iterable[Any] | None) -> re.Pattern[str] | None:
+    parts = [str(p) for p in patterns or [] if str(p)]
+    return re.compile("|".join(f"(?:{p})" for p in parts)) if parts else None
+
+
 def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -> Report:
     settings = (config or load_config()).get("consistency") or {}
     hidden_words = [str(w) for w in settings.get("hidden_placeholder_words") or []]
@@ -144,6 +150,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
     bib_keys = read_bib_index(tree.bib_files).keys
     assumptions = paths.assumptions.read_text(encoding="utf-8") if paths.assumptions.exists() else ""
     id_re = _id_regex(case_ids(case) | claim_ids(evidence), settings.get("extra_internal_id_patterns") or [])
+    nonstandard_re = _any_of(settings.get("nonstandard_placeholder_patterns"))
     process_patterns = [str(w) for w in settings.get("process_text_patterns") or [] if str(w)]
     ledger = load_ledger(paths.ledger) if paths.ledger.exists() else None
     entry_texts = bib_entry_texts(tree.bib_files) if ledger is not None else {}
@@ -176,6 +183,10 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                 report.placeholders.append(Finding("placeholder", rel, number, match.group(0)))
                 if match.group(0) not in assumptions:
                     report.errors.append(Finding("placeholder_unlisted", rel, number, match.group(0)))
+            if nonstandard_re:
+                for match in nonstandard_re.finditer(placeholder_re.sub("", body)):
+                    detail = f"{_excerpt(body[body.find(match.group(0)):], 40)}；请改成「【待补充：……】」并列入占位清单"
+                    report.errors.append(Finding("placeholder_nonstandard", rel, number, detail))
             if process_patterns:
                 _check_process_text(report, rel, number, placeholder_re.sub("", body), process_patterns)
             if is_tex:

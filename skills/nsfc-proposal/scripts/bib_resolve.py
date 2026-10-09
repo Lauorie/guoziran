@@ -27,7 +27,7 @@ import requests
 
 from citation_ledger import record_added
 from http_retry import failure_label, get_with_retry
-from latex_files import BibIndex, bib_entry_texts, normalize_doi, read_bib_index, scan_latex_tree
+from latex_files import BibIndex, normalize_doi, read_bib_index, scan_latex_tree
 from proposal_common import ProposalError, append_under_heading, load_config, proposal_paths, resolve_project_root
 
 USER_AGENT = "nsfc-proposal-bib-resolve/0.1"
