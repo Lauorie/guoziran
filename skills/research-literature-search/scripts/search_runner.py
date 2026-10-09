@@ -28,6 +28,7 @@ try:
     from rls_contract import CONTRACT_VERSION
     from validate_bundle import validate_bundle
     from providers import search_crossref, search_openalex, search_semantic_scholar
+    from providers.host_results import load_host_results
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from candidate_schema import normalize_record
@@ -38,6 +39,7 @@ except ModuleNotFoundError:
     from rls_contract import CONTRACT_VERSION
     from validate_bundle import validate_bundle
     from providers import search_crossref, search_openalex, search_semantic_scholar
+    from providers.host_results import load_host_results
 
 
 ProviderFn = Callable[..., list[dict[str, Any]]]
@@ -189,6 +191,7 @@ def run_search(
     provider_options: Mapping[str, Any] | None = None,
     query_source: str | None = None,
     preprint_profile: str = "auto",
+    host_results: Mapping[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
     try:
         bundle = _safe_bundle_dir(output_dir, scope_root)
@@ -250,6 +253,21 @@ def run_search(
         # Compatibility policy: priority order with fallback/top-up, matching
         # the pre-split review pipeline rather than a full provider union.
         for provider in order:
+            if provider == "mcp" and host_results is not None:
+                host_hits = host_results.get(text.strip())
+                if host_hits is None:
+                    item = {"provider": provider, "status": "skipped", "results": 0, "reason": "no host results for query"}
+                    query_attempts.append(item)
+                    attempts.append({"query_id": query_id, **item})
+                    warnings.append(f"{query_id}/{provider}: skipped ({item['reason']})")
+                    continue
+                item = {"provider": provider, "status": "success" if host_hits else "empty", "results": len(host_hits), "host_tool": "wispaper"}
+                query_attempts.append(item)
+                attempts.append({"query_id": query_id, **item})
+                hits.extend((provider, row) for row in host_hits)
+                if len(hits) >= max(5, int(max_results_per_query * TOPUP_THRESHOLD)):
+                    break
+                continue
             if provider not in SUPPORTED_PROVIDERS:
                 item = {"provider": provider, "status": "skipped", "results": 0, "reason": "host tool required"}
                 query_attempts.append(item)
@@ -427,6 +445,7 @@ def main() -> int:
     run.add_argument("--min-queries", type=int, default=5)
     run.add_argument("--max-queries", type=int, default=25)
     run.add_argument("--query-source", default="direct_cli")
+    run.add_argument("--host-results", type=Path, help="rls.host_results.v1 文件：宿主经 MCP（wispaper）取得的结果，填入 mcp 检索源位置")
     enrich = sub.add_parser("enrich-abstracts")
     enrich.add_argument("--input", required=True, type=Path)
     enrich.add_argument("--output", required=True, type=Path)
@@ -436,6 +455,13 @@ def main() -> int:
     validate.add_argument("--bundle", required=True, type=Path)
     args = parser.parse_args()
     if args.command == "run":
+        host_results = None
+        if args.host_results:
+            try:
+                host_results = load_host_results(args.host_results)
+            except ValueError as exc:
+                print(json.dumps(_failed_result(topic=args.topic, output_dir=args.output_dir, code="contract_invalid", warning=_safe_error(exc)), ensure_ascii=False, indent=2))
+                return 1
         filters = {"min_year": args.min_year, "max_year": args.max_year, "exclude_preprints": args.exclude_preprints}
         if args.publication_types:
             filters["publication_types"] = args.publication_types
@@ -444,7 +470,7 @@ def main() -> int:
         if args.open_access_filter or args.open_access:
             filters["open_access"] = bool(args.open_access)
         provider_order = [item.strip() for item in args.provider_order.split(",") if item.strip()] if args.provider_order else None
-        manifest = run_search(topic=args.topic, domain=args.domain, query_file=args.query_file, output_dir=args.output_dir, scope_root=args.scope_root, filters=filters, provider_order=provider_order, max_results_per_query=args.max_results_per_query, max_total=args.max_total, fallback_enabled=not args.no_fallback, provider_options={"min_queries": args.min_queries, "max_queries": args.max_queries}, preprint_profile=args.domain_profile)
+        manifest = run_search(topic=args.topic, domain=args.domain, query_file=args.query_file, output_dir=args.output_dir, scope_root=args.scope_root, filters=filters, provider_order=provider_order, max_results_per_query=args.max_results_per_query, max_total=args.max_total, fallback_enabled=not args.no_fallback, provider_options={"min_queries": args.min_queries, "max_queries": args.max_queries}, preprint_profile=args.domain_profile, host_results=host_results)
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
         return 0 if manifest.get("status") in {"success", "partial_success"} else 1
     if args.command == "enrich-abstracts":
