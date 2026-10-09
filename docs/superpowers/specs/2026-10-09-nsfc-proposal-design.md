@@ -83,14 +83,14 @@
 
 - AI 按 `references/scientific_case_guide.md` 填写 `scientific_case.yaml`。科学问题和假设的写法，以 `nsfc-justification-writer/references/` 下的 `scientific_question_guidelines.md` 和 `scientific_hypothesis_guidelines.md` 为准，本 skill 不另写一份。
 - 三项必填：研究对象与目标人群的差异及偏倚处理（针对 D3），标题中专业术语的界定（针对 D2），每个研究任务的必比基线（针对 D4）。
-- 申请人没有提供、由 AI 拟定的内容，在字段中标 `source: ai_proposed`，同时写入 `assumptions.md`（针对 D6）。
-- 论证中用到的每条论断，在这一步就写入 `evidence_map.yaml`：填 `id`、`text`、`type`、`sections`，`support` 一律先记为 `unsupported`，`evidence` 留空。第 3 步只补证据、重算 `support`，不新增编号。这样 `scientific_case.yaml` 中的 `claim_ids` 从一开始就有着落。
+- 申请人没有提供、由 AI 拟定的内容，在字段中标 `source: ai_proposed`，同时写入 `assumptions.md`（针对 D6）。申请人没给例数时，按检验效能估算主要比较所需的最小样本量（写明效应量、α、检验效能、方法），同样作为 AI 拟定项；可得例数仍写占位。
+- 论证中用到的每条论断，在这一步就写入 `evidence_map.yaml`：填 `id`、`text`、`type`、`sections`，`support` 一律先记为 `unsupported`，`evidence` 留空。第 3 步只补证据、重算 `support`，不新增编号；方法类论断除外，它们不被 `scientific_case.yaml` 引用，在第 3 步新增。这样 `scientific_case.yaml` 中的 `claim_ids` 从一开始就有着落。
 - `case.py validate` 通过后才进入下一步。
 - 用户想先系统探索选题时，`SKILL.md` 提示先运行 research-idea，再把它的报告导入本文件。本 skill 不调用 research-idea。
 
 ### 4.3 文献与证据
 
-见第 6 节。
+见第 6 节。研究方案借用的方法（范式、量表、模型、统计方法）与现状论断一起检索，写成 `type: background`、`text` 以「方法：」开头的论断，正文引用。申请人提供的已发表论文经 `bib_resolve.py` 入 `.bib`，在立项依据相关处引用。
 
 ### 4.4 章节分配
 
@@ -98,6 +98,7 @@
 - 各章默认的「不写」清单来自 `references/section_boundaries.md`。例如立项依据不写实验步骤、技术路线、样本量设计、年度安排（针对 D1）。
 - 科学论证中 `source: missing` 的可行性条目，必须进入研究基础的占位清单（针对 D5）。
 - 离线或缺文献时，缺口类论断写「尚不清楚」；背景类论断集中成段，段末放一处列出待补文献的可见占位，不逐句写成「可能」，也不写凭记忆的研究名称、作者、年份和具体数字。背景类判断在 `evidence_map.yaml` 中仍有对应论断，`support` 为 `unsupported`。
+- 参照 2026 版中标申请书：立项依据用 `\subsubsection` 单列科学技术价值，现状各条以局限收尾，小节标题写判断；研究内容的每项用同一组小标题，开头放研究框架图占位。
 
 ### 4.5 确认点
 
@@ -137,6 +138,7 @@
 - 引用台账：`\cite` 的 key 不在台账中，或 `.bib` 条目与台账记录的哈希不符（手改）。
 - 引用句中的数字不见于所引文献的台账摘要；所引文献没有摘要可核。
 - 项目没有台账；正文中出现写作过程说明；占位写法不是 `【待补充：……】`。
+- 立项依据引用的不同文献少于 `literature.min_distinct_refs_justification`（默认 30），提示复核；报告同时给出各章引用的不同文献数。
 
 AI 做语义检查：各章的科学问题和假设表述一致；研究内容的任务与科学问题一一对应；研究基础覆盖每个任务的可行性。
 
@@ -147,7 +149,7 @@ AI 做语义检查：各章的科学问题和假设表述一致；研究内容�
 - 起草 `extraTex/4.5.生成式人工智能.tex`。依据是运行日志：AI 做了哪几步、产出了哪些文件、申请人确认了哪些、跳过了哪些。第一行写占位「【待补充：申请人核对本声明后删除此行】」，按 5.6 节规则列入占位清单。
 - 模板 `main.tex` 没有引用 `extraTex/4.5.生成式人工智能.tex` 时（如 NSFC_Young），改写到 `proposal/ai_declaration.md`，并在 `assumptions.md` 记一条待核实项。
 - 更新 `assumptions.md`。
-- 向用户报告：写了哪些文件、待核实项、占位位置、建议的下一步（编译、nsfc-length-aligner、nsfc-reviewers、nsfc-qc）。
+- 向用户报告：写了哪些文件、各章引用的不同文献数、待核实项、占位位置、建议的下一步（编译、nsfc-length-aligner、nsfc-reviewers、nsfc-qc）。
 - 用户要求时，调用 nsfc-reviewers 或 nsfc-qc。
 
 ## 5. 共享文件

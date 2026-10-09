@@ -90,3 +90,5 @@ claims:
 ```
 
 流程第 2 步（科学论证）新增论断时一律写 `support: unsupported`、`evidence: []`；第 3 步读完摘要后再改。`applicant_material` 只用于 `type: applicant_result`。
+
+方法类论断（研究方案借用的任务范式、量表、模型、统计方法）：`type` 没有 `method` 一项，用 `background`，`text` 以「方法：」开头，例如「方法：用 Dice 系数评估分割一致性」。证据与措辞规则同其他论断。
