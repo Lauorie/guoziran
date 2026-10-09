@@ -120,6 +120,15 @@ class ConsistencyTest(unittest.TestCase):
         report = check_project(self._build_numbers())
         self.assertFalse([f for f in report.numbers if "99" in f.detail])
 
+    def test_numbers_latex_percent_range_and_tilde(self) -> None:
+        body = "约 95\\% 的患者。\n宽度 2--10 mm。\n层厚 10~mm。\n共 3 例如下。\n年龄 5 个别。\n"
+        details = [f.detail for f in check_project(build(self.base, body_11=body)).numbers]
+        self.assertIn("95\\%", details)
+        self.assertEqual([d for d in details if "10" in d and "mm" in d and d.startswith("2")], ["2--10 mm"])
+        self.assertNotIn("10 mm", details)
+        self.assertIn("10~mm", details)
+        self.assertFalse([d for d in details if d.startswith(("3 ", "5 "))])
+
     def test_cli_numbers_flag_keeps_exit_code(self) -> None:
         env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
         root = self._build_numbers()

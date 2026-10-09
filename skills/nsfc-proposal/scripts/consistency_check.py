@@ -21,8 +21,8 @@ from proposal_common import ProposalError, load_config, project_path, proposal_p
 
 CITE_RE = re.compile(r"\\[A-Za-z]*cite[A-Za-z]*\*?(?:\[[^\]]*\]){0,2}\{([^}]*)\}")
 NUMBER_RE = re.compile(
-    r"\d+(?:\.\d+)?(?:\s?[–\-~～至到]\s?\d+(?:\.\d+)?)?\s?"
-    r"(?P<unit>mm|cm|毫米|厘米|例|名|家|年|个月|月|%|HU|kV|mAs|层|项|个)(?![A-Za-z])"
+    r"\d+(?:\.\d+)?(?:\s?(?:---|--|[–\-~～至到])\s?\d+(?:\.\d+)?)?[\s~]?(?:\\(?=%))?"
+    r"(?P<unit>mm|cm|毫米|厘米|例(?!如)|名|家|年|个月|月|%|HU|kV|mAs|层|项|个(?!别))(?![A-Za-z])"
 )
 DEFAULT_PLACEHOLDER = "【待补充：[^】]*】"
 LABELS = {
