@@ -15,6 +15,7 @@
 - `nsfc-research-foundation-writer` 0.2.0、`nsfc-abstract` 2.1.3：接入 nsfc-proposal。
 - `research-literature-search` 1.1.0：`run` 新增 `--host-results`，接收 wispaper 结果。
 - `.gitignore`：放行 tests/nsfc-justification-writer、tests/nsfc-research-content-writer、tests/research-literature-search、tests/nsfc-proposal 下的测试脚本。
+- 终审修复：`nsfc-proposal` 的 `init` 不再登记 `.bib` 中已有的条目，`citation_ledger.py register-user` 改为 `--key`（全部登记须加 `--all`），没有引用台账改为必须修正，一致性检查识别跨行 `\cite`；`nsfc-research-content-writer` 新增 `checks.allowed_s_tokens`；`nsfc-justification-writer` 的 `--task-root` 须在 `.bensz-api` 下；`research-literature-search` 的 manifest 版本号改读 `config.yaml`；nsfc-proposal 计划与设计文档去掉本机路径。
 - 本分支未写 BAC 记录，经负责人同意。
 - 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。

@@ -26,4 +26,7 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - `init` 不再把 `.bib` 中已有的条目登记入账：只建空台账，并把这些条目列入警告与「待核实项」；`citation_ledger.py register-user` 改为 `--key K`（可重复）逐条登记，全部登记须显式加 `--all`；有台账时 `case.py validate` 只把台账记录为 `add` 的文献计入 `single_verified`、`multi_verified` 的篇数（`basis: full_abstract` 还要求台账摘要非空）；没有台账（`no_citation_ledger`）改为必须修正（来源：终审）。
 - `consistency_check.py` 识别跨行的 `\cite`：逐行去注释后按文件拼接再查引用，`missing_bibkey`、台账检查、各章引用数与引用句数字核对都覆盖 key 换行写的情形；引用句可以跨行，按句末标点和空行切句（来源：终审）。
 - 确认点的「我替你拟定」清单同时列出 `assumptions.md`「AI 拟定项」下的每一行（样本量、终点、分组口径等设计参数），一屏放不下时单独占第二屏（来源：终审）。
+- 引用台账是只追加的 JSONL 事件日志，没有用 BSK：这是申请人选定的设计（借用 academic-literature 的做法），本机没有 BSK 源码可调用；设计文档 §11 注明了这一例外。
+- `citation_ledger` 的 `add` 记录只在解析出的 DOI 与检索记录 DOI 规范化后相同、或记录本来没有 DOI 时保存记录的摘要，否则摘要记 null（来源：终审）。
+- 执行说明：申请人论文的记录写入 `applicant.jsonl`，与检索记录合并后只运行一次 `bib_resolve`；篇幅检查加 `--out-dir`；检索式条数引用 `literature.keyword_queries`、`literature.bundle_max_queries`；S 编号误报的处理办法（来源：终审）。
 - 本分支未写 BAC 记录，经负责人同意。

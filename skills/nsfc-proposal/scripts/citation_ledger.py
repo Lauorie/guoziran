@@ -114,15 +114,26 @@ def _record_abstract(record: Mapping[str, Any]) -> str | None:
     return None
 
 
+def _record_doi(record: Mapping[str, Any]) -> str | None:
+    identifiers = record.get("identifiers") if isinstance(record.get("identifiers"), Mapping) else {}
+    return normalize_doi(identifiers.get("doi") or record.get("doi"))
+
+
 def record_added(ledger_path: Path, bib_files: list[Path], records: list[dict[str, Any]], outcomes: list[Any]) -> None:
-    """给每个 status 为 added 的结果追加 add 事件；哈希取实际写入 .bib 的条目文本，来源缺失时记 null。"""
+    """给每个 status 为 added 的结果追加 add 事件；哈希取实际写入 .bib 的条目文本，来源缺失时记 null。
+
+    记录的摘要只在写入 .bib 的就是这条记录时才记：解析出的 DOI 与记录 DOI 规范化后相同，或记录本来没有 DOI。
+    记录 DOI 的标题核对失败、改按标题解析到另一篇时，摘要属于原 DOI 那一篇，台账记 null。
+    """
     texts = bib_entry_texts(bib_files)
     for record, outcome in zip(records, outcomes):
         if outcome.status != "added" or outcome.bibkey not in texts:
             continue
+        record_doi = _record_doi(record)
+        same_work = record_doi is None or normalize_doi(outcome.doi) == record_doi
         append_event(ledger_path, add_event(
             outcome.bibkey, source=outcome.source, entry_text=texts[outcome.bibkey], doi=outcome.doi,
-            abstract=_record_abstract(record), provenance=_record_provenance(record, outcome.record_id)))
+            abstract=_record_abstract(record) if same_work else None, provenance=_record_provenance(record, outcome.record_id)))
 
 
 def register_user_entries(project_root: Path, keys: Sequence[str] | None = None, bib_files: list[Path] | None = None) -> list[str]:

@@ -16,8 +16,8 @@ literature:
   use_wispaper: true
   quick_search_top_n: 20
   deep_search_top_n: 10
-  keyword_queries: {min: 5, max: 25}
-  bundle_max_queries: 25
+  keyword_queries: {min: 5, max: 25}   # 供执行说明引用，脚本不读取：关键词检索式的条数范围
+  bundle_max_queries: 25               # 供执行说明引用，脚本不读取：每个论断检索式文件的条数上限
   title_similarity: 0.92
   doi_title_similarity: 0.8
   year_window: 1
@@ -38,9 +38,9 @@ consistency:
 
 guardrails:
   # 本 skill 自己写入的正文文件；proposal/ 下的文件；.bib 只追加、写前备份（目标由 main.tex 解析）
-  allowed_write_files:
+  allowed_write_files:   # 供执行说明引用，脚本不读取
     - extraTex/4.5.生成式人工智能.tex
-  allowed_write_dirs:
+  allowed_write_dirs:    # 供执行说明引用，脚本不读取
     - proposal
 
 # 篇幅预算的唯一来源；按文件名与其中 match 通配符匹配

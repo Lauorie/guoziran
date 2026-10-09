@@ -47,6 +47,7 @@ output_mode：apply（默认）/ preview（只预览不写入）
 - 按 `skills/nsfc-research-content-writer/references/dod_checklist.md` 快速自检（重点看 2.2 可回溯、2.3 覆盖 S1–S4）
 - 可选脚本自检（只读）：`python3 skills/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root projects/NSFC_Young`
   - 更严格（将“首次/领先”等绝对化措辞视为错误）：`python3 skills/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root projects/NSFC_Young --fail-on-risk-phrases`
+  - 检查把正确的专业写法（如 L5–S1、S100β）报成 S 编号时，把该写法加入 `config.yaml` 的 `checks.allowed_s_tokens`。
   - 一键执行（先校验 skill 再自检输出）：`python3 skills/nsfc-research-content-writer/scripts/run_checks.py --project-root projects/NSFC_Young --fail-on-risk-phrases`
 
 ## 开发者：一致性校验与可追溯测试会话

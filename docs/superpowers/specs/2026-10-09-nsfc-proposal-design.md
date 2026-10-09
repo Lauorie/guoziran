@@ -500,7 +500,7 @@ nsfc-abstract 只在 `SKILL.md` 中补一句：存在科学论证时，科学问
 
 - **SKILL.md 结构**：frontmatter 含 `name`、`description`、`metadata.author`。`description` 只写用途和触发条件，不写文件名、参数和默认值。正文按「目标 → 流程（输入、执行步骤、输出、输出管理、校验、失败与恢复）→ 约束」组织。nsfc-proposal 不声明 State、Verifier 或 Gate，所以不设「控制」一节。
 - **公共约束**：「约束」一节逐字复制 `docs/templates/skill-common-constraints.md` 的公共块，块后加「Skill 专属约束」。本仓库没有上游的 `check_skill_structure.py` 和 `sync_skill_constraints.py`，改由单元测试比对公共块与模板是否一致。
-- **不用 BSK**：本机没有安装 `bensz_skill_kernel`；本任务也不需要状态机或验证器。确认点、版本号和运行日志都用普通文件表达，不另建事件账本或哈希链。
+- **不用 BSK**：本机没有安装 `bensz_skill_kernel`；本任务也不需要状态机或验证器。确认点、版本号和运行日志都用普通文件表达，不另建事件账本或哈希链。例外：引用台账 `proposal/citation_ledger.jsonl`（5.1 节、6.4 节第 8 条）是只追加的事件日志，记录条目哈希。这是申请人选定的设计，借用 academic-literature 的做法；本机没有 BSK 源码可调用，所以用独立的 JSONL 文件实现。
 - **脚本**：用 `Path(__file__).resolve()` 定位 skill 自身的资产，不依赖当前工作目录；文件读写显式指定 `encoding="utf-8"`；阈值和路径放进 `config.yaml`；用户给出的路径必须限制在 `project_root` 内。
 - **分工**：确定性工作（校验、DOI 提取、去重、编号扫描）放进脚本；语义判断（证据是否支持论断、各章是否一致）交给 AI。
 - **版本**：只改各 skill 的 `config.yaml:skill_info.version`。新 skill 的 `CHANGELOG.md` 以 `[0.1.0]` 和「初始化技能，实现核心功能」开头。

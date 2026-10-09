@@ -5,13 +5,17 @@ import argparse
 import re
 import sys
 from pathlib import Path
+from typing import Sequence
 
 from _yaml_utils import extract_yaml_list_under_block, extract_yaml_value_under_block
 
 DEFAULT_RISK_PHRASES = ["首次", "领先", "填补空白", "突破性", "国际领先", "世界领先"]
+# 含 S+数字、但不是内部编号的专业写法；config.yaml 的 checks.allowed_s_tokens 缺失时使用
+DEFAULT_ALLOWED_S_TOKENS = ["L5-S1", "L5–S1", "S100", "S100β", "S1P", "S1 受体", "S1受体"]
 
-# SKILL.md 规定 S1–S4 只用于内部规划，禁止出现在 .tex 正文中
-INTERNAL_SUBGOAL_ID_RE = re.compile(r"(?<![A-Za-z0-9])S\d+(?![A-Za-z0-9])")
+# SKILL.md 规定 S1–S4 只用于内部规划，禁止出现在 .tex 正文中。
+# 紧跟在字母、数字或连字符后的 S+数字（如 L5–S1、T12-S2 中的 S1、S2）是解剖节段等写法，不算编号。
+INTERNAL_SUBGOAL_ID_RE = re.compile(r"(?<![A-Za-z0-9\-‐‑–—−])S\d+(?![A-Za-z0-9])")
 LATEX_COMMENT_RE = re.compile(r"(?<!\\)%.*$")
 
 
@@ -39,6 +43,18 @@ def _read_checks_from_config(config_yaml: Path) -> list[str]:
     return extract_yaml_list_under_block(lines, "checks", "risk_phrases") or DEFAULT_RISK_PHRASES
 
 
+def _read_allowed_s_tokens(config_yaml: Path) -> list[str]:
+    lines = config_yaml.read_text(encoding="utf-8").splitlines()
+    return extract_yaml_list_under_block(lines, "checks", "allowed_s_tokens") or DEFAULT_ALLOWED_S_TOKENS
+
+
+def find_leaked_ids(text: str, allowed_tokens: Sequence[str]) -> list[str]:
+    """正文中疑似内部子目标编号的 S+数字；先去掉允许的专业写法（长的先去）。"""
+    for token in sorted((t for t in allowed_tokens if t), key=len, reverse=True):
+        text = text.replace(token, " ")
+    return sorted(set(INTERNAL_SUBGOAL_ID_RE.findall(text)))
+
+
 def _check_file_exists(project_root: Path, relpath: str) -> str | None:
     path = project_root / relpath
     if not path.exists():
@@ -52,13 +68,16 @@ def _strip_latex_comments(text: str) -> str:
     return "\n".join(LATEX_COMMENT_RE.sub("", line) for line in text.splitlines())
 
 
-def _check_minimal_content(path: Path, *, kind: str) -> list[str]:
+def _check_minimal_content(path: Path, *, kind: str, allowed_s_tokens: Sequence[str] = ()) -> list[str]:
     text = _strip_latex_comments(path.read_text(encoding="utf-8", errors="replace"))
     problems: list[str] = []
 
-    leaked = sorted(set(INTERNAL_SUBGOAL_ID_RE.findall(text)))
+    leaked = find_leaked_ids(text, allowed_s_tokens)
     if leaked:
-        problems.append(f"{path}: internal subgoal IDs leaked into body: {', '.join(leaked)} (use natural language instead)")
+        problems.append(
+            f"{path}: internal subgoal IDs leaked into body: {', '.join(leaked)} (use natural language instead; "
+            "if this is a correct technical term, add it to checks.allowed_s_tokens in config.yaml)"
+        )
 
     if kind == "research":
         if not text.strip():
@@ -124,6 +143,7 @@ def main() -> int:
         return _err(str(exc))
 
     risk_phrases = _read_checks_from_config(config_yaml)
+    allowed_s_tokens = _read_allowed_s_tokens(config_yaml)
 
     errors: list[str] = []
     errors.extend(
@@ -148,7 +168,7 @@ def main() -> int:
         ]
         for relpath, kind in checks:
             errors.extend(
-                _check_minimal_content(project_root / relpath, kind=kind)
+                _check_minimal_content(project_root / relpath, kind=kind, allowed_s_tokens=allowed_s_tokens)
             )
 
     warnings: list[str] = []

@@ -298,6 +298,39 @@ def unledgered_note(keys: list[str]) -> str:
             "`citation_ledger.py register-user --key K`；不是申请人的（如模板示例）从 `.bib` 删去。未入账的条目不得引用。")
 
 
+class RecordAbstractTest(unittest.TestCase):
+    """台账摘要只在检索记录与写入 .bib 的是同一篇时才记：DOI 规范化后相同，或记录本来没有 DOI。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = make_ledger_project(Path(self.tmp.name))
+        self.ledger = proposal_paths(self.root).ledger
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _abstract(self, record: dict, resolved_doi: str | None) -> str | None:
+        from bib_resolve import Outcome
+        from citation_ledger import record_added
+        outcome = Outcome("r1", "Alpha", "added", bibkey="a2020", doi=resolved_doi, source="crossref")
+        row = {"record_id": "r1", "title": "Alpha", "abstract": ABSTRACT, "abstract_status": "present", **record}
+        record_added(self.ledger, [self.root / "references" / "refs.bib"], [row], [outcome])
+        return load_ledger(self.ledger)["a2020"]["abstract"]
+
+    def test_different_doi_drops_the_abstract(self) -> None:
+        self.assertIsNone(self._abstract({"identifiers": {"doi": "10.5555/other"}}, "10.5555/a"))
+
+    def test_resolved_without_doi_drops_record_abstract_with_doi(self) -> None:
+        self.assertIsNone(self._abstract({"doi": "10.5555/other"}, None))
+
+    def test_same_doi_in_another_form_keeps_the_abstract(self) -> None:
+        self.assertEqual(self._abstract({"identifiers": {"doi": "https://doi.org/10.5555/A"}}, "10.5555/a"), ABSTRACT)
+        self.assertEqual(self._abstract({"doi": "doi:10.5555/A"}, "10.5555/a"), ABSTRACT)
+
+    def test_record_without_doi_keeps_the_abstract(self) -> None:
+        self.assertEqual(self._abstract({}, "10.5555/a"), ABSTRACT)
+
+
 class InitLedgerTest(unittest.TestCase):
     def test_existing_entries_are_listed_not_registered(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

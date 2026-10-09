@@ -898,7 +898,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     task_root = getattr(args, "task_root", None)
     if task_root:
         root = Path(task_root).expanduser().resolve()
-        if not root.name.startswith("task-"):
+        if not root.name.startswith("task-") or root.parent.name != ".bensz-api":
             logger.error("❌ --task-root 必须指向 .bensz-api/task-*/ 目录：%s", root)
             return 2
         os.environ[RUNS_DIR_ENV] = str(root / "nsfc-justification-writer")

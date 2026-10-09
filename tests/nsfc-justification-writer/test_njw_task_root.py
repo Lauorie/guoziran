@@ -39,6 +39,13 @@ class TaskRootTest(unittest.TestCase):
         proc = run_cli(self.base, "--task-root", str(self.base / "elsewhere"), "init")
         self.assertEqual(proc.returncode, 2)
 
+    def test_task_root_requires_bensz_api_parent(self) -> None:
+        task = self.base / "elsewhere" / "task-20261009-1200-demo"
+        proc = run_cli(self.base, "--task-root", str(task), "init", "--run-id", "init_20261009120000")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn(".bensz-api", proc.stderr)
+        self.assertFalse(task.exists())
+
     def test_diff_locates_run_in_earlier_task_dir(self) -> None:
         project = self.base / "proj"
         target = project / "extraTex" / "1.1.立项依据.tex"
