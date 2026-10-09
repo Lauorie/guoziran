@@ -9,6 +9,13 @@
 ## [Unreleased]
 
 - 新增 `nsfc-proposal` 设计文档 `docs/superpowers/specs/2026-10-09-nsfc-proposal-design.md`：以 nsfc-* 为主线并入 nsfc-writer 的科学论证、证据图谱和章节分工，接入 wispaper 检索，修复 `nsfc-justification-writer` 3 处 bug；本轮只写设计，不修改 Skill 源码。
+- 新增 `nsfc-proposal` 0.1.0：国自然正文统一入口，建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef/OpenAlex 元数据核对，按固定顺序调用写作 skill 并做跨章一致性检查。
+- `nsfc-justification-writer` 1.4.0：允许提案新增模板标题命令；`list-runs` 不再列出工作区目录；新增 `--task-root` 并跨任务目录查找运行记录；接入 nsfc-proposal。
+- `nsfc-research-content-writer` 1.1.0：检查脚本改为检测 S 编号泄漏（原规则与 SKILL.md 矛盾）；接入 nsfc-proposal。
+- `nsfc-research-foundation-writer` 0.2.0、`nsfc-abstract` 2.1.3：接入 nsfc-proposal。
+- `research-literature-search` 1.1.0：`run` 新增 `--host-results`，接收 wispaper 结果。
+- `.gitignore`：放行 tests/nsfc-justification-writer、tests/nsfc-research-content-writer、tests/research-literature-search、tests/nsfc-proposal 下的测试脚本。
+- 本分支未写 BAC 记录，经负责人同意。
 - 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。
 - 修订 Skill 基础设施边界：移除重复 BSK 的 `contract.py` 与自建 completion attestation，通用 evidence/Gate/transition/重放统一交给本地 BSK；research-idea 仅保留边 applicability 与 reviewer receipt 领域适配。

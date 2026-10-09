@@ -13,7 +13,8 @@ graph LR
     A[research-topic-extractor<br>提取综述主题] --> S[research-literature-search<br>候选文献检索]
     S --> B[research-literature-review<br>规范化文献综述]
     B --> C[research-guide-updater<br>优化项目指南]
-    C --> D[nsfc系列skills<br>标书各部分写作]
+    C --> P[nsfc-proposal<br>科学论证与分章总控]
+    P --> D[nsfc系列写作 skills<br>立项依据 / 研究内容 / 研究基础 / 摘要]
     D --> F[nsfc-reviewers<br>专家评审模拟]
 ```
 
@@ -43,6 +44,7 @@ graph LR
 
 **第四步：标书各部分写作**
 - 使用 nsfc 系列技能，基于优化后的项目指南进行标书写作：
+  - 推荐以 `nsfc-proposal` 为入口：它先建立科学论证、证据图谱与章节分工，再按顺序调用下列写作 skill，并做跨章一致性检查。
   - `nsfc-justification-writer`：立项依据
   - `nsfc-research-content-writer`：研究内容
   - `nsfc-research-foundation-writer`：研究基础
@@ -759,6 +761,37 @@ python3 research-literature-search/scripts/search_runner.py validate --bundle ./
 - 可选输出分层诊断、变更摘要与 STYLE_CARD，便于跨段落保持风格一致
 
 [详细文档 →](nsfc-humanization/README.md)
+
+---
+
+### 23. nsfc-proposal - 国自然正文统一入口
+
+**状态**：🚧 开发中（版本见 `skills/nsfc-proposal/config.yaml`）
+
+**类型**：📝 日常
+
+**功能**：国自然正文的统一入口。先建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef/OpenAlex 元数据核对，再按固定顺序调用各写作 skill，并做跨章一致性检查。
+
+**推荐 Prompt 模板**：
+
+```text
+用 nsfc-proposal 帮我写国自然青年基金正文。
+项目目录：projects/我的项目
+题目：……
+研究对象：……
+痛点：……
+科学问题与假设的初步想法：……
+已有材料：论文 / 预实验 / 没有
+```
+
+想全程不被打断，加一句「全自动，不用停下来问我」。
+
+**产出**：
+- 各章正文，写进项目的 `extraTex/`；摘要写进 `NSFC-ABSTRACTS.md`
+- `proposal/` 目录：科学论证、证据图谱、章节分工、待核实清单、文献线索
+- 核对过的参考文献，追加到项目的 `.bib`
+
+[详细文档 →](nsfc-proposal/README.md)
 
 ---
 

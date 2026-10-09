@@ -141,6 +141,7 @@ AI 做语义检查：各章的科学问题和假设表述一致；研究内容�
 ### 4.8 收尾
 
 - 起草 `extraTex/4.5.生成式人工智能.tex`。依据是运行日志：AI 做了哪几步、产出了哪些文件、申请人确认了哪些、跳过了哪些。第一行写占位「【待补充：申请人核对本声明后删除此行】」，按 5.6 节规则列入占位清单。
+- 模板 `main.tex` 没有引用 `extraTex/4.5.生成式人工智能.tex` 时（如 NSFC_Young），改写到 `proposal/ai_declaration.md`，并在 `assumptions.md` 记一条待核实项。
 - 更新 `assumptions.md`。
 - 向用户报告：写了哪些文件、待核实项、占位位置、建议的下一步（编译、nsfc-length-aligner、nsfc-reviewers、nsfc-qc）。
 - 用户要求时，调用 nsfc-reviewers 或 nsfc-qc。
@@ -280,6 +281,8 @@ claims:
 
 类型为 `applicant_result` 但没有申请人材料的论断，正文不写，只留占位。线索（`lead:`）和摘要片段都不能作为支持证据。
 
+`support` 按不同的 bibkey 计数。同一个 bibkey 列两次，只算一篇。
+
 ### 5.4 `section_plan.yaml`
 
 ```yaml
@@ -326,7 +329,7 @@ python3 skills/research-literature-search/scripts/search_runner.py run \
 ```
 
 - 某条检索式在 `--host-results` 中有结果时，`mcp` 位置记为成功，来源写 `wispaper`；结果数不足时，按 `run` 原有的补充规则（约 70% 阈值）继续用 OpenAlex 等补足。没有结果时，仍记为「跳过」。
-- 每条记录转为 `rls.paper.v1`。`quick_search` 的摘要标为 `abstract_status: snippet`。
+- 每条记录转为 `rls.paper.v1`。`quick_search` 的摘要片段不作为摘要：`abstract` 置空、`abstract_status` 为 `missing`，片段原文存入 `provenance.host_abstract_snippet`，并加 `abstract_snippet_only` 警告；之后由 `enrich-abstracts` 补全。
 - 去重、manifest 和 `validate_bundle` 沿用 `run` 的现有逻辑，不另写一套。
 - 不传 `--host-results` 时，`run` 的行为与改动前一致。
 
@@ -343,11 +346,11 @@ python3 skills/research-literature-search/scripts/search_runner.py run \
 
 ### 6.4 元数据补全：`scripts/bib_resolve.py`
 
-1. **取 DOI**：先用记录中的 DOI 字段；为空时，从 `url`、`source_url`、`pdf_url` 中提取。规范化规则：转小写；去掉 `/full`、`/abstract`、`.pdf` 等尾缀。
+1. **取 DOI**：用规范记录中的 DOI。wispaper 记录的 DOI 已由 research-literature-search 在导入时从链接中提取。
 2. **有 DOI**：查询 CrossRef，取标题、全部作者、期刊、年、卷、期、页码、DOI。
 3. **无 DOI**：在 CrossRef 按标题检索，取首条结果。规范化后的标题相似度达到 0.92 且年份相差不超过 1 年，才算匹配。标题被截断（含「…」）时，只比较已知的前缀。CrossRef 不匹配时，按同样规则查 OpenAlex。
 4. **生成 bibkey**：第一作者姓 + 年份 + 标题首个实词，小写 ASCII。重名时加 a、b 后缀。
-5. **写入 `.bib`**：目标文件取 `main.tex` 及其 `\input` 文件中 `\bibliography{}` 指向的文件。写入前备份；DOI 已存在的条目跳过。
+5. **写入 `.bib`**：目标文件取 `main.tex` 及其 `\input` 文件中 `\bibliography{}` 指向的文件。写入前备份；DOI 已存在的条目跳过。`--task-root` 必须是 `.bensz-api/task-*/` 目录，其父目录名为 `.bensz-api`。BibTeX 转义只剥离已知标记标签（i、b、em、strong、sub、sup、scp、span、mml:*），并在 title、author、journal 中转义 `\ { } ~ ^ & % $ # _`；doi 字段保持原样。
 6. **未匹配的**：写入 `literature_leads.md`，标 `[unverified]`，正文不引用。
 7. **请求规范**：请求中不附带个人邮箱或其他身份信息。
 
@@ -397,7 +400,7 @@ AI 阅读完整摘要，填写 `evidence_map.yaml` 的 `evidence` 和 `support`�
 
 信息表由 nsfc-proposal 一侧生成：调用写作 skill 前，先运行自己的 `case.py to-info-form`，把生成的文件路径交给写作 skill。justification-writer 经 `--info-form` 接收；另两个 skill 没有这个参数，在调用说明中给出文件路径。写作 skill 不调用 nsfc-proposal 的脚本，所以安装到 `~/.claude/skills/` 后路径变化也不受影响。写作 skill 只直接读取 `proposal/` 下的 `evidence_map.yaml` 和 `section_plan.yaml`。
 
-nsfc-abstract 只在 `SKILL.md` 中补一句：存在科学论证时，科学问题和术语以它为准。版本号不变。
+nsfc-abstract 只在 `SKILL.md` 中补一句：存在科学论证时，科学问题和术语以它为准。版本 2.1.2 → 2.1.3。
 
 ### 7.4 文档
 
@@ -405,13 +408,14 @@ nsfc-abstract 只在 `SKILL.md` 中补一句：存在科学论证时，科学问
 - 每个改动过的 skill 更新自己的 `CHANGELOG.md`。
 - 仓库根目录 `CHANGELOG.md` 的 `[Unreleased]` 记录本次新增与改动。仓库版本号和 Git tag 不动，由申请人决定。
 
-## 8. nsfc-justification-writer 的 3 处 bug
+## 8. 已知缺陷修复
 
 | bug | 原因 | 修法 |
 |---|---|---|
 | 不允许新增 `\subsubsection` 标题 | `scripts/core/change_guard.py` 的 `STRUCTURE_COMMAND_RE` 把增删 `\subsubsection` 的行都判为结构变动 | 区分新增标题与删改已有结构。模板使用的标题命令允许新增，白名单写在 `config.yaml`；删改已有标题、增删 `\input`、`\usepackage` 等命令仍然拒绝 |
 | `list-runs` 把 `input/output/log` 列为运行记录 | `scripts/core/versioning.py` 的 `list_runs` 把所有子目录都当作运行记录 | 只列出含运行记录文件的目录 |
 | 任务目录名每分钟变一次 | `scripts/core/config_loader.py` 的 `get_runs_dir` 每次调用都用当前时间生成目录名；两条命令分属不同分钟时，`diff`、`rollback` 找不到前一步 | 所有子命令接受 `--task-root`，nsfc-proposal 总是显式传入。`diff`、`rollback`、`list-runs` 未传入时，在 `.bensz-api/task-*/nsfc-justification-writer/` 下按 run_id 查找。写入类命令未传入时保持现行为，并在输出中打印所用任务目录。不猜测「最近一次」的目录，以免两个任务混用一个目录 |
+| research-content-writer 检查脚本要求正文出现 S 编号 | `check_project_outputs.py` 要求至少 3 个 S 编号，SKILL.md 却禁止编号进入正文 | 改为检查编号泄漏，删除 `subgoal_markers_min` |
 
 每个 bug 单独提交，附回归测试：修复前失败，修复后通过。
 
