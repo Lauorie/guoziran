@@ -58,7 +58,7 @@ python3 S/scripts/case.py init --project-root P --title "<题目>" --type "<项�
 python3 S/scripts/case.py validate --project-root P
 ```
 
-不通过就改，直到通过。
+第 2、3 步只要求 `[scientific_case]` 和 `[evidence_map]` 前缀的问题清零。`[section_plan]` 前缀的问题（如研究基础的占位尚未登记）留到第 4 步解决；进入第 5 步前全部清零。
 
 各列表条目和论断条目的字段写法见 `references/scientific_case_guide.md` 的「列表条目的写法」和 `references/evidence_wording.md` 的「论断条目的写法」。
 
@@ -99,13 +99,13 @@ python3 S/scripts/bib_resolve.py --project-root P --records T/nsfc-proposal/outp
 ```
 
    只使用输出中 `added` 或 `exists` 条目的 bibkey。`unresolved` 条目已写入线索清单，正文不得引用。
-7. 阅读完整摘要，按 `references/evidence_wording.md` 填写每条论断的 `evidence` 与 `support`，再运行 `case.py validate` 直到通过。
+7. 阅读完整摘要，按 `references/evidence_wording.md` 填写每条论断的 `evidence` 与 `support`，再运行 `case.py validate`，直到 `[scientific_case]` 和 `[evidence_map]` 前缀的问题清零。
 
-完全离线时跳过 3–6：文献类论断保持 `unsupported`，并在 `assumptions.md` 的「## 待核实项」写明「本次未检索文献」。
+完全离线时跳过 3–6：文献类论断保持 `unsupported`，并在 `assumptions.md` 的「## 待核实项」写明「本次未检索文献」。证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标；不用推测或泛泛的背景凑字数。
 
 **4. 章节分配**
 
-按 `references/section_boundaries.md` 填写 `P/proposal/section_plan.yaml` 各文件的 `must_include`、`must_exclude` 和 `placeholders`。`scientific_case.yaml` 中 `source: missing` 的可行性条目，逐条写进研究基础的 `placeholders`。然后：
+按 `references/section_boundaries.md` 填写 `P/proposal/section_plan.yaml` 各文件的 `must_include`、`must_exclude` 和 `placeholders`。`scientific_case.yaml` 中 `source: missing` 的可行性条目，逐条写进研究基础的 `placeholders`。然后运行下面两条；此时 `[section_plan]` 前缀的问题也要清零。
 
 ```bash
 python3 S/scripts/case.py validate --project-root P
@@ -118,7 +118,7 @@ python3 S/scripts/case.py render --project-root P
 
 | 回答 | 动作 |
 |---|---|
-| 同意 | `python3 S/scripts/case.py status --project-root P --set confirmed` |
+| 同意（或只答其中几条） | `python3 S/scripts/case.py status --project-root P --set confirmed` |
 | 修改：…… | 修改 YAML → `case.py bump` → `case.py validate` → 重新展示 |
 | 先继续 | `python3 S/scripts/case.py status --project-root P --set bypassed` |
 
@@ -126,9 +126,16 @@ python3 S/scripts/case.py render --project-root P
 
 **6. 分章写作**（顺序固定）
 
-每一章都遵守四条：措辞不超过 `evidence_map.yaml` 中对应论断的 `support`；不写 `must_exclude` 中的内容；缺失的信息写成可见占位 `【待补充：……】`，并逐条列入 `assumptions.md` 的「## 占位清单」（格式：`- 文件：【待补充：……】`）；正文不出现内部编号。
+每一章都遵守六条：
 
-第五条：被调用的写作 skill 若在自己的说明里要向用户提问（确认 project_root 或 output_mode、确认后创建 `extraTex`、nsfc-abstract 多次超长裁剪后让用户选方案等），一律不问，取保守默认（保留已有文件、按配置先预览再应用、停止裁剪并保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md`，并列入最终报告。整个流程只有第 5 步向用户提问。
+1. 措辞不超过 `evidence_map.yaml` 中对应论断的 `support`。
+2. 不写 `must_exclude` 中的内容。
+3. 缺失的信息写成可见占位 `【待补充：……】`，并逐条列入 `assumptions.md` 的「## 占位清单」（格式：`- 文件：【待补充：……】`）。
+4. 正文不出现内部编号。
+5. 凡是叙述研究现状、他人方法或结论、流行病学数据的句子，必须 `\cite` 一个已核实的 bibkey，即 `evidence_map.yaml` 中 `support` 为 `single_verified` 或 `multi_verified` 的论断所列文献；否则改写为推测（「可能」「尚不清楚」）或删去。一个段落讲几项研究，就逐项引用，不在段末堆一个引用。示例见 `references/evidence_wording.md` 的「哪些句子必须引用」。
+6. 证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标。不用推测或泛泛的背景凑字数；字数不足的原因写进收尾报告。
+
+另外，被调用的写作 skill 若在自己的说明里要向用户提问（确认 project_root 或 output_mode、确认后创建 `extraTex`、nsfc-abstract 多次超长裁剪后让用户选方案等），一律不问，取保守默认（保留已有文件、按配置先预览再应用、停止裁剪并保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md`，并列入最终报告。整个流程只有第 5 步向用户提问。
 
 1. 立项依据：
 
@@ -137,8 +144,8 @@ python3 S/scripts/case.py render --project-root P
    ```
 
    按 `SK/nsfc-justification-writer/SKILL.md` 执行。`--task-root T` 是顶层选项，放在子命令之前，例如 `python3 SK/nsfc-justification-writer/scripts/run.py --task-root T coach --project-root P --info-form T/nsfc-proposal/output/info_form_justification.md`；每条 CLI 命令都这样加。`coach` 加 `--info-form T/nsfc-proposal/output/info_form_justification.md`。写入后运行 `python3 S/scripts/case.py mark-written --project-root P --file extraTex/1.1.立项依据.tex`。
-2. 研究内容、特色与创新、年度研究计划：用 `--writer nsfc-research-content-writer` 生成信息表，按 `SK/nsfc-research-content-writer/SKILL.md` 执行。写完运行 `python3 SK/nsfc-research-content-writer/scripts/run_checks.py --project-root P`，三个文件逐一 `mark-written`。
-3. 研究基础、工作条件：用 `--writer nsfc-research-foundation-writer` 生成信息表，按 `SK/nsfc-research-foundation-writer/SKILL.md` 执行，两个文件逐一 `mark-written`。
+2. 研究内容、特色与创新、年度研究计划：用 `--writer nsfc-research-content-writer` 生成信息表，按 `SK/nsfc-research-content-writer/SKILL.md` 执行。写完直接运行 `python3 SK/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root P`，三个文件逐一 `mark-written`。不用 `run_checks.py`：它先跑 `validate_skill.py`，后者在当前版本中会因打包问题提前退出，检查没有执行。
+3. 研究基础、工作条件：用 `--writer nsfc-research-foundation-writer` 生成信息表，按 `SK/nsfc-research-foundation-writer/SKILL.md` 执行。写完同样直接运行 `python3 SK/nsfc-research-foundation-writer/scripts/check_project_outputs.py --project-root P`，两个文件逐一 `mark-written`。
 4. 摘要：按 `SK/nsfc-abstract/SKILL.md` 在 `P` 下写 `NSFC-ABSTRACTS.md`，科学问题与术语以科学论证为准，然后 `mark-written --file NSFC-ABSTRACTS.md`。
 
 **7. 跨章一致性检查**
@@ -149,14 +156,18 @@ python3 S/scripts/consistency_check.py --project-root P
 
 - 「必须修正」：回到对应的写作 skill 修改，再查；最多 `consistency.max_fix_rounds` 轮。仍不通过的写进收尾报告。
 - 「需要复核」：逐条判断。确属内部编号的改成自然语言；属于误报的（如「T1 加权」）在 `T/nsfc-proposal/log/stages.md` 记下理由。
+- 数值对照：运行 `python3 S/scripts/consistency_check.py --project-root P --numbers`，按单位对照数值清单。同一参数（环带宽度、阈值、例数、年限、任务数等）在各章取值必须一致；确有不同时，在正文中写明原因（例如一处是文献报道值，一处是本项目设定值，并写清来源）。处理结果记入 `stages.md`。
 - 语义检查由 AI 完成：各章的科学问题与假设表述一致；研究内容的任务与科学问题一一对应；研究基础覆盖每个任务的可行性。
+- 现状句检查：通读立项依据，逐句找出叙述研究现状、他人方法或结论、流行病学数据却没有 `\cite` 的句子，补引用或改写为推测。处理结果记入 `stages.md`。
+- 同步改动：科学论证中的术语、分组名称、研究任务数改过后，用 `grep` 在全部正文和 `assumptions.md` 中查旧说法，逐处改成新说法。
 
 **8. 收尾**
 
 1. 起草 AI 使用说明，写入 `section_plan.yaml` 中 writer 为 `nsfc-proposal` 的文件（`extraTex/4.5.生成式人工智能.tex` 或 `proposal/ai_declaration.md`）。只写 `stages.md` 里记录过的使用。第一行写 `【待补充：申请人核对本声明后删除此行】`，并列入占位清单。
 2. 再运行一次 `consistency_check.py`。
-3. 按「输出」一节的格式向用户报告。
-4. 用户要求时，调用 nsfc-reviewers 或 nsfc-qc。
+3. 项目有编译脚本且本机字体齐全时编译，用 `pdfinfo` 记页数。超过 28 页时在报告中写明页数，并建议用 nsfc-length-aligner 压缩。字体缺失导致编译报错时，写「页数未核」。各章篇幅取自 nsfc-length-aligner 的下限时，加上参考文献，正文仍可能超过 30 页。
+4. 按「输出」一节的格式向用户报告。申请人在确认点只答「同意」时，把 AI 拟定项在报告中再列一次，标「申请人未逐条回应」。
+5. 用户要求时，调用 nsfc-reviewers 或 nsfc-qc。
 
 ### 输出
 
@@ -183,17 +194,17 @@ python3 S/scripts/consistency_check.py --project-root P
 
 ### 校验
 
-- 进入第 5 步前：`case.py validate` 通过。
-- 写作期间：各写作 skill 自带的检查通过（立项依据的 Tier2、研究内容的 `run_checks.py`、摘要的 `validate_abstract.py`）。
+- 第 2、3 步：`case.py validate` 中 `[scientific_case]` 和 `[evidence_map]` 前缀的问题清零。进入第 5 步前：全部问题清零。
+- 写作期间：各写作 skill 自带的检查通过（立项依据的 Tier2、研究内容和研究基础的 `check_project_outputs.py`、摘要的 `validate_abstract.py`）。
 - 收尾前：`consistency_check.py` 的「必须修正」为 0，或剩余问题已写入报告。
 - 篇幅：`python3 SK/nsfc-length-aligner/scripts/check_length.py --input P`。
-- 项目有编译脚本时运行它（如 `python3 P/scripts/nsfc_build.py build --project-dir P`），确认 PDF 生成。
+- 项目有编译脚本且本机字体齐全时运行它（如 `python3 P/scripts/nsfc_build.py build --project-dir P`），确认 PDF 生成，并用 `pdfinfo` 记页数；超过 28 页，报告写明页数并建议用 nsfc-length-aligner 压缩。字体缺失导致报错时，写「页数未核」。
 
 ### 失败与恢复
 
 | 情况 | 处理 |
 |---|---|
-| `case.py validate` 不通过 | 不进入写作；按提示修改后重试 |
+| `case.py validate` 在第 4 步后仍有问题 | 不进入写作；按提示修改后重试 |
 | wispaper 不可用 | 不传 `--host-results`，改用 research-literature-search 的现有检索源 |
 | CrossRef 与 OpenAlex 都不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
 | 某个写作 skill 失败 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续 |
