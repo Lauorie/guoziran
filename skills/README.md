@@ -177,7 +177,7 @@ graph LR
 
 ### 5. nsfc-justification-writer - 全自动立项依据语义写作与专业可读性复核
 
-**状态**：✅ 稳定（v1.3.1）
+**状态**：✅ 稳定（v1.4.0）
 
 **类型**：📝 日常
 
@@ -306,7 +306,7 @@ output_mode：preview（先预览）/ apply（确认后写入）
 
 ### 8.5. research-literature-search - 独立文献检索
 
-**状态**：✅ 稳定（v1.0.2）
+**状态**：✅ 稳定（v1.1.0）
 
 **类型**：📚 日常
 

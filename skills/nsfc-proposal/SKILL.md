@@ -66,7 +66,7 @@ python3 S/scripts/case.py validate --project-root P
 
 1. 生成英文关键词检索式，条数在 `config.yaml` 中 `literature.keyword_queries` 的范围内（`min` 至 `max` 条），写入 `T/nsfc-proposal/input/keyword_queries.json`（格式 `{"queries": [...]}`），并抄入 `P/proposal/literature_leads.md` 的「## 检索式」。
 2. 研究方案依赖的任务范式、量表、模型和统计方法，同现状论断一起检索。每个方法在 `evidence_map.yaml` 中写成一条论断：`id` 取 `C<n>`，n 接在现有最大编号之后；`text` 以「方法：」开头；`sections` 填使用该方法的研究内容文件（如 `["研究内容"]`）。`case_validate.py` 不接受 `type: method`，所以 `type` 用最接近的 `background`，`support` 按证据记，没有证据时记 `unsupported`。正文引用它们，条件同规则 5。
-   - 申请人提供的已发表论文也在这一步处理。每篇写成一行 `rls.paper.v1` 记录，写入 `T/nsfc-proposal/output/applicant.jsonl`（字段同其他记录：`record_id`、`title`、`identifiers.doi` 或 `doi`、`year`；标题、DOI、年份取自申请人材料）。不写进 `selected.jsonl`：第 6 步会整份写那个文件。第 7 步把它与检索记录合并后经 `bib_resolve.py` 进入 `.bib`。
+   - 申请人提供的已发表论文也在这一步处理。每篇写成一行 `rls.paper.v1` 记录，写入 `T/nsfc-proposal/output/applicant.jsonl`（字段同其他记录：`record_id`、`title`、`identifiers.doi` 或 `doi`、`year`；标题、DOI、年份取自申请人材料）。不写进 `selected.jsonl`：本步第 6 项会整份写那个文件。本步第 7 项把它与检索记录合并后经 `bib_resolve.py` 进入 `.bib`。
    - 每篇（或每组）申请人论文，在 `evidence_map.yaml` 中对应一条 `type: applicant_result`、`support: applicant_material` 的论断，`sections` 含立项依据；`evidence` 列该论文的 bibkey，`role: supporting`，`basis` 按实际读到的内容写（`fulltext` 或 `full_abstract`）。这样 6.1 引用它时满足规则 5 的 (b)。
    - 这些论文的台账摘要可能为空。引用句含数字时会报 `no_abstract_for_numbers`：按第 7 步的处理办法改写，或只写申请人材料写明的数字。
 3. 对每条 `gap`、`mechanism` 类论断和每条方法类论断写一个英文问句，写入 `T/nsfc-proposal/input/claim_queries_1.json`；超过 `literature.bundle_max_queries` 条时拆成 `claim_queries_2.json` 等，每个文件不超过这个条数。
@@ -99,11 +99,11 @@ python3 SK/research-literature-search/scripts/search_runner.py enrich-abstracts 
 7. 核对元数据并写入 `.bib`。申请人论文与检索记录先合并成一个文件，`bib_resolve` 只对它运行一次（每次运行都会覆盖 `T/nsfc-proposal/output/bib_resolve.json`）：
 
 ```bash
-cat T/nsfc-proposal/output/applicant.jsonl T/nsfc-proposal/output/selected_enriched.jsonl > T/nsfc-proposal/output/bib_records.jsonl
+cat T/nsfc-proposal/output/selected_enriched.jsonl T/nsfc-proposal/output/applicant.jsonl > T/nsfc-proposal/output/bib_records.jsonl
 python3 S/scripts/bib_resolve.py --project-root P --records T/nsfc-proposal/output/bib_records.jsonl --task-root T
 ```
 
-   没有申请人论文时，`cat` 只列 `selected_enriched.jsonl`。两个文件都要以换行结尾，否则拼接处两行相连，`bib_resolve` 会报该行不是合法 JSON 并以退出码 2 停下。
+   检索记录排在前面：同一 DOI 出现两次时 `bib_resolve` 采用第一条，检索记录带有补全的摘要。没有申请人论文时，`cat` 只列 `selected_enriched.jsonl`。两个文件都要以换行结尾，否则拼接处两行相连，`bib_resolve` 会报该行不是合法 JSON 并以退出码 2 停下。
 
    `bib_resolve` 写入 `.bib` 的同时，把来源写进 `P/proposal/citation_ledger.jsonl`。候选引用键是输出中 `added` 条目的 bibkey，以及 `exists` 且在台账中有有效记录（`citation_ledger.py show` 能列出）的 bibkey；`exists` 但台账中没有记录的（`init` 之前就在 `.bib` 中、未经申请人确认的条目），不得引用。`unresolved` 条目已写入线索清单，正文不得引用。能否在正文引用，取决于规则 5 的三个条件。
 8. 阅读完整摘要，按 `references/evidence_wording.md` 填写每条论断的 `evidence` 与 `support`，再运行 `case.py validate`，直到 `[scientific_case]` 和 `[evidence_map]` 前缀的问题清零。
