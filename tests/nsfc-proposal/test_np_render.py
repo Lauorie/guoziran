@@ -53,7 +53,7 @@ class InfoFormTest(unittest.TestCase):
                         "4. **核心科学假设（陈述句，预测性结果，不写验证方式）**", "5. **本项目切入点（差异化切口）**",
                         "8. **主流路线与代表工作（引用先核验）**"):
             self.assertIn(heading, form)
-        self.assertIn("8000–10000", form)
+        self.assertIn("4500–10000", form)
         self.assertIn("技术路线", form)  # 本章不写
         self.assertNotIn("Q1", form)
 

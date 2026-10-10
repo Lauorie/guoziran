@@ -53,7 +53,8 @@ class InitTest(unittest.TestCase):
     def test_plan_uses_length_budgets_and_writers(self) -> None:
         init_proposal(self.root, title="T", project_type="青年科学基金")
         files = {f["file"]: f for f in read_yaml(proposal_paths(self.root).plan)["files"]}
-        self.assertEqual(files["extraTex/1.1.立项依据.tex"]["length"], {"min": 8000, "max": 10000, "unit": "cjk_chars"})
+        self.assertEqual(files["extraTex/1.1.立项依据.tex"]["length"], {"min": 4500, "max": 10000, "unit": "cjk_chars"})
+        self.assertEqual(files["extraTex/2.1.研究内容.tex"]["length"], {"min": 7000, "max": 15000, "unit": "cjk_chars"})
         self.assertEqual(files["extraTex/1.1.立项依据.tex"]["writer"], "nsfc-justification-writer")
         self.assertIn("技术路线", files["extraTex/1.1.立项依据.tex"]["must_exclude"])
         self.assertIsNone(files["extraTex/3.2.工作条件.tex"]["length"])

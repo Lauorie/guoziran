@@ -57,7 +57,7 @@ def valid_evidence() -> dict:
 def valid_plan() -> dict:
     return {"version": 1, "files": [
         {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "must_include": ["G1", "Q1", "hypothesis", "entry_point"],
-         "must_exclude": ["技术路线"], "length": {"min": 8000, "max": 10000, "unit": "cjk_chars"}, "placeholders": [], "written_with_case_version": None},
+         "must_exclude": ["技术路线"], "length": {"min": 4500, "max": 10000, "unit": "cjk_chars"}, "placeholders": [], "written_with_case_version": None},
         {"file": "extraTex/3.1.研究基础.tex", "writer": "nsfc-research-foundation-writer", "must_include": ["feasibility", "risks"],
          "must_exclude": [], "length": None, "placeholders": ["【待补充：预实验结果】"], "written_with_case_version": None},
     ]}
