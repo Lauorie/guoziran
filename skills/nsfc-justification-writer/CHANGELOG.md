@@ -33,6 +33,7 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 新增顶层参数 `--task-root`；`diff`、`rollback`、`list-runs` 未指定时跨任务目录按 run_id 查找，修复跨分钟找不到前一步的问题。
 - README 删去版本号，版本以 `config.yaml` 为准。
 - `--task-root` 还要求父目录名为 `.bensz-api`，与 nsfc-proposal 的 `bib_resolve.py` 一致。
+- coach 提示词不再禁止新增引用：只要文献已核验、已入 .bib 并在引用台账中有记录即可引用；不再禁止新增配置允许的标题（来源：申请人 2026-10-10 决定）。
 
 ### Added（新增）
 - 与 nsfc-proposal 协作：读取 `proposal/` 下的信息表、篇幅与章节边界；Tier2 追加措辞强度与章节边界两项检查。
