@@ -331,6 +331,22 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertEqual(len(self._number_details("只有 7 个特征\\cite{wu2021value}。\n", a)), 1)
         self.assertEqual(self._number_details("共 20 项\\cite{wu2021value}。\n", "TWENTY items were retained after selection in the final model of the study."), [])
 
+    def test_percent_words_in_abstract(self) -> None:
+        a = ("Energy use fell by 10–20 percent in treated households, sorting accuracy rose 7 percentage points, "
+             "and contamination dropped 3.5 per cent, from 12 to 15 percent of bins over the study.")
+        self.assertEqual(self._number_details("用电量下降10\\%至20\\%\\cite{wu2021value}。\n", a), [])
+        self.assertEqual(self._number_details("正确率提高7个百分点\\cite{wu2021value}。\n", a), [])
+        self.assertEqual(self._number_details("混投下降3.5\\%\\cite{wu2021value}。\n", a), [])
+        self.assertEqual(self._number_details("占比由12\\%升至15\\%\\cite{wu2021value}。\n", a), [])
+        self.assertEqual(len(self._number_details("用电量下降30\\%\\cite{wu2021value}。\n", a)), 1)
+
+    def test_number_in_text_reads_percent_words(self) -> None:
+        from consistency_check import number_in_text
+        text = "Rates rose by 10-20 Percent and by 4.5 per cent; another arm gained 6 percentage-points."
+        for value in ("10%", "20%", "4.5%", "6%"):
+            self.assertTrue(number_in_text(value, text), value)
+        self.assertFalse(number_in_text("45%", text))
+
     def test_month_after_year_is_not_extracted(self) -> None:
         from consistency_check import sentence_numbers
         self.assertEqual(sentence_numbers("2021年3月的研究\\cite{k}"), [])

@@ -42,4 +42,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 信息表列出 section_plan 中的占位并要求逐字照抄；研究基础的缺失项不再自拟占位文字，同一缺失项只有一种写法（来源：funded-2 验证运行）。
 - `nsfc-proposal` 0.1.0：wispaper 检索的 HTTP 正文与错误信息先脱敏再截断到 200 字；占位格式说明只在 AI 使用说明中豁免，其他文件的空占位报 `empty_placeholder`（需要复核）；执行说明补检索步骤的前台运行与超时重跑，第 0 步告知检索式会发送到 wispaper 服务，可选输入补 `WIS_MCP_URL`、`WIS_MCP_TOKEN`。
 - `bib_resolve` 先解 HTML 实体（最多两层）再做 LaTeX 转义，标题比对同样先解实体；此前 CrossRef 期刊名中的 `&amp;` 会写成 `\&amp;`，排版显示「&amp;」（来源：fresh-1 验证运行）。
+- 引用句数字核对把摘要中的 percent、per cent、percentage points 读作 %（含「10–20 percent」「12 to 15 percent」这类区间）；此前这类写法会被报为数字不见于摘要（来源：fresh-1 验证运行）。
 - 本分支未写 BAC 记录，经负责人同意。
