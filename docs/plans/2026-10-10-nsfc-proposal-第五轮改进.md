@@ -665,7 +665,7 @@ Global Constraints 的补充：
 
 `skills/research-literature-review/tests/test_openalex_provider.py`（unittest，不联网）：
 
-1. 等价测试：构造一条典型 OpenAlex work（含 `authorships`、`primary_location.source`、`abstract_inverted_index`、`publication_year`、`doi`、`open_access`）。分别用（a）现有方式：原始 work 直接交给 research-literature-search 的 `normalize_record(raw, provider="openalex")`；（b）新方式：`openalex_provider._to_raw(work)`（或你命名的转换函数）的结果交给 `normalize_record(..., provider="openalex")`。断言两者的 `title`、`authors`、`year`、`venue`、`identifiers["doi"]`、`abstract`、`abstract_status`、`publication["is_open_access"]` 相同。
+1. 等价测试：构造一条典型 OpenAlex work（含 `authorships`、`primary_location.source`、`abstract_inverted_index`、`publication_year`、`doi`、`open_access`）。`openalex_provider._to_raw(work)`（或你命名的转换函数）的结果交给 research-literature-search 的 `normalize_record(..., provider="openalex")`，断言 `title`、`authors`、`year`、`venue`、`identifiers["doi"]`、`abstract`、`abstract_status`、`publication["is_open_access"]` 等于写死的期望值。期望值这样得到：在本任务中（research-literature-search 仍认识 OpenAlex 格式时）把原始 work 直接交给 `normalize_record(raw, provider="openalex")`，取它的结果；在报告中贴出这一比对。测试里不调用旧路径，因为 Task 6 会删掉它。
 2. 注入测试：`multi_query_search` 的进程内接口与 CLI `--bundle-dir` 路径都把 `{"openalex": openalex_provider.search}` 传给 `run_search`。用 `unittest.mock.patch` 替换 `openalex_provider.search`，断言被调用。
 
 - [ ] **Step 3: 两个 wrapper 改用本地适配器**
