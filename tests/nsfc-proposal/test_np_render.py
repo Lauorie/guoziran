@@ -36,6 +36,17 @@ class RenderCaseTest(unittest.TestCase):
 
 
 class InfoFormTest(unittest.TestCase):
+    def test_foundation_form_uses_section_plan_placeholders(self) -> None:
+        plan = valid_plan()
+        for entry in plan["files"]:
+            if entry["file"] == "extraTex/3.1.研究基础.tex":
+                entry["placeholders"] = ["【待补充：预实验的设计、样本量与主要结果】"]
+        form = info_form(valid_case(), plan, "nsfc-research-foundation-writer")
+        self.assertIn("【待补充：预实验的设计、样本量与主要结果】", form)
+        self.assertIn("逐字照抄", form)
+        self.assertNotIn("【待补充：预实验结果】", form)  # 不再用可行性条目原文自拟占位
+        self.assertIn("预实验结果", form)               # 缺失项本身仍列出
+
     def test_justification_form_matches_writer_fields(self) -> None:
         form = info_form(valid_case(), valid_plan(), "nsfc-justification-writer")
         for heading in ("1. **研究对象/应用场景**", "3. **关键科学问题（疑问句，非研究目标）**",

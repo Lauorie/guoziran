@@ -174,6 +174,9 @@ def _section_notes(plan: Mapping[str, Any] | None, writer: str) -> list[str]:
         exclude = _strs(entry.get("must_exclude"))
         if exclude:
             notes.append(f"{entry.get('file')} 不写：{'；'.join(exclude)}")
+        placeholders = _strs(entry.get("placeholders"))
+        if placeholders:
+            notes.append(f"{entry.get('file')} 占位（逐字照抄，不改写）：{'；'.join(placeholders)}")
     notes.append("措辞强度不得超过 proposal/evidence_map.yaml 中各论断的 support；正文不得出现任何内部编号")
     return notes
 
@@ -258,7 +261,7 @@ def _foundation_form(case: Mapping[str, Any], plan: Mapping[str, Any] | None) ->
             if item.get("kind") not in kinds:
                 continue
             text = _t(item.get("text"))
-            entries.append(text if item.get("source") == "user_material" else f"缺失，正文写占位 {_placeholder(text)}，不得略去或编造")
+            entries.append(text if item.get("source") == "user_material" else f"缺失：{text}。正文写「可选补充」中列出的对应占位，逐字照抄，不得略去或编造")
         lines += ["", heading, _bullets(entries)]
     lines += ["", "## 4. 风险清单"]
     for heading, category in RISK_GROUPS:
