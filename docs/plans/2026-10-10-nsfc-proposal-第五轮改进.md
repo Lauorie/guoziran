@@ -606,3 +606,188 @@ class RoundFiveWritingDocsTest(unittest.TestCase):
 - `skills/nsfc-proposal/CHANGELOG.md` 0.1.0 `### Changed（变更）` 末尾（BAC 行之前）：「- 研究内容的小标题按每项研究的类型选，一章中两类研究都有时各用各的；设计图中的实物与刺激材料画成线描图标，自检时照片或写实渲染判为不合格。」
 - 根 `CHANGELOG.md`：「- `nsfc-proposal` 0.1.0：小标题按每项研究的类型选；设计图不画照片，自检把照片判为不合格。」
 - 提交：`docs(nsfc-proposal): 小标题按研究类型选；设计图的刺激材料画成图标`。
+
+---
+
+## 追加（2026-10-10）：国自然写作的 skill 一律不用 OpenAlex
+
+申请人在 Task 1–4 之后追加两句：「research-literature-search 里的 OpenAlex 也删掉」；「我要的是整个国自然写作的 skill 里面都不用 openalex……只用 wispaper」。
+
+范围：
+
+- `skills/nsfc-*` 与 research-literature-search 中不留 OpenAlex 的代码、默认顺序、请求和文档。验收：`git grep -il openalex -- 'skills/nsfc-*' skills/research-literature-search tests/nsfc-* tests/research-literature-search ':!*CHANGELOG*'` 只命中 `tests/nsfc-proposal/test_np_consistency.py`（旧台账读取的回归测试，保留）。
+- research-literature-review 不是国自然写作的 skill，主力检索源是 OpenAlex，并借用 research-literature-search 的 OpenAlex 适配器。把适配器挪进 research-literature-review，由它自己注入，行为不变。
+- CrossRef 只做一件事：按 DOI 或标题核对文献元数据，补全 wispaper 不返回的卷期页码和完整作者名。research-literature-search 单独使用时的 Semantic Scholar、CrossRef 检索源保留；国自然写作的 skill 走不到它们（`--provider-order mcp`、`--offline`，Task 3 的文档测试已钉住）。
+
+Global Constraints 的补充：
+
+- 测试命令加上 `tests/nsfc-ref-alignment`：`PYTHONPYCACHEPREFIX=.bensz-api/pycache python3 -m pytest -q -p no:cacheprovider -W ignore::pytest.PytestConfigWarning tests/nsfc-proposal tests/nsfc-justification-writer tests/nsfc-research-content-writer tests/nsfc-research-foundation-writer tests/research-literature-search tests/nsfc-ref-alignment`。Task 4 之后基线 434 passed、19 subtests passed（`tests/nsfc-ref-alignment` 尚不存在时 pytest 会报目录不存在，Task 7 之前去掉这一项）。
+- research-literature-review 的测试在 skill 目录内：`PYTHONPYCACHEPREFIX=.bensz-api/pycache python3 -m pytest -q -p no:cacheprovider skills/research-literature-review/tests`。基线 2 failed（`test_search_validator_isolated_from_review_query_contract`、`test_each_supported_autodiscovery_location_uses_multi_query` 的 subtest 3，均为既有失败）、15 passed、16 subtests passed。改动后不得新增失败。
+- research-literature-review、nsfc-ref-alignment 的版本号不改；改动记入各自 CHANGELOG 的 `[Unreleased]`（没有就新建，放在第一个版本段落之前，含 `### Changed`）。根 `CHANGELOG.md` 的位置规则同上：依任务顺序接在上一条之后、「- 本分支未写 BAC 记录，经负责人同意。」之前。
+
+### Task 5: research-literature-review 自带 OpenAlex 适配器
+
+先做这一步，再在 Task 6 从 research-literature-search 删除，使每次提交后两个 skill 都能用。
+
+**Files:**
+- Modify: `skills/research-literature-search/scripts/search_runner.py`（只改检索源的跳过条件）
+- Create: `skills/research-literature-review/scripts/openalex_provider.py`
+- Modify: `skills/research-literature-review/scripts/openalex_search.py`、`skills/research-literature-review/scripts/multi_query_search.py`
+- Create: `skills/research-literature-review/tests/test_openalex_provider.py`
+- Modify: `tests/research-literature-search/test_rls_host_results.py`（加 1 个测试）
+- Modify: `skills/research-literature-review/CHANGELOG.md`、根 `CHANGELOG.md`
+
+**Interfaces:**
+- Produces: `openalex_provider.search(query, *, max_results=50, min_year=None, max_year=None, mailto=None, timeout=30, session=None, **_) -> list[dict]`。每条结果已转成通用字段：`id`、`title`、`authors`（字符串列表）、`doi`、`year`、`venue`、`abstract`（由 `abstract_inverted_index` 还原的纯文本；没有时为 None）、`url`、`is_open_access`、`type`。research-literature-search 不再需要认识 OpenAlex 的返回格式。
+- `run_search`：调用方经 `provider_functions` 注入的检索源，即使名字不在 `SUPPORTED_PROVIDERS` 中，也照常调用。
+
+- [ ] **Step 1: 检索源的跳过条件**
+
+`search_runner.py` 中：
+
+```python
+            if provider not in SUPPORTED_PROVIDERS:
+                item = {"provider": provider, "status": "skipped", "results": 0, "reason": "host tool required"}
+```
+
+改为只跳过没有适配器的检索源，跳过原因不变：
+
+```python
+            if provider not in SUPPORTED_PROVIDERS and provider not in registry:
+                item = {"provider": provider, "status": "skipped", "results": 0, "reason": "host tool required"}
+```
+
+（`registry = _provider_registry(provider_functions)` 已含注入的函数；`mcp` 在前面的分支处理，`duckduckgo` 没有适配器，行为不变。）在 `tests/research-literature-search/test_rls_host_results.py` 加一个测试：`run_search(..., provider_order=["custom_source"], provider_functions={"custom_source": fake})` 时 `fake` 被调用，bundle 中有它返回的记录。先红后绿。
+
+- [ ] **Step 2: 适配器与等价测试**
+
+`openalex_provider.py`：把 `skills/research-literature-search/scripts/providers/openalex.py` 的 `search()` 搬过来（请求参数、`mailto` 行为不变），返回前逐条转换为上面的通用字段。转换规则：`title` 取 `title` 或 `display_name`；`authors` 取 `authorships[].author.display_name`；`doi` 去掉 `https://doi.org/` 前缀；`year` 取 `publication_year`；`venue` 取 `primary_location.source.display_name`；`abstract` 由 `abstract_inverted_index` 按位置还原（把 research-literature-search 中 `abstract_from_inverted_index` 的实现复制进来）；`url` 取 `doi` 链接或 `primary_location.landing_page_url`；`is_open_access` 取 `open_access.is_oa`；`type` 原样。
+
+`skills/research-literature-review/tests/test_openalex_provider.py`（unittest，不联网）：
+
+1. 等价测试：构造一条典型 OpenAlex work（含 `authorships`、`primary_location.source`、`abstract_inverted_index`、`publication_year`、`doi`、`open_access`）。分别用（a）现有方式：原始 work 直接交给 research-literature-search 的 `normalize_record(raw, provider="openalex")`；（b）新方式：`openalex_provider._to_raw(work)`（或你命名的转换函数）的结果交给 `normalize_record(..., provider="openalex")`。断言两者的 `title`、`authors`、`year`、`venue`、`identifiers["doi"]`、`abstract`、`abstract_status`、`publication["is_open_access"]` 相同。
+2. 注入测试：`multi_query_search` 的进程内接口与 CLI `--bundle-dir` 路径都把 `{"openalex": openalex_provider.search}` 传给 `run_search`。用 `unittest.mock.patch` 替换 `openalex_provider.search`，断言被调用。
+
+- [ ] **Step 3: 两个 wrapper 改用本地适配器**
+
+- `openalex_search.py`：`from providers.openalex import search as search_openalex` 改为从同目录的 `openalex_provider` 导入（同目录导入的写法照该文件现有的 `sys.path` 处理）。
+- `multi_query_search.py`：`search_openalex` 改从 `openalex_provider` 导入；`multi_search()` 中的 `functions` 映射与 `main()` 中 `--bundle-dir` 分支的 `run_search(...)` 调用都传 `provider_functions={"openalex": search_openalex, ...}`（`main()` 现在没有传，必须加上，否则 OpenAlex 会从综述 skill 的主路径中消失）。
+
+- [ ] **Step 4: 测试**：本仓库测试命令（不含 `tests/nsfc-ref-alignment`）0 failed；`skills/research-literature-review/tests` 不新增失败。
+
+- [ ] **Step 5: CHANGELOG 与提交**
+- `skills/research-literature-review/CHANGELOG.md` `[Unreleased]` `### Changed`：「- OpenAlex 适配器移入本 skill（`scripts/openalex_provider.py`），由本 skill 注入 research-literature-search；检索行为不变。」
+- `CHANGELOG.md`：「- `research-literature-review`：OpenAlex 适配器移入本 skill，research-literature-search 接受调用方注入的检索源。」
+- 提交：`refactor(research-literature-review): OpenAlex 适配器移入本 skill，经注入使用`。
+
+### Task 6: research-literature-search 删除 OpenAlex
+
+**Files:**
+- Delete: `skills/research-literature-search/scripts/providers/openalex.py`
+- Modify: `skills/research-literature-search/scripts/providers/__init__.py`、`search_runner.py`、`candidate_schema.py`、`dedupe_papers.py`、`config.yaml`、`SKILL.md`、`README.md`、`references/provider-guide.md`、`references/paper-schema.md`
+- Modify: `tests/research-literature-search/test_rls_enrich_abstracts.py`、`test_rls_host_results.py`、`test_rls_host_abstracts.py`
+- Create: `tests/research-literature-search/test_rls_no_openalex.py`
+- Modify: `skills/research-literature-search/CHANGELOG.md`（1.1.0 段 `### Changed（变更）`，没有则新建该小节，BAC 行之前）、根 `CHANGELOG.md`
+
+- [ ] **Step 1: 写失败的测试** `tests/research-literature-search/test_rls_no_openalex.py`：
+
+```python
+# tests/research-literature-search/test_rls_no_openalex.py
+from __future__ import annotations
+
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+SKILL = ROOT / "skills" / "research-literature-search"
+sys.path.insert(0, str(SKILL / "scripts"))
+
+import search_runner  # noqa: E402
+from candidate_schema import IDENTIFIER_KEYS  # noqa: E402
+
+TEXT_SUFFIXES = {".py", ".md", ".yaml", ".yml", ".json", ".txt"}
+
+
+class NoOpenAlexTests(unittest.TestCase):
+    def test_skill_files_never_mention_openalex(self) -> None:
+        hits = [str(p.relative_to(ROOT)) for p in SKILL.rglob("*")
+                if p.is_file() and p.suffix in TEXT_SUFFIXES and p.name != "CHANGELOG.md"
+                and "__pycache__" not in p.parts and "openalex" in p.read_text(encoding="utf-8").lower()]
+        self.assertEqual(hits, [])
+
+    def test_defaults_have_no_openalex(self) -> None:
+        self.assertNotIn("openalex", search_runner.DEFAULT_PROVIDER_ORDER)
+        self.assertNotIn("openalex", search_runner.SUPPORTED_PROVIDERS)
+        self.assertNotIn("openalex", search_runner._provider_registry())
+        self.assertNotIn("openalex", IDENTIFIER_KEYS)
+        self.assertFalse((SKILL / "scripts" / "providers" / "openalex.py").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()
+```
+
+运行：2 个失败（红）。
+
+- [ ] **Step 2: 删除与改写**
+
+- 删除 `providers/openalex.py`；`providers/__init__.py` 去掉 `search_openalex` 的导入与 `__all__` 项。
+- `search_runner.py`：两处 `from providers import …` 去掉 `search_openalex`；`DEFAULT_PROVIDER_ORDER = ["mcp", "semantic_scholar", "crossref", "duckduckgo"]`；`SUPPORTED_PROVIDERS = {"semantic_scholar", "crossref"}`；`_provider_registry` 去掉 `"openalex"`；补摘要的来源元组去掉 `("openalex", title)`；`# OpenAlex is the main source; …` 注释改为 `# Stop once the first source meets the target; only supplement if clearly below it.`；`_hit_abstract` 不再还原倒排索引（只取 `abstract` 纯文本），文档字符串相应改写；导入中去掉 `abstract_from_inverted_index`。
+- `candidate_schema.py`：删除 `abstract_from_inverted_index` 及其在 `normalize_record` 中的调用；`IDENTIFIER_KEYS = ("doi", "pmid", "arxiv", "semantic_scholar")`；`stable_record_id` 的键元组去掉 `"openalex"`；`_source_envelope` 去掉 `or raw.get("openalex_id")`；删除 `if provider == "openalex" …` 两行；扁平视图去掉 `"openalex_id"`。旧 bundle 中多出的 `identifiers.openalex`、`openalex_id` 不影响校验（`validate_record` 只检查 `IDENTIFIER_KEYS` 中的键），在报告中用 fresh-1 的一个 bundle（`/home/juli/guoziran/nsfc-proposal-eval/fresh-1/projects/proj/.bensz-api/task-20261010-1702-waste-sorting-habit/research-literature-search/output/keyword-bundle`）跑 `search_runner.py validate --bundle` 证明。
+- `dedupe_papers.py`：两处键元组去掉 `openalex` / `openalex_id`。
+- `config.yaml`：`provider_priority: [mcp, semantic_scholar, crossref, duckduckgo]`。
+- 文档：`SKILL.md`、`README.md`（第 31 行示例改为 `--provider-order semantic_scholar,crossref`；第 51 行那段删去或改写为与 OpenAlex 无关的说法）、`references/provider-guide.md`（第 3 行改为：「默认先用宿主检索结果（mcp，当前为 wispaper）；没有时依次用 Semantic Scholar、Crossref。MCP 与 duckduckgo 需要宿主能力……」，后半句照原文）、`references/paper-schema.md`（identifiers 列表去掉 openalex）。全目录 `grep -rn -i openalex skills/research-literature-search` 只允许命中 CHANGELOG。
+- 测试：`test_rls_enrich_abstracts.py` 去掉离线 fetcher 元组中的 `"openalex"`，删除 `test_openalex_inverted_index_is_rebuilt` 与 `InvertedIndexTests`，以及导入 `abstract_from_inverted_index`；其他用 `openalex` 作 fetcher 名的测试改用 `semantic_scholar` 或 `crossref`，断言语义不变。`test_rls_host_results.py` 中的 `fake_openalex` / `"openalex"` 改为 `semantic_scholar`。`test_rls_host_abstracts.py` 的 `NO_NET` 去掉 `"openalex"`。
+
+- [ ] **Step 3: 测试转绿**：本仓库测试命令（不含 `tests/nsfc-ref-alignment`）0 failed，报告增减明细；`skills/research-literature-review/tests` 不新增失败（它已在 Task 5 改为自带适配器）。
+
+- [ ] **Step 4: CHANGELOG 与提交**
+- `skills/research-literature-search/CHANGELOG.md`：「- 删除 OpenAlex 检索源、补摘要来源与 `openalex` 标识符；默认顺序为 mcp、Semantic Scholar、Crossref。旧 bundle 中的 `openalex_id` 字段不影响校验。」
+- `CHANGELOG.md`：「- `research-literature-search` 1.1.0：删除 OpenAlex（检索源、补摘要、标识符与文档）。」
+- 提交：`refactor(research-literature-search): 删除 OpenAlex`。
+
+### Task 7: nsfc-ref-alignment 只用 CrossRef 核验 DOI；国自然写作的 skill 全部不含 OpenAlex
+
+**Files:**
+- Modify: `skills/nsfc-ref-alignment/scripts/online_verify.py`、`scripts/run_ref_alignment.py`、`config.yaml`、`README.md`（以及 `SKILL.md` 中若有的相同说法）
+- Modify: `skills/nsfc-proposal/scripts/citation_ledger.py`（模块文档字符串）
+- Create: `tests/nsfc-ref-alignment/test_nra_online_verify.py`
+- Modify: `tests/nsfc-proposal/test_np_skill_docs.py`（新增 1 个测试）
+- Modify: `skills/nsfc-ref-alignment/CHANGELOG.md`、`skills/nsfc-proposal/CHANGELOG.md`、根 `CHANGELOG.md`
+
+- [ ] **Step 1: 写失败的测试**
+
+`tests/nsfc-ref-alignment/test_nra_online_verify.py`（unittest，不联网）：用 `unittest.mock.patch.object(online_verify, "_http_get_json", fake)` 记录 URL。
+1. CrossRef 返回带 `message.title` 的结果：`check_doi_online("10.1000/x", "Some title")` 的 `ok` 为真，`crossref_title` 正确；所有 URL 以 `https://api.crossref.org/` 开头。
+2. CrossRef 失败（`fake` 返回 `(None, "HTTP 404")`）：`ok` 为假；所有 URL 仍只有 CrossRef；结果的 `to_dict()` 中没有任何以 `openalex` 开头的键。
+3. `online_verify.py` 与 `run_ref_alignment.py` 的源码（小写）不含 `openalex`。
+
+`tests/nsfc-proposal/test_np_skill_docs.py` 加：
+
+```python
+class NsfcSkillsHaveNoOpenAlexTest(unittest.TestCase):
+    def test_no_nsfc_skill_mentions_openalex(self) -> None:
+        suffixes = {".py", ".md", ".yaml", ".yml", ".json", ".txt", ".tex", ".sh"}
+        hits = [str(p.relative_to(ROOT)) for d in sorted(SKILLS.glob("nsfc-*")) for p in d.rglob("*")
+                if p.is_file() and p.suffix in suffixes and p.name != "CHANGELOG.md" and "__pycache__" not in p.parts
+                and "openalex" in p.read_text(encoding="utf-8", errors="ignore").lower()]
+        self.assertEqual(hits, [])
+```
+
+运行：失败（红），命中 nsfc-ref-alignment 的 4 个文件与 `citation_ledger.py`。
+
+- [ ] **Step 2: 改写**
+- `online_verify.py`：删去 OpenAlex 请求与 `openalex_ok`、`openalex_title`、`title_similarity_openalex` 字段；`ok = crossref_ok`；错误信息只含 CrossRef。
+- `run_ref_alignment.py`：标题不符的判断只用 CrossRef 的相似度；输出字段去掉 `title_similarity_openalex`；文档字符串与 `--verify-online` 的 help 改为「在线核验 DOI（Crossref）」。
+- `config.yaml` 第 31 行、`README.md` 第 108 行：「Crossref/OpenAlex」改为「Crossref」。
+- `citation_ledger.py` 第 4 行：「元数据出自哪个服务（现只用 CrossRef；旧台账中 source 为 openalex 的记录照常读取）、」改为「元数据出自哪个服务（现只用 CrossRef；旧台账中其他来源的记录照常读取）、」。
+- 全部 `skills/nsfc-*`：`grep -rn -i openalex skills/nsfc-* --include=* | grep -v CHANGELOG` 无输出。
+
+- [ ] **Step 3: 测试转绿**：完整测试命令（含 `tests/nsfc-ref-alignment`）0 failed。
+
+- [ ] **Step 4: CHANGELOG 与提交**
+- `skills/nsfc-ref-alignment/CHANGELOG.md` `[Unreleased]` `### Changed`：「- 在线核验 DOI 只查 Crossref，删去 OpenAlex。」
+- `skills/nsfc-proposal/CHANGELOG.md` 0.1.0 `### Changed（变更）` 末尾（BAC 行之前）：「- 引用台账的说明不再提 OpenAlex；文档测试检查所有 nsfc-* skill 不含 OpenAlex。」
+- `CHANGELOG.md`：「- `nsfc-ref-alignment`：在线核验 DOI 只查 Crossref；国自然写作的 skill 均不再含 OpenAlex。」
+- 提交：`fix(nsfc-ref-alignment): 在线核验只查 Crossref，国自然写作的 skill 不再含 OpenAlex`。
