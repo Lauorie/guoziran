@@ -82,7 +82,10 @@ def _plan_years() -> ModuleType:
     """按路径加载 content-writer 的 plan_years.py；用独立模块名，不改 sys.path。"""
     spec = importlib.util.spec_from_file_location("nrcw_plan_years", PLAN_YEARS_PY)
     if spec is None or spec.loader is None or not PLAN_YEARS_PY.is_file():
-        raise ProposalError(f"找不到研究期限脚本：{PLAN_YEARS_PY.name}（nsfc-research-content-writer/scripts）")
+        raise ProposalError(
+            "找不到 nsfc-research-content-writer 的 plan_years.py；"
+            "请确认该 skill 与 nsfc-proposal 位于同一 skills 目录，且含 scripts/plan_years.py"
+        )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -91,14 +94,16 @@ def _plan_years() -> ModuleType:
 def _duration_line(case: Mapping[str, Any]) -> str:
     project = case.get("project") if isinstance(case.get("project"), Mapping) else {}
     project_type = _t(project.get("type"))
+    plan_years = _plan_years()  # 找不到脚本时直接报 ProposalError，不当作配置错误
     try:
-        years, matched = _plan_years().duration_years(project_type)
+        years, matched = plan_years.duration_years(project_type)
     except ValueError as exc:
         raise ProposalError(f"nsfc-research-content-writer 的 yearly_plan 配置有误：{exc}") from exc
     line = f"研究期限 {years} 年（项目类型：{project_type or '未写明'}）；按 {years} 年分年度写，不跨年"
-    if not matched:
-        line += f"；项目类型未写明，按 {years} 年；请在 assumptions.md 记一条 AI 拟定项"
-    return line
+    if matched:
+        return line
+    reason = f"项目类型「{project_type}」不在年数表中" if project_type else "项目类型未写明"
+    return line + f"；{reason}，按 {years} 年；请在 assumptions.md 记一条 AI 拟定项"
 
 
 def render_case_md(case: Mapping[str, Any], evidence: Mapping[str, Any] | None, plan: Mapping[str, Any] | None) -> str:

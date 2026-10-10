@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "skills/nsfc-proposal/scripts"
@@ -13,6 +14,7 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(TESTS))
 
+import case_render  # noqa: E402
 from case_render import info_form, render_case_md  # noqa: E402
 from proposal_common import ProposalError, read_yaml, write_yaml  # noqa: E402
 from test_np_validate import valid_case, valid_evidence, valid_plan  # noqa: E402
@@ -77,6 +79,28 @@ class InfoFormTest(unittest.TestCase):
         self.assertIn("研究期限 3 年", form)
         self.assertIn("按 3 年分年度写", form)
         self.assertIn("项目类型未写明，按 3 年；请在 assumptions.md 记一条 AI 拟定项", form)
+        self.assertNotIn("不在年数表中", form)
+
+    def test_content_form_duration_defaults_when_type_unknown(self) -> None:
+        case = valid_case()
+        case["project"]["type"] = "联合基金"
+        form = info_form(case, valid_plan(), "nsfc-research-content-writer")
+        self.assertIn("研究期限 3 年（项目类型：联合基金）", form)
+        self.assertIn("项目类型「联合基金」不在年数表中，按 3 年；请在 assumptions.md 记一条 AI 拟定项", form)
+        self.assertNotIn("项目类型未写明", form)
+
+    def test_missing_plan_years_script_is_reported_as_missing(self) -> None:
+        case_render._plan_years.cache_clear()
+        try:
+            with tempfile.TemporaryDirectory() as tmp, \
+                    mock.patch.object(case_render, "PLAN_YEARS_PY", Path(tmp) / "plan_years.py"):
+                with self.assertRaises(ProposalError) as ctx:
+                    info_form(valid_case(), valid_plan(), "nsfc-research-content-writer")
+            message = str(ctx.exception)
+            self.assertTrue(message.startswith("找不到 nsfc-research-content-writer 的 plan_years.py"), message)
+            self.assertNotIn("配置有误", message)
+        finally:
+            case_render._plan_years.cache_clear()
 
     def test_foundation_form_marks_missing_items_as_placeholders(self) -> None:
         form = info_form(valid_case(), valid_plan(), "nsfc-research-foundation-writer")
