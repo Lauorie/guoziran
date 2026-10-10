@@ -20,6 +20,7 @@ import re
 import sys
 import threading
 import time
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -64,6 +65,9 @@ def load_credentials(task_root: Path, *, cwd: Path | str | None = None,
     url = values[URL_KEY]
     if re.search(r"[\s#]", url) or not url.lower().startswith(("https://", "http://")):
         raise WispaperNotConfigured(f"{URL_KEY} 写法不对：须以 http(s):// 开头，不含空白或 #（检查 .env 中该行是否带了行尾注释）")
+    for key in (TOKEN_KEY, CONSUMER_KEY):
+        if re.search(r"\s", values[key]) or not values[key].isascii():
+            raise WispaperNotConfigured(f"{key} 含空白或非 ASCII 字符")
     return url, values[TOKEN_KEY], values[CONSUMER_KEY] or None
 
 
@@ -176,11 +180,28 @@ def _write_json(path: Path, payload: Any) -> None:
     os.replace(tmp, path)
 
 
-def _error_text(exc: Exception) -> str:
-    """MCP 错误照录（含 request-id，不含地址与 token）；网络错误只写类型，因为 requests 的信息会带出主机名与地址。"""
+def _redact(text: str, client: Any) -> str:
+    """遮盖文字中的 token、完整地址与主机名（地址与主机名不区分大小写）。"""
+    token, url = getattr(client, "token", ""), getattr(client, "url", "")
+    text = text.replace(token, "<已隐藏>") if token else text
+    try:
+        host = urllib.parse.urlparse(url).hostname or ""
+    except ValueError:
+        host = ""
+    for secret in (url, host):
+        if secret:
+            text = re.sub(re.escape(secret), "<已隐藏>", text, flags=re.IGNORECASE)
+    return text
+
+
+def _error_text(exc: Exception, client: Any = None) -> str:
+    """MCP 错误照录（含 request-id），先遮盖 token 与地址；网络错误只写类型，因为 requests 的信息会带出主机名与地址；
+    其他意外异常只写类型。"""
     if isinstance(exc, requests.RequestException):
         return f"网络错误（{type(exc).__name__}）"
-    return str(exc)
+    if isinstance(exc, McpError):
+        return _redact(str(exc), client)
+    return f"意外错误（{type(exc).__name__}）"
 
 
 def _env_client_factory(job: BatchJob) -> Callable[[], McpClient]:
@@ -209,20 +230,23 @@ def run_batch(job: BatchJob, client_factory: Optional[Callable[[], McpClient]] =
                     report.pending.append(query)
             if stop:
                 return
-            if getattr(local, "client", None) is None:
-                local.client = factory()
+            client = getattr(local, "client", None)
             try:
-                data = local.client.call_tool(job.tool, {"query": query, "top_n": job.top_n})
+                if client is None:
+                    client = local.client = factory()
+                data = client.call_tool(job.tool, {"query": query, "top_n": job.top_n})
+                if not isinstance(data, dict) or not isinstance(data.get("papers", []), list):
+                    raise ValueError("payload")
+                _write_json(job.raw_path(query), data)
             except McpAuthError as exc:
                 with lock:
                     report.auth_failed = True
-                    report.failed.append({"query": query, "error": _error_text(exc)})
+                    report.failed.append({"query": query, "error": _error_text(exc, client)})
                 return
-            except (McpError, requests.RequestException) as exc:
+            except Exception as exc:  # 单条失败不得中断整批：记为失败，汇总照常写出
                 with lock:
-                    report.failed.append({"query": query, "error": _error_text(exc)})
+                    report.failed.append({"query": query, "error": _error_text(exc, client)})
                 return
-            _write_json(job.raw_path(query), data)
             with lock:
                 report.fetched.append(query)
 

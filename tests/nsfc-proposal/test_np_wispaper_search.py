@@ -1,6 +1,8 @@
 """wispaper 检索脚本：MCP 会话、原始返回落盘、断点续查、汇成 rls.host_results.v1。不联网。"""
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -231,6 +233,63 @@ class BatchTest(unittest.TestCase):
         self.assertEqual(len(host["queries"][0]["papers"]), 1)
 
 
+    def test_gateway_echo_in_http_body_is_redacted(self) -> None:
+        task = TaskDir(self.base, ["q1"])
+        echo = f"Bad gateway at {SECRET_URL.upper()} host gateway.invalid auth Bearer {SECRET_TOKEN}"
+
+        def post(p: dict, h: dict) -> FakeResponse:
+            if p["method"] == "initialize":
+                return FakeResponse(200, rpc(p["id"], {}), {"Mcp-Session-Id": "s"})
+            if p["method"] == "notifications/initialized":
+                return FakeResponse(202, "")
+            return FakeResponse(502, echo)
+
+        report = ws.run_batch(self.job(task), client_factory=lambda: ws.McpClient(SECRET_URL, SECRET_TOKEN, post=post, sleep=lambda s: None))
+        self.assertEqual(report.exit_code, 1)
+        self.assertIn("502", report.failed[0]["error"])
+        self.assert_clean(task, report)
+
+    def test_gateway_echo_in_auth_message_is_redacted(self) -> None:
+        task = TaskDir(self.base, ["q1"])
+        denied = FakeServer(lambda q: ({"code": "40101", "message": f"denied {SECRET_TOKEN} at gateway.invalid {SECRET_URL}"}, True))
+        report = ws.run_batch(self.job(task), client_factory=denied.client)
+        self.assertEqual(report.exit_code, 3)
+        self.assert_clean(task, report)
+
+    def assert_clean(self, task: TaskDir, report: ws.BatchReport) -> None:
+        blob = json.dumps(report.failed) + (task.out / "keyword_host.summary.json").read_text(encoding="utf-8")
+        for secret in (SECRET_TOKEN, "gateway.invalid", "GATEWAY.INVALID"):
+            self.assertNotIn(secret, blob)
+
+    def test_unexpected_exceptions_count_as_failures_and_summary_is_written(self) -> None:
+        task = TaskDir(self.base, ["good", "bad list", "bad boom", "bad json"])
+
+        def answer(q: str):
+            if q == "bad list":
+                return []
+            return {"papers": [PAPER], "stats": {}}
+
+        server = FakeServer(answer)
+        real_post = server.post
+
+        def post(p: dict, h: dict) -> FakeResponse:
+            if p.get("method") == "tools/call":
+                q = p["params"]["arguments"]["query"]
+                if q == "bad boom":
+                    raise RuntimeError(f"boom {SECRET_TOKEN}")
+                if q == "bad json":
+                    return FakeResponse(200, '{"jsonrpc": "2.0", "id": 3, "result": ')
+            return real_post(p, h)
+
+        report = ws.run_batch(self.job(task), client_factory=lambda: ws.McpClient(SECRET_URL, SECRET_TOKEN, post=post, sleep=lambda s: None))
+        self.assertEqual(report.exit_code, 1)
+        self.assertEqual({f["query"] for f in report.failed}, {"bad list", "bad boom", "bad json"})
+        self.assertIn("RuntimeError", json.dumps(report.failed))
+        self.assertNotIn(SECRET_TOKEN, json.dumps(report.failed))
+        self.assertEqual(set(load_host_results(task.out / "keyword_host.json")), {"good"})
+        self.assertEqual(len(json.loads((task.out / "keyword_host.summary.json").read_text(encoding="utf-8"))["failed"]), 3)
+
+
 class PrepareAndCliTest(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -256,12 +315,26 @@ class PrepareAndCliTest(unittest.TestCase):
 
     def test_cli_without_credentials_exits_3_without_values(self) -> None:
         task = TaskDir(self.base, ["q1"])
-        env = {"PATH": os.environ.get("PATH", ""), "PYTHONPYCACHEPREFIX": str(ROOT / ".bensz-api" / "pycache")}
-        proc = subprocess.run([sys.executable, str(SCRIPTS / "wispaper_search.py"), "run", "--task-root", str(task.root),
-                               "--name", "keyword", "--tool", "quick_search", "--query-file", str(task.query_file)],
-                              env=env, cwd=self.base, capture_output=True, text=True, timeout=60)
-        self.assertEqual(proc.returncode, 3, proc.stderr)
-        self.assertIn("WIS_MCP_URL", proc.stderr)
+        sandbox = self.base / "sandbox"
+        sandbox.mkdir()
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {}, clear=True), mock.patch.object(ws, "SKILL_DIR", sandbox), \
+                mock.patch.object(ws.envfile, "dotenv_candidates", return_value=[sandbox / ".env"]), \
+                contextlib.redirect_stderr(err):
+            code = ws.main(["run", "--task-root", str(task.root), "--name", "keyword", "--tool", "quick_search",
+                            "--query-file", str(task.query_file)])
+        self.assertEqual(code, 3)
+        self.assertIn("缺 WIS_MCP_URL、WIS_MCP_TOKEN", err.getvalue())
+
+    def test_non_ascii_or_spaced_token_is_not_configured(self) -> None:
+        task = TaskDir(self.base, ["q1"])
+        for token in ("tok-密钥", "tok 1"):
+            env = {"WIS_MCP_URL": SECRET_URL, "WIS_MCP_TOKEN": token}
+            with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(ws.envfile, "dotenv_candidates", return_value=[]):
+                with self.assertRaises(ws.WispaperNotConfigured) as ctx:
+                    ws.load_credentials(task.root, skill_dir=self.base)
+            self.assertNotIn(token, str(ctx.exception))
+            self.assertIn("WIS_MCP_TOKEN", str(ctx.exception))
 
 
 if __name__ == "__main__":
