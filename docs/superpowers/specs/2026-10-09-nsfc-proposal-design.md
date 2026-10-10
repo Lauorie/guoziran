@@ -28,7 +28,7 @@
 
 1. 新建 skill `nsfc-proposal`，作为写国自然正文的统一入口。
 2. 写正文前建立三份共享文件：科学论证、证据图谱、章节分工。三个写作 skill 从这里取输入。
-3. 文献经检索、元数据经 CrossRef 或 OpenAlex 核对后才进入 `.bib`。正文措辞的强度受证据约束。借用 academic-literature 的引用台账做法，记录每条文献的来源。
+3. 文献经 wispaper 检索、元数据经 CrossRef 核对后才进入 `.bib`。正文措辞的强度受证据约束。借用 academic-literature 的引用台账做法，记录每条文献的来源。
 4. D1–D7 在新流程的产出中不再出现。
 5. 修复 nsfc-justification-writer 的 3 处 bug。
 
@@ -47,7 +47,7 @@
 | 实现方式 | 写作 skill 原生读取共享文件；文件不存在时退回原信息表 | 措辞强度和章节分工能进入写作 skill 的自审；单独使用不受影响 |
 | 确认点 | 一个，可跳过 | 科学问题定错，各章会沿错误方向写完；其余步骤保持 nsfc-* 的全自动 |
 | 运行环境 | 本地代理（Claude Code、Codex） | 流程要调用 skill、脚本、MCP 和网络 |
-| 文献来源 | wispaper MCP 优先；不可用时依次用 OpenAlex、Semantic Scholar、CrossRef | wispaper 召回切题，但 DOI、期刊、作者全名常缺，需另行补全 |
+| 文献来源 | 只用 wispaper；不可用时停在检索这一步。CrossRef 只用于核对元数据 | wispaper 召回切题，但 DOI、期刊、作者全名常缺，需另行补全 |
 | 共享文件位置 | `{project_root}/proposal/` | 要跨会话保存；任务目录名每次运行都变 |
 
 未采用的方案：

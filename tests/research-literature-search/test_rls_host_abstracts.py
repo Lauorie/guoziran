@@ -147,6 +147,22 @@ class AbstractQueriesTests(unittest.TestCase):
                            capture_output=True, text=True, env=env)
         self.assertEqual(e.returncode, 2)
 
+    def test_cli_rejects_invalid_host_file_and_missing_reuse(self) -> None:
+        src = self._jsonl("s.jsonl", [{"record_id": "a", "title": TITLE}])
+        env = {**os.environ, "PYTHONPYCACHEPREFIX": str(ROOT / ".bensz-api" / "pycache")}
+        bad = self.dir / "bad.json"
+        bad.write_text("{not json", encoding="utf-8")
+        runner = str(SCRIPTS / "search_runner.py")
+        cases = {
+            "invalid host json": ["enrich-abstracts", "--offline", "--input", str(src), "--output", str(self.dir / "o.jsonl"), "--host-results", str(bad)],
+            "abstract-queries missing reuse": ["abstract-queries", "--input", str(src), "--output", str(self.dir / "q.json"), "--reuse", str(self.dir / "none.jsonl")],
+            "enrich missing reuse": ["enrich-abstracts", "--offline", "--input", str(src), "--output", str(self.dir / "o2.jsonl"), "--reuse", str(self.dir / "none.jsonl")],
+        }
+        for label, argv in cases.items():
+            with self.subTest(label):
+                r = subprocess.run([sys.executable, runner, *argv], capture_output=True, text=True, env=env)
+                self.assertEqual(r.returncode, 2, r.stderr)
+
 
 class McpOnlyBundleTests(unittest.TestCase):
     def test_mcp_only_order_never_calls_other_providers(self) -> None:

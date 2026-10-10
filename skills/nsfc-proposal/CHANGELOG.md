@@ -48,4 +48,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 第 3 步只用 wispaper：bundle 加 `--provider-order mcp`；补摘要改为按标题检索 wispaper（`abstract-queries`、`enrich-abstracts --offline`）；wispaper 不可用时停在第 3 步，不改用其他检索源。
 - 研究内容的小标题按每项研究的类型选，一章中两类研究都有时各用各的；设计图中的实物与刺激材料画成线描图标，自检时照片或写实渲染判为不合格。
 - 引用台账的说明不再提 OpenAlex；文档测试检查所有 nsfc-* skill 不含 OpenAlex。
+- 第 3 步补上 wispaper 失败时的去向：bundle 全空、补摘要批次退出码 1、`use_wispaper` 为 false；README 写明 Crossref 无法核对的 DOI。
 - 本分支未写 BAC 记录，经负责人同意。

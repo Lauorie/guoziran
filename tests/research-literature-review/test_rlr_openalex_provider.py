@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 import tempfile
@@ -15,6 +16,11 @@ from candidate_schema import normalize_record  # noqa: E402  (before review scri
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 import multi_query_search  # noqa: E402
 import openalex_provider  # noqa: E402
+
+# research-literature-search ships a module of the same name; load the review one by path.
+_spec = importlib.util.spec_from_file_location("rlr_multi_source_abstract", SKILL_ROOT / "scripts" / "multi_source_abstract.py")
+multi_source_abstract = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(multi_source_abstract)
 
 WORK = {
     "id": "https://openalex.org/W2741809807",
@@ -125,6 +131,19 @@ class OpenAlexInjectionTests(unittest.TestCase):
             self.assertTrue(fake.called)
             rows = (base / "out.jsonl").read_text(encoding="utf-8")
             self.assertIn(WORK["title"] + " 0", rows)
+
+
+class AbstractFillingInjectionTests(unittest.TestCase):
+    def test_multi_source_abstract_injects_openalex_fetcher(self) -> None:
+        fake_search = MagicMock()
+        fake_enrich = MagicMock(return_value={"filled": 0})
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            argv = ["multi_source_abstract.py", "--input", str(base / "in.jsonl"), "--output", str(base / "out.jsonl")]
+            with patch.object(multi_source_abstract, "search_openalex", fake_search), \
+                    patch.object(multi_source_abstract, "enrich_abstracts", fake_enrich), patch.object(sys, "argv", argv):
+                self.assertEqual(multi_source_abstract.main(), 0)
+        self.assertIs(fake_enrich.call_args.kwargs["fetchers"]["openalex"], fake_search)
 
 
 if __name__ == "__main__":

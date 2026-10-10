@@ -82,7 +82,7 @@ python3 S/scripts/case.py validate --project-root P
    - 每篇（或每组）申请人论文，在 `evidence_map.yaml` 中对应一条 `type: applicant_result`、`support: applicant_material` 的论断，`sections` 含立项依据；`evidence` 列该论文的 bibkey，`role: supporting`，`basis` 按实际读到的内容写（`fulltext` 或 `full_abstract`）。材料中有该论文的 PDF 并已由 `materials.py` 解析时，`basis` 写 `fulltext`，数字从解析结果（`primary` 指向的文件）中取。这样 6.1 引用它时满足规则 5 的 (b)。
    - 这些论文的台账摘要可能为空。引用句含数字时会报 `no_abstract_for_numbers`：按第 7 步的处理办法改写，或只写申请人材料写明的数字。
 3. 对每条 `gap`、`mechanism` 类论断和每条方法类论断写一个英文问句，写入 `T/nsfc-proposal/input/claim_queries_1.json`；超过 `literature.bundle_max_queries` 条时拆成 `claim_queries_2.json` 等，每个文件不超过这个条数。
-4. `config.yaml` 中 `literature.use_wispaper` 为 true 时，用 `scripts/wispaper_search.py` 检索。凭据 `WIS_MCP_URL`、`WIS_MCP_TOKEN` 由脚本从环境变量或上级目录的 `.env` 读取，不要打开 `.env`。
+4. 用 `scripts/wispaper_search.py` 检索（`config.yaml` 中 `literature.use_wispaper` 为 false 时不检索，按本步末尾的离线情形处理）。凭据 `WIS_MCP_URL`、`WIS_MCP_TOKEN` 由脚本从环境变量或上级目录的 `.env` 读取，不要打开 `.env`。
 
    ```bash
    python3 S/scripts/wispaper_search.py run --task-root T --name keyword --tool quick_search \
@@ -110,7 +110,7 @@ python3 SK/research-literature-search/scripts/search_runner.py run --topic "<题
 python3 SK/research-literature-search/scripts/search_runner.py validate --bundle <每个 bundle 目录>
 ```
 
-   `--provider-order` 取 `mcp`，让 bundle 只用 wispaper 的结果，不向其他检索服务发请求。wispaper 不可用时不建 bundle，见「失败与恢复」。
+   `--provider-order` 取 `mcp`，让 bundle 只用 wispaper 的结果，不向其他检索服务发请求。wispaper 不可用时不建 bundle，见「失败与恢复」。某个 bundle 的 manifest 为 `failed`（wispaper 对其中检索式全都没有返回结果）时，它不提供候选：论断问句换个写法写入新的 `claim_queries_<n>.json`，按第 4、5 项再检索一次；仍没有结果的，在 `stages.md` 记下，相关论断保持 `unsupported`。
 6. 逐条论断从各 bundle 的 `candidates_deduped.jsonl` 中挑候选证据，原样写入 `T/nsfc-proposal/output/selected.jsonl`，再用 wispaper 补全摘要。关键词检索只返回摘要片段，片段不算完整摘要；按标题检索通常能拿到完整摘要。先列出缺完整摘要的记录标题，按标题检索，再把摘要填回记录：
 
 ```bash
@@ -123,7 +123,7 @@ python3 SK/research-literature-search/scripts/search_runner.py enrich-abstracts 
   --host-results T/nsfc-proposal/output/wispaper/abstracts_1_host.json
 ```
 
-   - `wispaper_search.py` 的退出码按第 4 项处理。
+   - `wispaper_search.py` 的退出码：0 继续；4 原样重跑同一条命令；1 原样重跑一次，仍失败的标题不改写、不另建检索式文件，照常用已写出的 host 文件运行 `enrich-abstracts`，失败的标题保持缺摘要，在 `stages.md` 列出；3 按「wispaper 不可用」处理。
    - `abstract-queries` 输出的 `queries` 为 0 时，不运行 `wispaper_search.py`，`enrich-abstracts` 去掉 `--host-results`，保留 `--offline`。
    - `--offline` 保证补摘要不向 wispaper 以外的服务发请求，不得去掉。
    - 汇总写在 `T/nsfc-proposal/output/selected_enriched.jsonl.summary.json`。`filled / attempted` 低于一半（`attempted` 为 0 时不算）时，背景类论断也可以写成论断问句检索，以拿到带完整摘要的记录：问句写入新的 `claim_queries_<n>.json`（n 接在已有文件之后），按本步第 4、5 项检索，再回到本项挑选并补全摘要。在 `stages.md` 记录这一偏离及原因。
@@ -141,7 +141,7 @@ python3 S/scripts/bib_resolve.py --project-root P --records T/nsfc-proposal/outp
    `bib_resolve` 写入 `.bib` 的同时，把来源写进 `P/proposal/citation_ledger.jsonl`。候选引用键是输出中 `added` 条目的 bibkey，以及 `exists` 且在台账中有有效记录（`citation_ledger.py show` 能列出）的 bibkey；`exists` 但台账中没有记录的（`init` 之前就在 `.bib` 中、未经申请人确认的条目），不得引用。`unresolved` 条目已写入线索清单，正文不得引用。能否在正文引用，取决于规则 5 的三个条件。
 8. 阅读完整摘要，按 `references/evidence_wording.md` 填写每条论断的 `evidence` 与 `support`，再运行 `case.py validate`，直到 `[scientific_case]` 和 `[evidence_map]` 前缀的问题清零。
 
-完全离线时跳过 4–7：文献类论断保持 `unsupported`，并在 `assumptions.md` 的「## 待核实项」写明「本次未检索文献」。现状论断的写法见规则 5 的 `unsupported` 两类。证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标；不用推测或泛泛的背景凑字数。
+申请人要求不联网（完全离线），或 `literature.use_wispaper` 为 false 时，跳过 4–7：文献类论断保持 `unsupported`，并在 `assumptions.md` 的「## 待核实项」写明「本次未检索文献」。现状论断的写法见规则 5 的 `unsupported` 两类。证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标；不用推测或泛泛的背景凑字数。
 
 **4. 章节分配**
 
@@ -273,8 +273,8 @@ python3 S/scripts/consistency_check.py --project-root P
 | 情况 | 处理 |
 |---|---|
 | `case.py validate` 在第 4 步后仍有问题 | 不进入写作；按提示修改后重试 |
-| wispaper 不可用（`wispaper_search.py` 退出码 3） | 停在第 3 步，不改用其他检索源。告诉申请人检查 `WIS_MCP_URL`、`WIS_MCP_TOKEN`（未配置，或凭据被拒）；全自动运行也停下，在报告中写明。配置好后从第 3 步第 4 项继续，已存档的检索式不重查 |
-| 部分检索式重跑后仍失败（退出码 1） | 把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。bundle 用已取得的结果建，不改用其他检索源 |
+| wispaper 不可用（`wispaper_search.py` 退出码 3） | 停在第 3 步，不改用其他检索源。告诉申请人检查 `WIS_MCP_URL`、`WIS_MCP_TOKEN`（未配置，或凭据被拒）；全自动运行也停下，在报告中写明。配置好后重跑被打断的那条命令，已存档的检索式不重查 |
+| 部分检索式重跑后仍失败（退出码 1） | 把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。bundle 用已取得的结果建，不改用其他检索源；建 bundle 时加 `--min-queries 1`，输出到新的 bundle 目录（如 `keyword-bundle-2`、`claims-bundle-<n>`） |
 | CrossRef 不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
 | 某个写作 skill 失败 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续 |
 | 写完后科学论证又被修改 | `case.py bump` 后，一致性检查会列出依据旧版的章节，逐章重写 |

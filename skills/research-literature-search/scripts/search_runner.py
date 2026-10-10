@@ -583,7 +583,9 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
         title = str(row.get("title") or "")
         raw_doi = str(row.get("doi") or (row.get("identifiers") or {}).get("doi") or "")
         doi = normalize_doi(raw_doi)
-        for source, query in (("crossref", raw_doi), ("semantic_scholar", title)):
+        sources = [("crossref", raw_doi), ("semantic_scholar", title)]
+        sources += [(name, title) for name in registry if name not in ("crossref", "semantic_scholar")]
+        for source, query in sources:
             if not query or source not in registry:
                 continue
             if source in exhausted:

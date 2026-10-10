@@ -9,6 +9,8 @@ from pathlib import Path
 
 SEARCH_ROOT = Path(__file__).resolve().parents[2] / "research-literature-search" / "scripts"
 sys.path.insert(0, str(SEARCH_ROOT))
+sys.path.append(str(Path(__file__).resolve().parent))  # after SEARCH_ROOT: both dirs hold dedupe_papers.py
+from openalex_provider import search as search_openalex  # noqa: E402
 from search_runner import enrich_abstracts  # noqa: E402
 
 
@@ -23,7 +25,7 @@ def main() -> int:
     parser.add_argument("--cache-dir", type=Path)
     parser.add_argument("--cache-ttl-seconds", type=int, default=86400)
     args = parser.parse_args()
-    print(json.dumps(enrich_abstracts(args.input, args.output, max_papers=args.max_papers, min_chars=args.min_abstract_chars, timeout=args.timeout), ensure_ascii=False))
+    print(json.dumps(enrich_abstracts(args.input, args.output, max_papers=args.max_papers, min_chars=args.min_abstract_chars, timeout=args.timeout, fetchers={"openalex": search_openalex}), ensure_ascii=False))
     return 0
 
 

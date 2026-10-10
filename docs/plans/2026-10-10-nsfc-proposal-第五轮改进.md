@@ -615,7 +615,7 @@ class RoundFiveWritingDocsTest(unittest.TestCase):
 
 范围：
 
-- `skills/nsfc-*` 与 research-literature-search 中不留 OpenAlex 的代码、默认顺序、请求和文档。验收：`git grep -il openalex -- 'skills/nsfc-*' skills/research-literature-search tests/nsfc-* tests/research-literature-search ':!*CHANGELOG*'` 只命中 `tests/nsfc-proposal/test_np_consistency.py`（旧台账读取的回归测试，保留）。
+- `skills/nsfc-*` 与 research-literature-search 中不留 OpenAlex 的代码、默认顺序、请求和文档。验收：`git grep -il openalex -- 'skills/nsfc-*' skills/research-literature-search tests/nsfc-* tests/research-literature-search ':!*CHANGELOG*'` 只命中测试文件：断言不含 OpenAlex 的测试，以及旧台账读取的回归测试 `tests/nsfc-proposal/test_np_consistency.py`。
 - research-literature-review 不是国自然写作的 skill，主力检索源是 OpenAlex，并借用 research-literature-search 的 OpenAlex 适配器。把适配器挪进 research-literature-review，由它自己注入，行为不变。
 - CrossRef 只做一件事：按 DOI 或标题核对文献元数据，补全 wispaper 不返回的卷期页码和完整作者名。research-literature-search 单独使用时的 Semantic Scholar、CrossRef 检索源保留；国自然写作的 skill 走不到它们（`--provider-order mcp`、`--offline`，Task 3 的文档测试已钉住）。
 
@@ -734,7 +734,7 @@ if __name__ == "__main__":
 
 - 删除 `providers/openalex.py`；`providers/__init__.py` 去掉 `search_openalex` 的导入与 `__all__` 项。
 - `search_runner.py`：两处 `from providers import …` 去掉 `search_openalex`；`DEFAULT_PROVIDER_ORDER = ["mcp", "semantic_scholar", "crossref", "duckduckgo"]`；`SUPPORTED_PROVIDERS = {"semantic_scholar", "crossref"}`；`_provider_registry` 去掉 `"openalex"`；补摘要的来源元组去掉 `("openalex", title)`；`# OpenAlex is the main source; …` 注释改为 `# Stop once the first source meets the target; only supplement if clearly below it.`；`_hit_abstract` 不再还原倒排索引（只取 `abstract` 纯文本），文档字符串相应改写；导入中去掉 `abstract_from_inverted_index`。
-- `candidate_schema.py`：删除 `abstract_from_inverted_index` 及其在 `normalize_record` 中的调用；`IDENTIFIER_KEYS = ("doi", "pmid", "arxiv", "semantic_scholar")`；`stable_record_id` 的键元组去掉 `"openalex"`；`_source_envelope` 去掉 `or raw.get("openalex_id")`；删除 `if provider == "openalex" …` 两行；扁平视图去掉 `"openalex_id"`。旧 bundle 中多出的 `identifiers.openalex`、`openalex_id` 不影响校验（`validate_record` 只检查 `IDENTIFIER_KEYS` 中的键），在报告中用 fresh-1 的一个 bundle（`/home/juli/guoziran/nsfc-proposal-eval/fresh-1/projects/proj/.bensz-api/task-20261010-1702-waste-sorting-habit/research-literature-search/output/keyword-bundle`）跑 `search_runner.py validate --bundle` 证明。
+- `candidate_schema.py`：删除 `abstract_from_inverted_index` 及其在 `normalize_record` 中的调用；`IDENTIFIER_KEYS = ("doi", "pmid", "arxiv", "semantic_scholar")`；`stable_record_id` 的键元组去掉 `"openalex"`；`_source_envelope` 去掉 `or raw.get("openalex_id")`；删除 `if provider == "openalex" …` 两行；扁平视图去掉 `"openalex_id"`。旧 bundle 中多出的 `identifiers.openalex`、`openalex_id` 不影响校验（`validate_record` 只检查 `IDENTIFIER_KEYS` 中的键），在报告中用 fresh-1 的一个 bundle（评测目录中 fresh-1 的 keyword-bundle）跑 `search_runner.py validate --bundle` 证明。
 - `dedupe_papers.py`：两处键元组去掉 `openalex` / `openalex_id`。
 - `config.yaml`：`provider_priority: [mcp, semantic_scholar, crossref, duckduckgo]`。
 - 文档：`SKILL.md`、`README.md`（第 31 行示例改为 `--provider-order semantic_scholar,crossref`；第 51 行那段删去或改写为与 OpenAlex 无关的说法）、`references/provider-guide.md`（第 3 行改为：「默认先用宿主检索结果（mcp，当前为 wispaper）；没有时依次用 Semantic Scholar、Crossref。MCP 与 duckduckgo 需要宿主能力……」，后半句照原文）、`references/paper-schema.md`（identifiers 列表去掉 openalex）。全目录 `grep -rn -i openalex skills/research-literature-search` 只允许命中 CHANGELOG。

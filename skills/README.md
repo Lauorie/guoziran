@@ -310,7 +310,7 @@ output_mode：preview（先预览）/ apply（确认后写入）
 
 **类型**：📚 日常
 
-**功能**：校验 5–25 条查询，按 OpenAlex → Semantic Scholar/Crossref 的兼容策略检索，输出 `rls.paper.v1` canonical 候选、provenance、dedupe map 和可验证 `manifest.json`。
+**功能**：校验 5–25 条查询，按 宿主检索结果 → Semantic Scholar → Crossref 的顺序检索，输出 `rls.paper.v1` canonical 候选、provenance、dedupe map 和可验证 `manifest.json`。
 
 **适用场景**：只需要候选论文池、为研究选题/标书准备证据，或被 `research-literature-review` 作为检索生产者调用。
 
@@ -770,7 +770,7 @@ python3 research-literature-search/scripts/search_runner.py validate --bundle ./
 
 **类型**：📝 日常
 
-**功能**：国自然正文的统一入口。先建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef/OpenAlex 元数据核对，再按固定顺序调用各写作 skill，并做跨章一致性检查。
+**功能**：国自然正文的统一入口。先建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef 元数据核对，再按固定顺序调用各写作 skill，并做跨章一致性检查。
 
 **推荐 Prompt 模板**：
 

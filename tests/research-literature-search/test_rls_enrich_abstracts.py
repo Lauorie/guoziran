@@ -39,6 +39,17 @@ class EnrichAbstractsMatchTests(unittest.TestCase):
         self.assertEqual(row["abstract_provenance"]["rejected_mismatch"], 1)
         self.assertEqual(summary["filled"], 1)
 
+    def test_injected_extra_fetcher_is_tried_by_title_after_builtin_sources(self) -> None:
+        calls: list[str] = []
+
+        def extra(query: str, **_k: object) -> list:
+            calls.append(query)
+            return [{"title": TITLE, "abstract": LONG}]
+        _, row = _run({"title": TITLE, "doi": "10.5555/q.1"}, {"extra_source": extra})
+        self.assertEqual(calls, [TITLE])
+        self.assertEqual(row["abstract"], LONG)
+        self.assertEqual(row["abstract_provenance"]["source"], "extra_source")
+
     def test_all_mismatched_leaves_abstract_missing(self) -> None:
         hits = [{"title": "Liver fibrosis staging", "abstract": OTHER}, {"title": "Another unrelated paper", "abstract": OTHER}]
         fetchers = {"semantic_scholar": lambda q, **k: hits, "crossref": lambda q, **k: hits}
