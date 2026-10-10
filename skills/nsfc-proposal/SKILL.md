@@ -28,7 +28,7 @@ metadata:
 - 必需：
   - `project_root`：含 `main.tex` 和 `extraTex/` 的 NSFC 正文项目，例如 `projects/NSFC_Young` 的副本。
   - 申请人的研究信息：题目或方向、研究对象、痛点、科学问题与假设的初步想法、已有材料。
-- 可选：项目类型；要写的章节（默认全部）；协作方式；论文、数据、预实验结果等材料（PDF、DOCX、Markdown、TXT）；参考文献；生图服务凭据（`WISMODEL_IMAGE_URL`、`WISMODEL_API_KEY`、`DEPLOY_REGION`，环境变量或 `.env`）；没有时不出图，保留占位。
+- 可选：项目类型；要写的章节（默认全部）；协作方式；论文、数据、预实验结果等材料（PDF、DOCX、Markdown、TXT）；参考文献；生图服务凭据（`WISMODEL_IMAGE_URL`、`WISMODEL_API_KEY`、`DEPLOY_REGION`，环境变量或 `.env`）；wispaper 检索凭据（`WIS_MCP_URL`、`WIS_MCP_TOKEN`，缺失时按「wispaper 不可用」处理）；没有生图凭据时不出图，保留占位。
 - 缺 `project_root` 时停下，请用户指定；无人值守时报错退出。
 - 申请人没提供的信息不追问（确认点除外），按保守假设处理，并记入 `assumptions.md`。
 
@@ -38,7 +38,7 @@ metadata:
 
 **0. 说明与建目录**
 
-1. 向用户逐项说明将调用的 skill 及其工作，按调用顺序：research-literature-search（检索文献）→ nsfc-justification-writer（立项依据）→ nsfc-research-content-writer（研究内容、特色与创新、年度研究计划）→ nsfc-research-foundation-writer（研究基础、工作条件）→ nsfc-abstract（摘要）。用户只要部分章节时，只列相关的 skill。申请人提供 PDF 材料时，同时告知：PDF 会上传到团队的 WisDoc 服务解析，解析结果存放在该服务的服务器上；申请人说材料不能离开本机时加 `--local-only`（第 1 步）。全自动模式下默认使用 WisDoc，除非申请人材料写明不能外传。研究内容的作图说明会发送到 WisImage 生成研究框架图与设计图；没有配置生图服务时不出图，保留占位。告知后不停下等回答。
+1. 向用户逐项说明将调用的 skill 及其工作，按调用顺序：research-literature-search（检索文献）→ nsfc-justification-writer（立项依据）→ nsfc-research-content-writer（研究内容、特色与创新、年度研究计划）→ nsfc-research-foundation-writer（研究基础、工作条件）→ nsfc-abstract（摘要）。用户只要部分章节时，只列相关的 skill。申请人提供 PDF 材料时，同时告知：PDF 会上传到团队的 WisDoc 服务解析，解析结果存放在该服务的服务器上；申请人说材料不能离开本机时加 `--local-only`（第 1 步）。全自动模式下默认使用 WisDoc，除非申请人材料写明不能外传。研究内容的作图说明会发送到 WisImage 生成研究框架图与设计图；检索式会发送到团队的 wispaper 检索服务；没有配置生图服务时不出图，保留占位。告知后不停下等回答。
 2. 宣布唯一任务目录 `T = ./.bensz-api/task-{yyyymmdd-hhmm}-{简短描述}/`，之后不更换。建立 `T/README.md`、`T/shared/` 和 `T/nsfc-proposal/{input,output,log}/`。
 3. 此后每完成一步，在 `T/nsfc-proposal/log/stages.md` 追加一行：时间、步骤、AI 做了什么、产出文件、申请人是否确认。第 8 步据此起草 AI 使用说明。
 
@@ -92,6 +92,7 @@ python3 S/scripts/case.py validate --project-root P
 
    - `top_n` 默认取 `literature.quick_search_top_n` 与 `literature.deep_search_top_n`。
    - 每条检索式的原始返回逐字存进 `T/nsfc-proposal/output/wispaper/raw/<名称>/`，再汇成 `T/nsfc-proposal/output/wispaper/<名称>_host.json`（`rls.host_results.v1`），汇总在 `<名称>_host.summary.json`。不要改写这些文件。
+   - 在前台运行，Bash 超时设 600000 ms；不得放到后台后结束本轮。运行被超时打断（没有退出码）时，原样重跑同一条命令；已存档的检索式不重查。
    - 退出码 0：完成。4：到了单次时限，原样再跑同一条命令，已存档的不重查。1：有检索式失败，原样再跑一次；仍失败的检索式在 `stages.md` 记下，按「失败与恢复」处理。3：未配置或凭据被拒，按「wispaper 不可用」处理。
    - 不要用 MCP 工具（`mcp__wis-scholar-search__*`）做检索：返回只进对话，不落文件，台账无从追溯。它只可用于一次性探测，例如检查服务是否可用。
 5. 建检索 bundle 并校验：

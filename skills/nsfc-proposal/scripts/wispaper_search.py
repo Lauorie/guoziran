@@ -30,7 +30,7 @@ import requests
 
 import envfile
 from proposal_common import ProposalError, load_config
-from wis_mcp_client import McpAuthError, McpClient, McpError  # 测试经本模块引用这三个名字
+from wis_mcp_client import McpAuthError, McpClient, McpError, redact_secrets  # 测试经本模块引用前三个名字
 
 SKILL_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = "nsfc-proposal/output/wispaper"
@@ -181,17 +181,8 @@ def _write_json(path: Path, payload: Any) -> None:
 
 
 def _redact(text: str, client: Any) -> str:
-    """遮盖文字中的 token、完整地址与主机名（地址与主机名不区分大小写）。"""
-    token, url = getattr(client, "token", ""), getattr(client, "url", "")
-    text = text.replace(token, "<已隐藏>") if token else text
-    try:
-        host = urllib.parse.urlparse(url).hostname or ""
-    except ValueError:
-        host = ""
-    for secret in (url, host):
-        if secret:
-            text = re.sub(re.escape(secret), "<已隐藏>", text, flags=re.IGNORECASE)
-    return text
+    """遮盖文字中的 token、完整地址与主机名；实现在 wis_mcp_client.redact_secrets。"""
+    return redact_secrets(text, getattr(client, "url", ""), getattr(client, "token", ""))
 
 
 def _error_text(exc: Exception, client: Any = None) -> str:

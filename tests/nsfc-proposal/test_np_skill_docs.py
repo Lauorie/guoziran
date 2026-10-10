@@ -76,6 +76,12 @@ class RoundThreeDocsTest(unittest.TestCase):
         self.assertNotIn("〈", rule[0])
         self.assertNotIn("〉", rule[0])
 
+    def test_wispaper_step_states_foreground_timeout_and_rerun(self) -> None:
+        blocks = [b for b in re.split(r"\n(?=\d+\. )", TEXT) if "wispaper_search.py" in b and b.lstrip().startswith("4. ")]
+        self.assertEqual(len(blocks), 1)
+        self.assertIn("600000", blocks[0])
+        self.assertIn("原样重跑", blocks[0])
+
     def test_motor_matched_control_rule(self) -> None:
         bounds = (SKILL / "references" / "section_boundaries.md").read_text(encoding="utf-8")
         self.assertIn("动作匹配的对照", bounds)

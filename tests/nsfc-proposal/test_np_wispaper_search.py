@@ -256,10 +256,54 @@ class BatchTest(unittest.TestCase):
         self.assertEqual(report.exit_code, 3)
         self.assert_clean(task, report)
 
+    def test_secret_crossing_200_char_boundary_in_http_body_is_redacted(self) -> None:
+        for offset in (180, 190, 195, 200, 205, 210):
+            with self.subTest(offset=offset):
+                task = TaskDir(Path(tempfile.mkdtemp(dir=self.base)), ["q1"])
+                echo = "x" * offset + f" {SECRET_URL} {SECRET_TOKEN}"
+
+                def post(p: dict, h: dict, echo: str = echo) -> FakeResponse:
+                    if p["method"] == "initialize":
+                        return FakeResponse(200, rpc(p["id"], {}), {"Mcp-Session-Id": "s"})
+                    if p["method"] == "notifications/initialized":
+                        return FakeResponse(202, "")
+                    return FakeResponse(502, echo)
+
+                report = ws.run_batch(self.job(task), client_factory=lambda: ws.McpClient(SECRET_URL, SECRET_TOKEN, post=post, sleep=lambda s: None))
+                self.assertEqual(report.exit_code, 1)
+                self.assert_clean(task, report)
+
+    def test_secret_crossing_200_char_boundary_in_messages_is_redacted(self) -> None:
+        for offset in (180, 190, 200, 210):
+            with self.subTest(offset=offset):
+                task = TaskDir(Path(tempfile.mkdtemp(dir=self.base)), ["q1"])
+                denied = FakeServer(lambda q, o=offset: ({"code": "40101", "message": "y" * o + f" {SECRET_URL} {SECRET_TOKEN}"}, True))
+                report = ws.run_batch(self.job(task), client_factory=denied.client)
+                self.assertEqual(report.exit_code, 3)
+                self.assert_clean(task, report)
+
+    def test_secret_crossing_boundary_in_jsonrpc_error_is_redacted(self) -> None:
+        task = TaskDir(self.base, ["q1"])
+        msg = "z" * 195 + f" {SECRET_URL} {SECRET_TOKEN}"
+
+        def post(p: dict, h: dict) -> FakeResponse:
+            if p["method"] == "initialize":
+                return FakeResponse(200, rpc(p["id"], {}), {"Mcp-Session-Id": "s"})
+            if p["method"] == "notifications/initialized":
+                return FakeResponse(202, "")
+            return FakeResponse(200, json.dumps({"jsonrpc": "2.0", "id": p["id"], "error": {"code": -32000, "message": msg}}))
+
+        report = ws.run_batch(self.job(task), client_factory=lambda: ws.McpClient(SECRET_URL, SECRET_TOKEN, post=post, sleep=lambda s: None))
+        self.assertEqual(report.exit_code, 1)
+        self.assert_clean(task, report)
+
     def assert_clean(self, task: TaskDir, report: ws.BatchReport) -> None:
         blob = json.dumps(report.failed) + (task.out / "keyword_host.summary.json").read_text(encoding="utf-8")
-        for secret in (SECRET_TOKEN, "gateway.invalid", "GATEWAY.INVALID"):
+        for secret in (SECRET_TOKEN, "gateway.invalid", "GATEWAY.INVALID", "https://gateway", "tok-secret"):
             self.assertNotIn(secret, blob)
+        for text, shortest in ((SECRET_URL, 8), (SECRET_TOKEN, 6)):
+            for n in range(shortest, len(text) + 1):
+                self.assertNotIn(text[:n], blob)
 
     def test_unexpected_exceptions_count_as_failures_and_summary_is_written(self) -> None:
         task = TaskDir(self.base, ["good", "bad list", "bad boom", "bad json"])

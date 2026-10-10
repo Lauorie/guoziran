@@ -29,6 +29,7 @@
 - `nsfc-proposal` 0.1.0：一致性检查的过程说明词加入「正式申请书」「正式稿」「请申请人」；内文只有省略号的【待补充：……】视为占位格式说明，不计入占位。
 - `nsfc-proposal` 0.1.0：bib_resolve 按 CrossRef/OpenAlex 类型写条目：书章为 @incollection（booktitle、publisher），图书为 @book；其余 @misc 也带 publisher。参考文献样式不渲染 howpublished，书章此前没有出处（来源：funded-2 验证运行）。
 - `nsfc-proposal` 0.1.0：信息表列出 section_plan 中的占位并要求逐字照抄；研究基础的缺失项不再自拟占位文字，同一缺失项只有一种写法（来源：funded-2 验证运行）。
+- `nsfc-proposal` 0.1.0：wispaper 检索的 HTTP 正文与错误信息先脱敏再截断到 200 字；占位格式说明只在 AI 使用说明中豁免，其他文件的空占位报 `empty_placeholder`（需要复核）；执行说明补检索步骤的前台运行与超时重跑，第 0 步告知检索式会发送到 wispaper 服务，可选输入补 `WIS_MCP_URL`、`WIS_MCP_TOKEN`。
 - 本分支未写 BAC 记录，经负责人同意。
 - 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。

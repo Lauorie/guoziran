@@ -593,12 +593,31 @@ class NonstandardPlaceholderTest(unittest.TestCase):
         self.assertEqual(self._errors(self._root("尺码 XXXL 的口罩。\n")), [])
         self.assertIn("XXX", "".join(load_config()["consistency"]["nonstandard_placeholder_patterns"]))
 
-    def test_placeholder_format_reference_is_not_a_placeholder(self) -> None:
+    def _ai_declaration_root(self, text: str) -> Path:
+        root = self._root("摘要。\n")
+        (root / "proposal" / "ai_declaration.md").write_text(text, encoding="utf-8")
+        write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
+            {"file": "proposal/ai_declaration.md", "writer": "nsfc-proposal", "written_with_case_version": None}]})
+        return root
+
+    def test_placeholder_format_reference_is_exempt_in_ai_declaration(self) -> None:
         for text in ("未提供的内容以【待补充：……】标出。\n", "格式为【待补充：...】。\n", "格式为【待补充：  】。\n"):
-            root = self._root(text)
-            report = check_project(root)
+            report = check_project(self._ai_declaration_root(text))
+            self.assertEqual([f for f in report.errors if f.kind == "placeholder_unlisted"], [], text)
+            self.assertEqual([f for f in report.placeholders if f.file == "proposal/ai_declaration.md"], [], text)
+            self.assertEqual([f for f in report.needs_review if f.kind == "empty_placeholder"], [], text)
+
+    def test_empty_placeholder_in_writing_sections_goes_to_needs_review(self) -> None:
+        for text in ("未提供的内容以【待补充：……】标出。\n", "格式为【待补充：...】。\n", "格式为【待补充：  】。\n"):
+            report = check_project(self._root(text))
+            reviews = [f for f in report.needs_review if f.kind == "empty_placeholder"]
+            self.assertEqual([f.file for f in reviews], ["NSFC-ABSTRACTS.md"], text)
+            self.assertIn("没有写明要补什么", reviews[0].detail)
             self.assertEqual([f for f in report.errors if f.kind == "placeholder_unlisted"], [], text)
             self.assertEqual([f for f in report.placeholders if f.file == "NSFC-ABSTRACTS.md"], [], text)
+        tex = check_project(self._root("摘要。\n", body_11="多模态影像信息\\cite{wu2021value}。【待补充：……】\n"))
+        self.assertEqual([f.file for f in tex.needs_review if f.kind == "empty_placeholder"], ["extraTex/1.1.立项依据.tex"])
 
     def test_real_unlisted_placeholder_still_errors(self) -> None:
         root = self._root("前期结果【待补充：未列入的条目】。\n")

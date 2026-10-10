@@ -8,7 +8,9 @@
 from __future__ import annotations
 
 import json
+import re
 import time
+import urllib.parse
 import uuid
 from typing import Any, Callable, Dict, List, Optional
 
@@ -41,6 +43,23 @@ class McpRateLimited(McpError):
 
 
 PostFn = Callable[[Dict[str, Any], Dict[str, str]], Any]
+
+REDACTED = "<已隐藏>"
+ERROR_TEXT_LIMIT = 200
+
+
+def redact_secrets(text: str, url: str = "", token: str = "") -> str:
+    """遮盖文字中的 token、完整地址与主机名（地址与主机名不区分大小写；空值跳过）。"""
+    token = (token or "").strip()
+    text = text.replace(token, REDACTED) if token else text
+    try:
+        host = urllib.parse.urlparse(url or "").hostname or ""
+    except ValueError:
+        host = ""
+    for secret in (url, host):
+        if secret:
+            text = re.sub(re.escape(secret), REDACTED, text, flags=re.IGNORECASE)
+    return text
 
 
 def _decode_body(resp: Any) -> str:
@@ -125,6 +144,10 @@ class McpClient:
         self._post: PostFn = post or self._default_post
         self._http: Optional[requests.Session] = None
 
+    def _clip(self, text: Any, limit: int = ERROR_TEXT_LIMIT) -> str:
+        """先脱敏再截断，避免地址或 token 被截在边界上而漏过遮盖。"""
+        return redact_secrets(str(text), self.url, self.token)[:limit]
+
     # ------------------------------------------------------------ transport
     def _default_post(self, payload: Dict[str, Any], headers: Dict[str, str]) -> requests.Response:
         if self._http is None:
@@ -164,15 +187,15 @@ class McpClient:
         text = _decode_body(resp)
         where = f" [request-id {request_id}]" if request_id else ""
         if status == 401:
-            raise McpAuthError(f"HTTP 401: {text.strip()[:200] or 'unauthorized'}{where}")
+            raise McpAuthError(f"HTTP 401: {self._clip(text.strip()) or 'unauthorized'}{where}")
         if status == 404 and self.session_id:
             # Streamable HTTP：会话过期时服务端回 404，须重新 initialize。
             self.session_id = None
             raise McpError("HTTP 404: MCP session expired")
         if status == 429:
-            raise McpRateLimited(f"HTTP 429: {text.strip()[:200]}{where}")
+            raise McpRateLimited(f"HTTP 429: {self._clip(text.strip())}{where}")
         if status >= 400:
-            raise McpError(f"HTTP {status}: {text.strip()[:200]}{where}")
+            raise McpError(f"HTTP {status}: {self._clip(text.strip())}{where}")
         if notify:
             return None
         msg = _parse_sse_or_json(text)
@@ -180,7 +203,7 @@ class McpClient:
             raise McpError(f"{method}: empty or unparsable response body{where}")
         if "error" in msg:
             err = msg["error"] or {}
-            raise McpError(f"{method}: JSON-RPC error {err.get('code')}: {err.get('message')}{where}")
+            raise McpError(f"{method}: JSON-RPC error {err.get('code')}: {self._clip(err.get('message'))}{where}")
         return msg.get("result"), getattr(resp, "headers", {}) or {}
 
     # -------------------------------------------------------------- session
@@ -244,7 +267,7 @@ class McpClient:
             data, is_error = self._unwrap_tool_result(result)
             if is_error:
                 code = str(data.get("code") or "")
-                message = f"{name}: error {code}: {data.get('message')} [request-id {request_id}]"
+                message = f"{name}: error {code}: {self._clip(data.get('message'))} [request-id {request_id}]"
                 if code == CODE_AUTH:
                     raise McpAuthError(message)
                 if code == CODE_RATE_LIMIT:
@@ -254,6 +277,6 @@ class McpClient:
                 # 40001/40002/50001：重试同一请求只会得到同一个错误，直接抛。
                 raise McpError(message)
             if agent_err := self._agent_error(data):
-                raise McpError(f"{name}: backend agent failed: {agent_err} [request-id {request_id}]")
+                raise McpError(f"{name}: backend agent failed: {self._clip(agent_err)} [request-id {request_id}]")
             return data
         raise last_exc or McpError(f"{name}: retries exhausted")
