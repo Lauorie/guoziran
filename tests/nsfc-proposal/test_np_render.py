@@ -59,6 +59,25 @@ class InfoFormTest(unittest.TestCase):
         self.assertIn("数据来源与验证：独立外部队列", form)  # Updated label
         self.assertNotIn("见第 7 项", form)  # Item 10 should show constraints, not reference
 
+    def test_content_form_duration_follows_project_type(self) -> None:
+        case = valid_case()
+        case["project"]["type"] = "面上项目"
+        form = info_form(case, valid_plan(), "nsfc-research-content-writer")
+        self.assertIn("10. **研究期限与分年硬约束**：研究期限 4 年（项目类型：面上项目）；按 4 年分年度写，不跨年", form)
+        self.assertNotIn("三年", form)
+        self.assertNotIn("项目类型未写明", form)
+        young = info_form(valid_case(), valid_plan(), "nsfc-research-content-writer")  # 青年科学基金
+        self.assertIn("研究期限 3 年", young)
+        self.assertNotIn("项目类型未写明", young)
+
+    def test_content_form_duration_defaults_when_type_missing(self) -> None:
+        case = valid_case()
+        case["project"]["type"] = ""
+        form = info_form(case, valid_plan(), "nsfc-research-content-writer")
+        self.assertIn("研究期限 3 年", form)
+        self.assertIn("按 3 年分年度写", form)
+        self.assertIn("项目类型未写明，按 3 年；请在 assumptions.md 记一条 AI 拟定项", form)
+
     def test_foundation_form_marks_missing_items_as_placeholders(self) -> None:
         form = info_form(valid_case(), valid_plan(), "nsfc-research-foundation-writer")
         self.assertIn("## 4. 风险清单", form)

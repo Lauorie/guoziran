@@ -30,4 +30,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 引用台账是只追加的 JSONL 事件日志，没有用 BSK：这是申请人选定的设计（借用 academic-literature 的做法），本机没有 BSK 源码可调用；设计文档 §11 注明了这一例外。
 - `citation_ledger` 的 `add` 记录只在解析出的 DOI 与检索记录 DOI 规范化后相同、或记录本来没有 DOI 时保存记录的摘要，否则摘要记 null（来源：终审）。
 - 执行说明：申请人论文的记录写入 `applicant.jsonl`，与检索记录合并后只运行一次 `bib_resolve`；篇幅检查加 `--out-dir`；检索式条数引用 `literature.keyword_queries`、`literature.bundle_max_queries`；S 编号误报的处理办法（来源：终审）。
+- content-writer 信息表第 10 项改为「研究期限与分年硬约束」：年数由项目类型经 `SK/nsfc-research-content-writer/scripts/plan_years.py` 算出，不再写死三年；类型匹配不到时按 3 年，并提示在 assumptions.md 记一条 AI 拟定项。第 6.2 步的检查命令加 `--project-type`；`references/section_boundaries.md` 的年度研究计划一行同步。
 - 本分支未写 BAC 记录，经负责人同意。

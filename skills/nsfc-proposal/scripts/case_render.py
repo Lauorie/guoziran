@@ -5,10 +5,13 @@
 
 from __future__ import annotations
 
+import functools
+import importlib.util
+from types import ModuleType
 from typing import Any, Mapping
 
 from case_validate import PLAN_KEYWORDS
-from proposal_common import ProposalError
+from proposal_common import SKILL_ROOT, ProposalError
 
 WRITERS = ("nsfc-justification-writer", "nsfc-research-content-writer", "nsfc-research-foundation-writer")
 NONE = "（无）"
@@ -23,6 +26,8 @@ FEASIBILITY_GROUPS = (
     ("## 3. 条件与资源", {"condition"}),
 )
 RISK_GROUPS = (("### 4.1 技术风险", "technical"), ("### 4.2 进度风险", "schedule"), ("### 4.3 资源风险", "resource"))
+# 研究期限的年数表只在 content-writer 的 config.yaml（yearly_plan），由它的 plan_years.py 读取
+PLAN_YEARS_PY = SKILL_ROOT.parent / "nsfc-research-content-writer" / "scripts" / "plan_years.py"
 
 
 def _t(value: Any) -> str:
@@ -70,6 +75,30 @@ def _ai_marker(item: Mapping[str, Any]) -> str:
 
 def _placeholder(text: str) -> str:
     return f"【待补充：{text}】"
+
+
+@functools.lru_cache(maxsize=1)
+def _plan_years() -> ModuleType:
+    """按路径加载 content-writer 的 plan_years.py；用独立模块名，不改 sys.path。"""
+    spec = importlib.util.spec_from_file_location("nrcw_plan_years", PLAN_YEARS_PY)
+    if spec is None or spec.loader is None or not PLAN_YEARS_PY.is_file():
+        raise ProposalError(f"找不到研究期限脚本：{PLAN_YEARS_PY.name}（nsfc-research-content-writer/scripts）")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _duration_line(case: Mapping[str, Any]) -> str:
+    project = case.get("project") if isinstance(case.get("project"), Mapping) else {}
+    project_type = _t(project.get("type"))
+    try:
+        years, matched = _plan_years().duration_years(project_type)
+    except ValueError as exc:
+        raise ProposalError(f"nsfc-research-content-writer 的 yearly_plan 配置有误：{exc}") from exc
+    line = f"研究期限 {years} 年（项目类型：{project_type or '未写明'}）；按 {years} 年分年度写，不跨年"
+    if not matched:
+        line += f"；项目类型未写明，按 {years} 年；请在 assumptions.md 记一条 AI 拟定项"
+    return line
 
 
 def render_case_md(case: Mapping[str, Any], evidence: Mapping[str, Any] | None, plan: Mapping[str, Any] | None) -> str:
@@ -206,7 +235,7 @@ def _content_form(case: Mapping[str, Any], plan: Mapping[str, Any] | None) -> st
         "7. **年度资源约束**：", _bullets(constraints, "   "),
         "8. **任务分解**：", _bullets(breakdown, "   "),
         "9. **创新对照坐标系**：", _bullets(routes, "   "),
-        "10. **三年计划的硬约束**：", _bullets(constraints, "   "),
+        f"10. **研究期限与分年硬约束**：{_duration_line(case)}", _bullets(constraints, "   "),
         "11. **关键风险与备选路线**：", _bullets(risks, "   "),
         "", "## 可选补充", _bullets(_section_notes(plan, "nsfc-research-content-writer") + ["子目标编号只用于内部规划，正文用自然语言指代"]),
     ]
