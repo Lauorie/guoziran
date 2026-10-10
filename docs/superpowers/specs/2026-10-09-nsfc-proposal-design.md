@@ -335,7 +335,7 @@ python3 skills/research-literature-search/scripts/search_runner.py run \
   --host-results <按 query_id 归档的 wispaper 原始返回>
 ```
 
-- 某条检索式在 `--host-results` 中有结果时，`mcp` 位置记为成功，来源写 `wispaper`；结果数不足时，按 `run` 原有的补充规则（约 70% 阈值）继续用 OpenAlex 等补足。没有结果时，仍记为「跳过」。
+- 某条检索式在 `--host-results` 中有结果时，`mcp` 位置记为成功，来源写 `wispaper`；nsfc-proposal 传 `--provider-order mcp`，结果数不足时不向其他检索源补足。没有结果时，仍记为「跳过」。
 - 每条记录转为 `rls.paper.v1`。`quick_search` 的摘要片段不作为摘要：`abstract` 置空、`abstract_status` 为 `missing`，片段原文存入 `provenance.host_abstract_snippet`，并加 `abstract_snippet_only` 警告；之后由 `enrich-abstracts` 补全。
 - 去重、manifest 和 `validate_bundle` 沿用 `run` 的现有逻辑，不另写一套。
 - 不传 `--host-results` 时，`run` 的行为与改动前一致。
@@ -355,7 +355,7 @@ python3 skills/research-literature-search/scripts/search_runner.py run \
 
 1. **取 DOI**：用规范记录中的 DOI。wispaper 记录的 DOI 已由 research-literature-search 在导入时从链接中提取。
 2. **有 DOI**：查询 CrossRef，取标题、全部作者、期刊、年、卷、期、页码、DOI。
-3. **无 DOI**：在 CrossRef 按标题检索，取首条结果。规范化后的标题相似度达到 0.92 且年份相差不超过 1 年，才算匹配。标题被截断（含「…」）时，只比较已知的前缀。CrossRef 不匹配时，按同样规则查 OpenAlex。
+3. **无 DOI**：在 CrossRef 按标题检索，取首条结果。规范化后的标题相似度达到 0.92 且年份相差不超过 1 年，才算匹配。标题被截断（含「…」）时，只比较已知的前缀。CrossRef 不匹配时记为未核实，进入线索清单。
 4. **生成 bibkey**：第一作者姓 + 年份 + 标题首个实词，小写 ASCII。重名时加 a、b 后缀。
 5. **写入 `.bib`**：目标文件取 `main.tex` 及其 `\input` 文件中 `\bibliography{}` 指向的文件。写入前备份；DOI 已存在的条目跳过。`--task-root` 必须是 `.bensz-api/task-*/` 目录，其父目录名为 `.bensz-api`。BibTeX 转义只剥离已知标记标签（i、b、em、strong、sub、sup、scp、span、mml:*），并在 title、author、journal 中转义 `\ { } ~ ^ & % $ # _`；doi 字段保持原样。
 6. **未匹配的**：写入 `literature_leads.md`，标 `[unverified]`，正文不引用。
@@ -371,7 +371,7 @@ AI 阅读完整摘要，填写 `evidence_map.yaml` 的 `evidence` 和 `support`�
 | 情况 | 处理 |
 |---|---|
 | wispaper 不可用 | 用 `search_runner.py run` 的现有检索源 |
-| CrossRef 和 OpenAlex 都不可达 | 不新增 `.bib` 条目；全部候选进入线索；相关论断记为 `unsupported` |
+| CrossRef 不可达 | 不新增 `.bib` 条目；全部候选进入线索；相关论断记为 `unsupported` |
 | 完全离线 | 只写检索式；所有文献类论断记为 `unsupported` |
 
 ## 7. 改动清单
@@ -468,7 +468,7 @@ nsfc-abstract 只在 `SKILL.md` 中补一句：存在科学论证时，科学问
 
 - 无人值守跑一次全流程，写出 1.1、2.1、2.2、2.3、3.1、3.2、摘要和 4.5。
 - 交互模式跑一次，在确认点回答「修改：删掉科学问题二」。检查三件事：`version` 加一；`scientific_case.md` 重新生成；已写章节被标为依据旧版本。
-- 把 `literature.use_wispaper` 设为 `false`，跑一次文献步骤，检查是否改走 OpenAlex。
+- 把 `literature.use_wispaper` 设为 `false`，跑一次文献步骤，检查是否不检索、文献类论断保持 `unsupported`。
 
 通过标准：
 
