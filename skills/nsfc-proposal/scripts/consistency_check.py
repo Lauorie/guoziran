@@ -130,12 +130,12 @@ _TRAILING_ZEROS_RE = re.compile(r"(?<![\d.])(\d+)\.(\d+)(?!\d|\.\d)")
 _NUMBER_WORDS = {w: str(i) for i, w in enumerate(
     "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty".split())}
 _NUMBER_WORD_RE = re.compile(r"(?<![\w-])(" + "|".join(w for w in _NUMBER_WORDS if w not in ("zero", "one")) + r")(?!\w|-(?:one|two|three|four|five|six|seven|eight|nine)\b)", re.IGNORECASE)
-_LATEX_LENGTH_RE = re.compile(r"\s?(?:em|pt|ex)(?![A-Za-z])")
+_LATEX_LENGTH_RE = re.compile(r"\s?(?:em|pt|ex)(?![A-Za-z])|\s?\\(?:text|line|column)width(?![A-Za-z])")
 
 
 def sentence_numbers(sentence: str) -> list[str]:
     """引用句中需要对照摘要的数字：百分数（含 %）、小数、带单位的整数；排除年份、年后的月份、LaTeX 长度。"""
-    text = _THOUSANDS_RE.sub("", REF_RE.sub("", CITE_RE.sub("", sentence)))
+    text = _THOUSANDS_RE.sub("", REF_RE.sub("", CITE_RE.sub("", strip_includegraphics(sentence))))
     found: list[str] = []
     spans: list[tuple[int, int]] = []
     for match in _CITED_NUMBER_RE.finditer(text):

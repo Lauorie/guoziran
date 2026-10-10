@@ -341,6 +341,16 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertEqual(sentence_numbers("\\hspace{1.5em}\\vspace{2.5pt}\\kern 0.5ex 结果\\cite{k}"), [])
         self.assertEqual(sentence_numbers("AUC 为 0.5\\cite{k}"), ["0.5"])
 
+    def test_figure_width_is_not_a_cited_number(self) -> None:
+        from consistency_check import sentence_numbers
+        block = (
+            "\\begin{figure}\n\\centering\n\\includegraphics*[width=0.95\\textwidth]{a.png}\n"
+            "\\caption{研究框架图}\n\\end{figure}\n既往研究报告 AUC 为 0.86\\cite{k}"
+        )
+        self.assertEqual(sentence_numbers(block), ["0.86"])
+        self.assertEqual(sentence_numbers("宽 0.95\\linewidth 与 0.9\\columnwidth 的版面\\cite{k}"), [])
+        self.assertEqual(sentence_numbers("\\includegraphics[width=0.95\n\\textwidth]{a.png}\\cite{k}"), [])
+
     def test_cite_key_digits_are_ignored(self) -> None:
         self.assertEqual(self._number_details("AUC 为 0.86\\cite{wu2021value}。\n"), [])
 
