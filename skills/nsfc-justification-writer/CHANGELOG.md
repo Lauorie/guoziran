@@ -34,6 +34,7 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - README 删去版本号，版本以 `config.yaml` 为准。
 - `--task-root` 还要求父目录名为 `.bensz-api`，与 nsfc-proposal 的 `bib_resolve.py` 一致。
 - coach 提示词不再禁止新增引用：只要文献已核验、已入 .bib 并在引用台账中有记录即可引用；不再禁止新增配置允许的标题（来源：申请人 2026-10-10 决定）。
+- `refs`、`review`、`coach` 的 `--out` 指向不存在的目录时先建目录；此前报 FileNotFoundError（来源：nsfc-proposal fresh-1 验证运行）。
 
 ### Added（新增）
 - 与 nsfc-proposal 协作：读取 `proposal/` 下的信息表、篇幅与章节边界；Tier2 追加措辞强度与章节边界两项检查。

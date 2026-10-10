@@ -94,6 +94,7 @@
 - 精简根目录 `AGENTS.md`：移除失效或过细的模板目录说明，保留责任分层、任务工作区、BAC 贡献记录、Skill 开发、验证、文档同步和安全边界等真正影响协作的规则。
 
 - 按当前 Skill 文档规范统一 `skills/*/SKILL.md`：frontmatter 仅保留 `name` 与 `description`，移除标题数字前缀和重复元数据，保持现有触发语义与执行正文不变；新增 `scripts/validate_skill_docs.py` 作为 500 行、frontmatter、标题结构和版本标记校验入口。
+- `nsfc-justification-writer` 1.4.0：`refs`、`review`、`coach` 的 `--out` 先建目录。
 
 ### Changed（变更）
 

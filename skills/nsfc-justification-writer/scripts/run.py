@@ -172,6 +172,14 @@ def _write_json(path: Path, data: Dict[str, Any]) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _write_out(path: str, text: str) -> None:
+    """把 markdown 写到 --out 指定的文件；目录不存在时先建。"""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"已输出：{path}")
+
+
 def _read_body_file(body_file: Optional[str]) -> str:
     if body_file is None or body_file == "-":
         return sys.stdin.read()
@@ -292,8 +300,7 @@ def cmd_refs(args: argparse.Namespace) -> int:
         else:
             md = md.rstrip() + "\n\n## Crossref（可选联网）校验\n\n- ✅ 未发现明显失败（仍建议抽查关键引用）\n"
     if args.out:
-        Path(args.out).write_text(md, encoding="utf-8")
-        print(f"已输出：{args.out}")
+        _write_out(args.out, md)
         return 0
     print(md, end="")
     return 0
@@ -651,8 +658,7 @@ def cmd_review(args: argparse.Namespace) -> int:
         include_tier2=True,
     )
     if args.out:
-        Path(args.out).write_text(md, encoding="utf-8")
-        print(f"已输出：{args.out}")
+        _write_out(args.out, md)
         return 0
     print(md, end="")
     return 0
@@ -669,8 +675,7 @@ def cmd_coach(args: argparse.Namespace) -> int:
     if args.topic:
         md = coord.recommend_examples(query=str(args.topic), top_k=int(args.top_k)) + "\n" + md
     if args.out:
-        Path(args.out).write_text(md, encoding="utf-8")
-        print(f"已输出：{args.out}")
+        _write_out(args.out, md)
         return 0
     print(md, end="")
     return 0
