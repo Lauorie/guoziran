@@ -21,7 +21,6 @@
 - `nsfc-research-foundation-writer` 0.2.0、`nsfc-abstract` 2.1.3：接入 nsfc-proposal。
 - `research-literature-search` 1.1.0：`run` 新增 `--host-results`，接收 wispaper 结果。
 - `research-literature-search` 1.1.0：`enrich-abstracts` 遇到重试后仍报 429 的服务，本次运行的后续记录跳过它，汇总写 `exhausted_providers`，`attempts` 计数不含跳过的服务。
-- `nsfc-length-aligner`：立项依据与研究内容的字数下限下调为 4500、7000，合计下限 18000；`nsfc-research-content-writer` 推荐字数同步。
 - `.gitignore`：放行 tests/nsfc-justification-writer、tests/nsfc-research-content-writer、tests/research-literature-search、tests/nsfc-proposal 下的测试脚本。
 - 终审修复：`nsfc-proposal` 的 `init` 不再登记 `.bib` 中已有的条目，`citation_ledger.py register-user` 改为 `--key`（全部登记须加 `--all`），没有引用台账改为必须修正，一致性检查识别跨行 `\cite`；`nsfc-research-content-writer` 新增 `checks.allowed_s_tokens`；`nsfc-justification-writer` 的 `--task-root` 须在 `.bensz-api` 下；`research-literature-search` 的 manifest 版本号改读 `config.yaml`；nsfc-proposal 计划与设计文档去掉本机路径。
 - `nsfc-proposal` 0.1.0：新增 `wispaper_search.py` 与 `wis_mcp_client.py`，经 MCP 会话检索，原始返回逐字存档并汇成 `rls.host_results.v1`，不再由模型手抄检索结果。
@@ -29,9 +28,14 @@
 - `nsfc-proposal` 0.1.0：作图提示词的标签不加括号、引号、书名号；神经或生理信号在动作不同的条件间比较时，设动作匹配的对照；编译命令不带相对路径的 `--project-dir`。
 - `nsfc-proposal` 0.1.0：一致性检查的过程说明词加入「正式申请书」「正式稿」「请申请人」；内文只有省略号的【待补充：……】视为占位格式说明，不计入占位。
 - `nsfc-proposal` 0.1.0：bib_resolve 按 CrossRef/OpenAlex 类型写条目：书章为 @incollection（booktitle、publisher），图书为 @book；其余 @misc 也带 publisher。参考文献样式不渲染 howpublished，书章此前没有出处（来源：funded-2 验证运行）。
-- `nsfc-proposal` 0.1.0：`bib_resolve` 先解 HTML 实体再转义，期刊名不再显示「&amp;」。
 - `nsfc-proposal` 0.1.0：信息表列出 section_plan 中的占位并要求逐字照抄；研究基础的缺失项不再自拟占位文字，同一缺失项只有一种写法（来源：funded-2 验证运行）。
 - `nsfc-proposal` 0.1.0：wispaper 检索的 HTTP 正文与错误信息先脱敏再截断到 200 字；占位格式说明只在 AI 使用说明中豁免，其他文件的空占位报 `empty_placeholder`（需要复核）；执行说明补检索步骤的前台运行与超时重跑，第 0 步告知检索式会发送到 wispaper 服务，可选输入补 `WIS_MCP_URL`、`WIS_MCP_TOKEN`。
+- `nsfc-proposal` 0.1.0：`bib_resolve` 先解 HTML 实体再转义，期刊名不再显示「&amp;」。
+- `nsfc-proposal` 0.1.0：新增 `bib_refresh.py`，按台账 DOI 刷新已写入的 `.bib` 条目，key 与正文引用不变。
+- `nsfc-proposal` 0.1.0：引用句数字核对认摘要中的 percent、per cent 写法；percentage points 不当作 %。
+- `nsfc-justification-writer` 1.4.0：`refs`、`review`、`coach` 的 `--out` 先建目录。
+- `research-literature-search` 1.1.0：`enrich-abstracts` 新增 `--reuse`，沿用前次补到的摘要；nsfc-proposal 第 3 步第 6 项改用它。
+- `nsfc-length-aligner`：立项依据与研究内容的字数下限下调为 4500、7000，合计下限 18000；`nsfc-research-content-writer` 推荐字数同步。
 - 本分支未写 BAC 记录，经负责人同意。
 - 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。
@@ -95,16 +99,12 @@
 - 精简根目录 `AGENTS.md`：移除失效或过细的模板目录说明，保留责任分层、任务工作区、BAC 贡献记录、Skill 开发、验证、文档同步和安全边界等真正影响协作的规则。
 
 - 按当前 Skill 文档规范统一 `skills/*/SKILL.md`：frontmatter 仅保留 `name` 与 `description`，移除标题数字前缀和重复元数据，保持现有触发语义与执行正文不变；新增 `scripts/validate_skill_docs.py` 作为 500 行、frontmatter、标题结构和版本标记校验入口。
-- `nsfc-justification-writer` 1.4.0：`refs`、`review`、`coach` 的 `--out` 先建目录。
 
 ### Changed（变更）
 
 - 统一 `research-literature-radar` 与 `research-literature-interpretation` 的 Agent 展示名及 `research-idea` 任务工作区子目录，避免省略 `research-` 前缀造成命名分裂。
 - `research-idea` 升级至 v0.2.2：默认研究想法报告统一写入 `./docs/ideas/`，并将具体报告文件名从 Skill 触发描述移至输出规范，避免根目录污染与触发元数据冗余。
 - 将尚未上线的 `research-paper-interpretation`、`research-paper-radar` 重命名为 `research-literature-interpretation`、`research-literature-radar`，同步目录、交叉引用、运行路径和系统级安装；不保留旧名兼容。
-- `nsfc-proposal` 0.1.0：新增 `bib_refresh.py`，按台账 DOI 刷新已写入的 `.bib` 条目，key 与正文引用不变。
-- `nsfc-proposal` 0.1.0：引用句数字核对认摘要中的 percent 写法。
-- `research-literature-search` 1.1.0：`enrich-abstracts` 新增 `--reuse`，沿用前次补到的摘要；nsfc-proposal 第 3 步第 6 项改用它。
 
 ## [4.1.0] - 2026-09-03
 
