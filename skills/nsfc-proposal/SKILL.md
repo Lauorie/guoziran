@@ -38,7 +38,7 @@ metadata:
 
 **0. 说明与建目录**
 
-1. 向用户逐项说明将调用的 skill 及其工作，按调用顺序：research-literature-search（检索文献）→ nsfc-justification-writer（立项依据）→ nsfc-research-content-writer（研究内容、特色与创新、年度研究计划）→ nsfc-research-foundation-writer（研究基础、工作条件）→ nsfc-abstract（摘要）。用户只要部分章节时，只列相关的 skill。申请人提供 PDF 材料时，同时告知：PDF 会上传到团队的 WisDoc 服务解析，解析结果存放在该服务的服务器上；申请人说材料不能离开本机时加 `--local-only`（第 1 步）。全自动模式下默认使用 WisDoc，除非申请人材料写明不能外传。告知后不停下等回答。
+1. 向用户逐项说明将调用的 skill 及其工作，按调用顺序：research-literature-search（检索文献）→ nsfc-justification-writer（立项依据）→ nsfc-research-content-writer（研究内容、特色与创新、年度研究计划）→ nsfc-research-foundation-writer（研究基础、工作条件）→ nsfc-abstract（摘要）。用户只要部分章节时，只列相关的 skill。申请人提供 PDF 材料时，同时告知：PDF 会上传到团队的 WisDoc 服务解析，解析结果存放在该服务的服务器上；申请人说材料不能离开本机时加 `--local-only`（第 1 步）。全自动模式下默认使用 WisDoc，除非申请人材料写明不能外传。研究内容的作图说明会发送到 WisImage 生成研究框架图与设计图；没有配置生图服务时不出图，保留占位。告知后不停下等回答。
 2. 宣布唯一任务目录 `T = ./.bensz-api/task-{yyyymmdd-hhmm}-{简短描述}/`，之后不更换。建立 `T/README.md`、`T/shared/` 和 `T/nsfc-proposal/{input,output,log}/`。
 3. 此后每完成一步，在 `T/nsfc-proposal/log/stages.md` 追加一行：时间、步骤、AI 做了什么、产出文件、申请人是否确认。第 8 步据此起草 AI 使用说明。
 
@@ -173,9 +173,9 @@ python3 S/scripts/case.py render --project-root P
      --prompt-file T/nsfc-proposal/output/figures/<名称>.prompt.txt --name <名称> [--aspect-ratio 1:1|16:9]
    ```
 
-   在前台运行，Bash 超时设 600000 ms。框架图的画幅取 `figures.framework_aspect_ratio`，设计图取 `figures.design_aspect_ratio`；不加 `--aspect-ratio` 时，名称含 `framework` 取前者，否则取后者。退出码 0 表示已生成 `P/figures/nsfc-proposal/<名称>.png`；每次运行都记入 `T/nsfc-proposal/output/figures/index.json`。生成后用 Read 读图，按 figure_guide 第 6 节自检；不合格时改写提示词，用新名称（`-v2`、`-v3`）重画，最多 `figures.max_rerenders` 次。退出码不为 0 时按「失败与恢复」处理。
+   在前台运行，Bash 超时设 600000 ms；单张图的总时限 `figures.total_timeout_s`（含重试与等待）小于这个超时。框架图的画幅取 `figures.framework_aspect_ratio`，设计图取 `figures.design_aspect_ratio`；不加 `--aspect-ratio` 时，名称含 `framework` 取前者，否则取后者。退出码 0 表示已生成图片：PNG 存为 `P/figures/nsfc-proposal/<名称>.png`，JPEG 存为 `<名称>.jpg`，以脚本输出的「已生成 ……」一行为准；每次运行都记入 `T/nsfc-proposal/output/figures/index.json`。生成后用 Read 读这个文件，按 figure_guide 第 6 节自检；不合格时改写提示词，用新名称（`-v2`、`-v3`）重画，最多 `figures.max_rerenders` 次。退出码不为 0 时按「失败与恢复」处理。
 
-   写作：用 `--writer nsfc-research-content-writer` 生成信息表，按 `SK/nsfc-research-content-writer/SKILL.md` 执行。先按研究类型选定一组小标题（实验研究：设计、对象与样本量、流程、指标与分析、预期结果与判定；数据驱动研究：数据、方法、验证、判定标准），作为额外几行追加到信息表 `T/nsfc-proposal/output/info_form_research_content.md` 末尾（生成信息表时用 `--out` 指到这个路径），要求每项研究内容用同一组，全章一致，不用加粗的（1）至（10）罗列。通过自检的图，把路径、图注、`\label` 和位置也追加到信息表末尾，作为给 nsfc-research-content-writer 的约束：框架图放在研究内容开头，设计图放在对应研究内容的「设计」小标题下，写法见 figure_guide 第 7 节。出图失败或未配置时，才放占位：没有可用的框架图时，研究内容开头放一处可见占位 `【待补充：图 1 研究框架图——各项研究内容、它们之间的输入输出、对应的科学问题】`；某项研究没有可用的设计图时，按 figure_guide 第 7 节放占位。占位列入占位清单（模板只加载 graphicx，没有 TikZ；图是 WisImage 生成的 PNG，用 `\includegraphics` 插入）。研究方案借用的方法，引用第 3 步入库的方法类文献。写完直接运行 `python3 SK/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root P`，三个文件逐一 `mark-written`。检查脚本加 `--project-type "<项目类型>"`（取 `scientific_case.yaml` 的 `project.type`）；研究期限以 content-writer 的 `yearly_plan` 表为准。检查把正确的专业写法（如「L5–S1」「S100β」）误报为 S 编号时，把该写法加入 `SK/nsfc-research-content-writer/config.yaml` 的 `checks.allowed_s_tokens`，或在 `stages.md` 记录误报；不为通过检查改写正确的专业术语。不用 `run_checks.py`：它先跑 `validate_skill.py`，后者在当前版本中会因打包问题提前退出，检查没有执行。
+   写作：用 `--writer nsfc-research-content-writer` 生成信息表，按 `SK/nsfc-research-content-writer/SKILL.md` 执行。先按研究类型选定一组小标题（实验研究：设计、对象与样本量、流程、指标与分析、预期结果与判定；数据驱动研究：数据、方法、验证、判定标准），作为额外几行追加到信息表 `T/nsfc-proposal/output/info_form_research_content.md` 末尾（生成信息表时用 `--out` 指到这个路径），要求每项研究内容用同一组，全章一致，不用加粗的（1）至（10）罗列。通过自检的图，把路径、图注、`\label`、位置，以及图中的可见标签与数字也追加到信息表末尾，作为给 nsfc-research-content-writer 的约束，让正文与图用同样的名称和数值：`\includegraphics` 用脚本输出的路径；框架图放在研究内容开头，设计图放在对应研究内容的「设计」小标题下，写法见 figure_guide 第 7 节。出图失败或未配置时，才放占位：未配置（退出码 3）或 `figures.enabled` 为 false 时，只在研究内容开头放一处可见占位 `【待补充：图 1 研究框架图——各项研究内容、它们之间的输入输出、对应的科学问题】`；配置了而某张图在重画上限内仍不合格或失败时，框架图放上面这处占位，设计图在对应研究的「设计」（数据驱动研究为「方法」）小标题下放占位，写法见 figure_guide 第 7 节。占位列入占位清单（模板只加载 graphicx，没有 TikZ；图是 WisImage 生成的 PNG，用 `\includegraphics` 插入）。研究方案借用的方法，引用第 3 步入库的方法类文献。写完直接运行 `python3 SK/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root P`，三个文件逐一 `mark-written`。检查脚本加 `--project-type "<项目类型>"`（取 `scientific_case.yaml` 的 `project.type`）；研究期限以 content-writer 的 `yearly_plan` 表为准。检查把正确的专业写法（如「L5–S1」「S100β」）误报为 S 编号时，把该写法加入 `SK/nsfc-research-content-writer/config.yaml` 的 `checks.allowed_s_tokens`，或在 `stages.md` 记录误报；不为通过检查改写正确的专业术语。不用 `run_checks.py`：它先跑 `validate_skill.py`，后者在当前版本中会因打包问题提前退出，检查没有执行。
 6.3 研究基础、工作条件：用 `--writer nsfc-research-foundation-writer` 生成信息表，按 `SK/nsfc-research-foundation-writer/SKILL.md` 执行。写完同样直接运行 `python3 SK/nsfc-research-foundation-writer/scripts/check_project_outputs.py --project-root P`，两个文件逐一 `mark-written`。
 6.4 摘要：按 `SK/nsfc-abstract/SKILL.md` 在 `P` 下写 `NSFC-ABSTRACTS.md`，科学问题与术语以科学论证为准，然后 `mark-written --file NSFC-ABSTRACTS.md`。nsfc-abstract 的结构要求写 1–2 条前期发现。申请人材料写明没有前期结果时（研究基础、预实验为「无」），这一部分改为从认知缺口直接引出假设，不留「【待补充：……前期研究发现】」占位，并在 `stages.md` 记录这一偏离。申请人有前期结果但缺细节时，照常写可见占位。
 
@@ -198,7 +198,7 @@ python3 S/scripts/consistency_check.py --project-root P
   - 处理结果都记入 `stages.md`。
 - 以上列出的类别名（label）是 `consistency_check.py` 人类可读输出中的中文名；`--json` 输出用括号前的 kind 名。
 - 数值对照：运行 `python3 S/scripts/consistency_check.py --project-root P --numbers`，按单位对照数值清单。同一参数（环带宽度、阈值、例数、年限、任务数等）在各章取值必须一致；确有不同时，在正文中写明原因（例如一处是文献报道值，一处是本项目设定值，并写清来源）。处理结果记入 `stages.md`。
-- 语义检查由 AI 完成：各章的科学问题与假设表述一致；研究内容的任务与科学问题一一对应；研究基础覆盖每个任务的可行性。
+- 语义检查由 AI 完成：各章的科学问题与假设表述一致；研究内容的任务与科学问题一一对应；研究基础覆盖每个任务的可行性；读图核对图中标签与数字和正文一致，不一致时改正文或重画（重画用新名称，并改正文中的路径）。
 - 引用句的限定词：逐句对照所引文献的台账摘要，核对验证方式（外部、内部、随机划分）、模型组成（单独、联合）、研究设计（前瞻、回顾）、人群这几类限定词。摘要在 `abstract` 字段读取。摘要没有写明的，按摘要的说法改写。`register-user` 登记的条目没有摘要：限定词按申请人的材料核对，或列入「待核实项」。反例见 `references/evidence_wording.md`。处理结果记入 `stages.md`。
 - 现状句检查：通读立项依据、研究内容、特色与创新、研究基础和摘要中凡叙述研究现状或他人结论的部分，逐句找出叙述研究现状、他人方法或结论、流行病学数据却没有 `\cite` 的句子，按规则 5 补引用，或按 `unsupported` 的两类处理、删去。背景类段落的各句若段末附了待补文献占位，视为合规。也检查有引用的句子是否满足 (b)(c)。处理结果记入 `stages.md`。
 - 同步改动：科学论证中的术语、分组名称、研究任务数改过后，用 `grep` 在全部正文和 `assumptions.md` 中查旧说法，逐处改成新说法。
@@ -263,10 +263,10 @@ python3 S/scripts/consistency_check.py --project-root P
 | `materials.py` 超时、被打断，或警告 WisDoc 超时、连接失败 | 重跑同一命令：已完成的文件命中缓存，不再上传；仍失败的 PDF 稍后只对该文件加 `--no-cache` 重跑，期间按本机文字（`local.txt`）继续 |
 | 材料解析警告「WisDoc 解析失败（服务器返回的地址不在允许范围内）」 | 已自动用本机文字。WisDoc 返回的结果地址或图片地址不是网关主机、其子域名或同一上级域名下的主机时会被拒绝；确认该主机可信后，把它写进 `WISDOC_ALLOWED_HOSTS`（环境变量或 `.env`，逗号分隔），再只对该 PDF 加 `--no-cache` 重跑 |
 | 材料解析警告「WisDoc 漏字（覆盖率 xx%）」 | 不必重跑：正文以 `local.txt` 为准，表格与图看 `wisdoc.md`；怀疑是 WisDoc 偶发问题时，只对该文件加 `--no-cache` 重跑一次 |
-| `figures.py` 退出码 3（未配置），或 `figures.enabled` 为 false | 不出图，正文放占位（6.2）；报告写明未出图及原因 |
+| `figures.py` 退出码 3（未配置），或 `figures.enabled` 为 false | 不出图，只放研究框架图一处占位（6.2）；报告写明未出图及原因 |
 | 出图失败，类别 `credit`（额度不足） | 停止出图；已通过自检的图照用，其余放占位；报告写明 |
-| 出图失败，类别 `no_image`、`bad_image` | 改写提示词，换名重画，计入 `figures.max_rerenders` |
-| 出图失败，类别 `http_5xx`、`network`（脚本已重试 1 次）、`http_4xx`、`too_large` | 不再重试，该图放占位；类别记入 `stages.md` 与报告 |
+| 出图失败，类别 `no_image`、`bad_image`、`unsupported_format`（返回的不是 PNG 或 JPEG） | 改写提示词，换名重画，计入 `figures.max_rerenders` |
+| 出图失败，类别 `http_5xx`、`network`、`timeout`（脚本已在总时限内重试 1 次）、`http_4xx`、`too_large` | 不再重试，该图放占位；类别记入 `stages.md` 与报告 |
 | 文献服务限流 | `bib_resolve` 与 `enrich-abstracts` 自动退避重试；仍未解析的记录稍后只对未解析的子集重跑 `bib_resolve`（未解析记录见 `T/nsfc-proposal/output/bib_resolve.json` 中 status 为 unresolved 的 outcomes；按 record_id 从 `bib_records.jsonl` 取出，另存为 JSONL 作 `--records`），不重跑已写入的记录 |
 
 ## 约束
