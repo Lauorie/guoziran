@@ -38,9 +38,11 @@ class PlaceholderStyleTest(unittest.TestCase):
         self.assertNotIn("instead of", proc.stderr)
 
     def test_old_placeholder_points_to_new_style(self) -> None:
-        proc = run_check(RISKS + "[请补充：X]\n")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("use 【待补充：...】 instead of", proc.stderr)
+        for legacy in ("[请补充：X]", "[需补充：X]"):
+            with self.subTest(legacy=legacy):
+                proc = run_check(RISKS + legacy + "\n")
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                self.assertIn("use 【待补充：...】 instead of", proc.stderr)
 
     def test_clean_text_has_no_placeholder_warning(self) -> None:
         proc = run_check(RISKS)

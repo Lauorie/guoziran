@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - 在线核验 DOI 只查 Crossref，删去 OpenAlex。
+- 文献摘要的 venue 对学位论文取 `school`。
 
 ## [0.1.1] - 2026-02-27
 

@@ -197,6 +197,9 @@ class McpOnlyBundleTests(unittest.TestCase):
     def test_fallback_flag_true_with_other_provider_and_fallback(self) -> None:
         self.assertIs(self._fallback_flag(["mcp", "semantic_scholar"], True), True)
 
+    def test_fallback_flag_false_with_single_non_host_source(self) -> None:
+        self.assertIs(self._fallback_flag(["semantic_scholar"], True), False)
+
     def test_fallback_flag_false_when_fallback_disabled(self) -> None:
         self.assertIs(self._fallback_flag(["mcp", "semantic_scholar"], False), False)
 

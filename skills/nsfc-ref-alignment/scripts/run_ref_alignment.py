@@ -63,7 +63,7 @@ def _entry_digest(e: BibEntry, project_root: Path, limits: Dict[str, int]) -> Di
         "title": title,
         "author": e.get("author"),
         "year": e.get("year") or e.get("date"),
-        "venue": e.get("journal") or e.get("booktitle") or e.get("publisher"),
+        "venue": e.get("journal") or e.get("booktitle") or e.get("publisher") or e.get("school"),
         "doi": e.get("doi"),
         "url": e.get("url"),
         "abstract": abstract,

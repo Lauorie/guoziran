@@ -257,6 +257,10 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
 
 
 def cmd_wordcount(args: argparse.Namespace) -> int:
+    info_form = getattr(args, "info_form", None)
+    if info_form and not Path(info_form).is_file():
+        print(f"✗ --info-form 文件不存在：{info_form}", file=sys.stderr)
+        return 2
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
     coord = HybridCoordinator(skill_root=skill_root, config=config)

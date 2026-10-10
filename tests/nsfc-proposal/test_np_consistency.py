@@ -607,7 +607,7 @@ class NonstandardPlaceholderTest(unittest.TestCase):
         self.assertEqual(self._errors(root), [])
 
     def test_other_variants_and_config(self) -> None:
-        for text in ("数据量 [TBD]。", "结果［待补充］。", "样本 XXX 例。", "【请补充：样本量】"):
+        for text in ("数据量 [TBD]。", "结果［待补充］。", "样本 XXX 例。", "【请补充：样本量】", "成员 [需补充：项目组成员]。"):
             self.assertEqual(len(self._errors(self._root(text + "\n"))), 1, text)
         self.assertEqual(self._errors(self._root("尺码 XXXL 的口罩。\n")), [])
         self.assertIn("XXX", "".join(load_config()["consistency"]["nonstandard_placeholder_patterns"]))

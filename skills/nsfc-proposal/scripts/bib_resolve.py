@@ -281,7 +281,7 @@ def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Setting
         return None, None, "；".join(failures + ["记录没有标题"])
     query = re.sub(r"\s+", " ", ELLIPSIS_RE.sub(" ", title)).strip()
     try:
-        data = _get_json(session, CROSSREF_WORKS, {"query.bibliographic": query, "rows": 5}, settings)
+        data = _get_json(session, CROSSREF_WORKS, {"query.bibliographic": query, "rows": 10}, settings)
     except (requests.RequestException, ValueError) as exc:
         failures.append(f"CrossRef 标题检索失败（{failure_label(exc)}）")
         return None, None, "；".join(failures)

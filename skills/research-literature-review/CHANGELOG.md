@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- OpenAlex 适配器移入本 skill（`scripts/openalex_provider.py`），由本 skill 注入 research-literature-search；返回先转成通用字段再交给 research-literature-search。记录内容有两处变化：没有 DOI 的记录不再带 `openalex_id`，`record_id` 改为按标题生成；`candidates_raw.jsonl` 中不再保存 OpenAlex 原始返回。
+- OpenAlex 适配器移入本 skill（`scripts/openalex_provider.py`），由本 skill 注入 research-literature-search；返回先转成通用字段再交给 research-literature-search。记录内容有三处变化：记录不再带 `openalex_id`（`identifiers` 中也没有 `openalex`），OpenAlex ID 只留在 `sources[].provider_record_id`；没有 DOI 的记录，`record_id` 改为按标题生成；`candidates_raw.jsonl` 中不再保存 OpenAlex 原始返回。
 - 补摘要也注入本 skill 的 OpenAlex 适配器，与检索一致。
 
 ### Changed（相关性驱动选文与轻量查新 - 2026-09-15）

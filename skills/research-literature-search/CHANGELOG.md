@@ -22,6 +22,7 @@
 - 删除 OpenAlex 检索源、补摘要来源与 `openalex` 标识符；默认顺序为 mcp、Semantic Scholar、Crossref。旧 bundle 中的 `openalex_id` 字段不影响校验。
 - `enrich-abstracts` 在固定来源之后，也按标题调用调用方注入的其他来源。
 - manifest 的 `fallback_enabled` 只在检索顺序含宿主以外的来源时为真。
+- manifest 的 `fallback_enabled` 还要求检索顺序至少含两个来源。
 
 - 本分支未写 BAC 记录，经负责人同意。
 

@@ -44,6 +44,18 @@ class WordcountTargetTest(unittest.TestCase):
         out = run_wordcount(self.base, "--project-root", str(self.proj))
         self.assertEqual((out["target"], out["tolerance"], out["source"]), (7250, 2750, "config_default"))
 
+    def test_missing_info_form_is_an_input_error(self) -> None:
+        env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+        missing = self.base / "nope.md"
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "--no-user-override", "wordcount", "--project-root", str(self.proj),
+             "--info-form", str(missing)],
+            cwd=self.base, env=env, capture_output=True, text=True, timeout=120,
+        )
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("--info-form 文件不存在", proc.stderr)
+        self.assertIn(str(missing), proc.stderr)
+
     def test_info_form_range_is_used(self) -> None:
         form = self._form("字数限制：4500–10000 字\n")
         out = run_wordcount(self.base, "--project-root", str(self.proj), "--info-form", str(form))
