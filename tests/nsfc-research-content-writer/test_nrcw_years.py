@@ -31,6 +31,11 @@ class DurationYearsTest(unittest.TestCase):
             "青年科学基金项目（C类）": (3, True),
             "地区科学基金项目": (4, True),
             "重点项目": (5, True),
+            "青年科学基金项目（A类）": (5, True),
+            "国家杰出青年科学基金": (5, True),
+            "青年科学基金项目（B类）": (3, True),
+            "重点支持领域的面上项目": (4, True),
+            "重大项目": (5, True),
             "": (3, False),
             "联合基金": (3, False),
         }
@@ -111,6 +116,21 @@ class CheckerYearsTest(unittest.TestCase):
             res = self.run_checker(root, "--project-type", "地区科学基金项目")
             self.assertNotEqual(res.returncode, 0)
             self.assertIn("第5年", res.stderr)
+
+    def test_year_du_not_counted_as_year(self):
+        # 「第N年度」不算第N年的标题
+        yearly = "第一年度：任务。\n第2年度：任务。\n第三年：任务。\n"
+        with tempfile.TemporaryDirectory() as d:
+            root = _project(Path(d), yearly)
+            res = self.run_checker(root)
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("第1年", res.stderr)
+            self.assertIn("第2年", res.stderr)
+            self.assertNotIn("第3年", res.stderr)
+        with tempfile.TemporaryDirectory() as d:
+            root = _project(Path(d), THREE_YEARS + "第4年度经费另行说明。\n")
+            res = self.run_checker(root, "--years", "3")
+            self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
 
     def test_unmatched_type_uses_default_and_warns(self):
         with tempfile.TemporaryDirectory() as d:

@@ -8,8 +8,9 @@ def extract_yaml_value_under_block(lines: Iterable[str], block_key: str, key: st
     """
     Minimal YAML extractor for a scalar value under a top-level mapping block.
 
-    This skill intentionally avoids external YAML dependencies; keep this helper
+    Reads flat scalars and lists from config.yaml without PyYAML; keep this helper
     small and predictable, and only support the patterns we generate in config.yaml.
+    The nested yearly_plan block is read with PyYAML in plan_years.py.
     """
     in_block = False
     block_indent: int | None = None

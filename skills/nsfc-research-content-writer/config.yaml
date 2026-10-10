@@ -55,7 +55,10 @@ quality_contract:
 yearly_plan:
   # 按项目类型中的关键词定研究期限（年）；按顺序匹配，先命中先用。匹配不到时用 default_years，并提示记入 assumptions.md。
   duration_by_keyword:
-    - [重点, 5]
+    - [杰出青年, 5]
+    - [A类, 5]
+    - [重点项目, 5]
+    - [重大项目, 5]
     - [面上, 4]
     - [地区, 4]
     - [青年, 3]

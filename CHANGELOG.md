@@ -13,7 +13,7 @@
 - `nsfc-justification-writer` 1.4.0：允许提案新增模板标题命令；`list-runs` 不再列出工作区目录；新增 `--task-root` 并跨任务目录查找运行记录；接入 nsfc-proposal。
 - `nsfc-justification-writer` 1.4.0：coach 提示词允许新增已核验、已入 `.bib` 并在引用台账有记录的引用，及配置允许的标题命令。
 - `nsfc-research-content-writer` 1.1.0：检查脚本改为检测 S 编号泄漏（原规则与 SKILL.md 矛盾）；接入 nsfc-proposal。
-- `nsfc-research-content-writer` 1.1.0：年度计划按项目类型定研究期限（`config.yaml` 的 `yearly_plan`），检查脚本新增 `--years`、`--project-type`；风险词「首次」改为「首次提出」等短语；`projects/NSFC_General`、`projects/NSFC_Local` 的 AGENTS.md 年度计划由三年改为四年。
+- `nsfc-research-content-writer` 1.1.0：年度计划按项目类型定研究期限（`config.yaml` 的 `yearly_plan`；杰出青年与 A 类按 5 年），检查脚本新增 `--years`、`--project-type`；风险词「首次」改为「首次提出」等短语；`projects/NSFC_General`、`projects/NSFC_Local` 的 AGENTS.md 年度计划由三年改为四年。
 - `nsfc-proposal` 0.1.0：content-writer 信息表第 10 项按项目类型写研究期限（年数取自 content-writer 的 `yearly_plan`），不再写死三年；第 6.2 步的检查加 `--project-type`。
 - `nsfc-research-foundation-writer` 0.2.0、`nsfc-abstract` 2.1.3：接入 nsfc-proposal。
 - `research-literature-search` 1.1.0：`run` 新增 `--host-results`，接收 wispaper 结果。
