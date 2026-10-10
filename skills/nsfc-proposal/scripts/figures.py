@@ -360,8 +360,8 @@ def render(project_root: Path | str, task_root: Path | str, prompt_file: Path | 
     ext = SAVED_EXTENSIONS[fmt]
     _write_atomic(job.targets[ext], data)
     for other, path in job.targets.items():
-        if other != ext and job.force:
-            path.unlink(missing_ok=True)  # --force 重画换了格式时，删去旧格式的同名图
+        if other != ext and job.force and path.is_file():
+            path.unlink()  # --force 重画换了格式时，删去旧格式的同名图
     rel = f"{FIGURES_DIR}/{job.name}.{ext}"
     logger.info("WisImage 返回 %d 字节（%s）", len(data), fmt)
     _append_index(job, "ok", png=rel, sha256=hashlib.sha256(data).hexdigest(), bytes=len(data), format=fmt)
