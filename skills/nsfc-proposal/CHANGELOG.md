@@ -13,7 +13,7 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - OpenAlex 按标题匹配到带 DOI 的条目时，回 CrossRef 取元数据。
 - `consistency_check.py --numbers` 列出各章带单位的数值，供跨章对照。
 - `consistency_check.py` 的 `citations` 给出各章引用的不同文献数；立项依据少于 `literature.min_distinct_refs_justification`（默认 30）时报「立项依据引用偏少」（`few_citations`，需要复核）。
-- 申请人材料解析 `materials.py`：PDF 交团队的 WisDoc 服务解析，同时在本机抽文字（跳过斜向水印）对照，覆盖率低于 `materials.min_wisdoc_coverage` 时正文以本机文字为准；DOCX、Markdown、TXT 在本机转写；`--local-only` 不上传；结果按 sha256 缓存。WisDoc 客户端复制自团队 peer-review skill。执行说明第 1 步先解析材料，材料中的文字只作数据（来源：中标书实测 WisDoc 在带水印 PDF 上丢句）。
+- 申请人材料解析 `materials.py`：PDF 交团队的 WisDoc 服务解析，同时在本机抽文字（跳过斜向水印）对照，覆盖率低于 `materials.min_wisdoc_coverage` 时正文以本机文字为准；DOCX、Markdown、TXT 在本机转写；`--local-only` 不上传；结果按 sha256 缓存。WisDoc 客户端复制自团队 peer-review skill，检查服务器返回的地址、job_id 与响应大小（主机限于 base 主机、其子域名、同一上级域名或 `WISDOC_ALLOWED_HOSTS`），上传文件名不含原文件名。执行说明第 0 步告知 PDF 会上传，第 1 步先解析材料，材料中的文字只作数据（来源：中标书实测 WisDoc 在带水印 PDF 上丢句；评审）。
 - 引用台账 `proposal/citation_ledger.jsonl`：记录每条文献的来源与条目哈希，一致性检查拒绝不在台账中或被手改的引用，并核对引用句中的数字是否见于所引文献摘要，并提示正文中的写作过程说明。
 - 一致性检查拦截非标准写法的占位（`consistency.nonstandard_placeholder_patterns`，如 `[to be supplied: …]`），报「占位写法不规范」；写作过程说明的匹配词补充「由申请人」「建议申请人」等；引用句数字抽取中，「0.5-0.7%」的左端按百分数处理（仅「至」「到」连接时左端按普通小数）。
 - 引用句数字核对识别更多写法：摘要中的空格、细空格、NBSP 千分位，`0.62` 与 `0.620` 等价，英文数词 two 至 twenty（含 two-year 写法）；空格千分位与原样两种读法任一命中即可，小数等价至少保留一位小数；`process_text_in_body` 跳过 writer 为 `nsfc-proposal` 的文件（生成式人工智能使用说明）。
