@@ -17,7 +17,7 @@ query_input:
 search:
   max_results_per_query: 50
   max_total_results: 500
-  provider_priority: [mcp, openalex, semantic_scholar, crossref, duckduckgo]
+  provider_priority: [mcp, semantic_scholar, crossref, duckduckgo]
   fallback_enabled: true
   # 兼容拆分前 review：按优先级尝试，达到阈值即停止；不足时才 fallback/top-up。
   retrieval_strategy: priority-fallback-topup

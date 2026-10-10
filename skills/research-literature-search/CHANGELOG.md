@@ -17,6 +17,10 @@
 - `enrich-abstracts` 遇 fetcher 报 429 或 5xx 时按退避重试（默认 2 次、2 秒，翻倍；CLI 选项 `--retries`、`--backoff-s`），其他异常照旧记录后换下一个来源。
 - manifest 与 Search Log 的 `search_skill_version` 改为读取 `config.yaml:skill_info.version`（原为写死的 1.0.4），读不到时报错；README 删去版本号。
 - `enrich-abstracts`：某个服务重试用尽后仍报 429 时，记为额度用尽，本次运行的后续记录不再请求它，`attempts` 记 `skipped_exhausted`，汇总新增 `exhausted_providers`；5xx 不计入，只有文字信息的错误只看第一个状态码；补全成功的记录，`abstract_provenance.attempts` 只计实际发出的请求。
+
+### Changed（变更）
+- 删除 OpenAlex 检索源、补摘要来源与 `openalex` 标识符；默认顺序为 mcp、Semantic Scholar、Crossref。旧 bundle 中的 `openalex_id` 字段不影响校验。
+
 - 本分支未写 BAC 记录，经负责人同意。
 
 ## [1.0.4] - 2026-09-15

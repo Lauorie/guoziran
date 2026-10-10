@@ -115,13 +115,13 @@ class HostResultsRunTest(unittest.TestCase):
             host = load_host_results(self._write(base, payload))
             calls: list[str] = []
 
-            def fake_openalex(query: str, **_: object) -> list[dict]:
+            def fake_semantic(query: str, **_: object) -> list[dict]:
                 calls.append(query)
                 return []
 
             manifest = run_search(
                 topic="GGN invasiveness", query_file=self._queries(base), output_dir=base / "bundle",
-                provider_order=["mcp", "openalex"], provider_functions={"openalex": fake_openalex},
+                provider_order=["mcp", "semantic_scholar"], provider_functions={"semantic_scholar": fake_semantic},
                 max_results_per_query=10, host_results=host,
             )
             self.assertIn(manifest["status"], {"success", "partial_success"})
@@ -141,8 +141,8 @@ class HostResultsRunTest(unittest.TestCase):
             base = Path(tmp)
             manifest = run_search(
                 topic="GGN", query_file=self._queries(base), output_dir=base / "bundle",
-                provider_order=["mcp", "openalex"],
-                provider_functions={"openalex": lambda q, **_: [{"title": f"paper for {q}", "year": 2020}]},
+                provider_order=["mcp", "semantic_scholar"],
+                provider_functions={"semantic_scholar": lambda q, **_: [{"title": f"paper for {q}", "year": 2020}]},
                 max_results_per_query=5,
             )
             mcp = [a for a in manifest["attempts"] if a["provider"] == "mcp"]

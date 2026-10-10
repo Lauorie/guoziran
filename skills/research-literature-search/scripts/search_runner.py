@@ -22,31 +22,31 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 try:
-    from candidate_schema import abstract_from_inverted_index, normalize_doi, normalize_record
+    from candidate_schema import normalize_doi, normalize_record
     from dedupe_papers import dedupe_records
     from manifest import ARTIFACT_NAMES, SEARCH_SKILL_VERSION, build_manifest, write_json
     from normalize_papers import write_jsonl
     from query_contract import QueryInputError, load_query_plan
     from rls_contract import CONTRACT_VERSION
     from validate_bundle import validate_bundle
-    from providers import search_crossref, search_openalex, search_semantic_scholar
+    from providers import search_crossref, search_semantic_scholar
     from providers.host_results import load_host_results
 except ModuleNotFoundError:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from candidate_schema import abstract_from_inverted_index, normalize_doi, normalize_record
+    from candidate_schema import normalize_doi, normalize_record
     from dedupe_papers import dedupe_records
     from manifest import ARTIFACT_NAMES, SEARCH_SKILL_VERSION, build_manifest, write_json
     from normalize_papers import write_jsonl
     from query_contract import QueryInputError, load_query_plan
     from rls_contract import CONTRACT_VERSION
     from validate_bundle import validate_bundle
-    from providers import search_crossref, search_openalex, search_semantic_scholar
+    from providers import search_crossref, search_semantic_scholar
     from providers.host_results import load_host_results
 
 
 ProviderFn = Callable[..., list[dict[str, Any]]]
-DEFAULT_PROVIDER_ORDER = ["mcp", "openalex", "semantic_scholar", "crossref", "duckduckgo"]
-SUPPORTED_PROVIDERS = {"openalex", "semantic_scholar", "crossref"}
+DEFAULT_PROVIDER_ORDER = ["mcp", "semantic_scholar", "crossref", "duckduckgo"]
+SUPPORTED_PROVIDERS = {"semantic_scholar", "crossref"}
 RETRIEVAL_STRATEGY = "priority-fallback-topup"
 TOPUP_THRESHOLD = 0.7
 ABSTRACT_TITLE_SIMILARITY = 0.9
@@ -139,7 +139,7 @@ def _safe_bundle_dir(path: Path, scope_root: Path | None) -> Path:
 
 
 def _provider_registry(overrides: Mapping[str, ProviderFn] | None = None) -> dict[str, ProviderFn]:
-    return {"openalex": search_openalex, "semantic_scholar": search_semantic_scholar, "crossref": search_crossref, **dict(overrides or {})}
+    return {"semantic_scholar": search_semantic_scholar, "crossref": search_crossref, **dict(overrides or {})}
 
 
 def _raw_envelope(raw: dict[str, Any], *, provider: str, query_id: str, rank: int) -> dict[str, Any]:
@@ -332,7 +332,7 @@ def run_search(
                         details.append(f"{invalid_count} invalid")
                     warnings.append(f"{query_id}/{provider}: skipped " + ", ".join(details) + " record(s)")
                 hits.extend((provider, row) for row in valid_result)
-                # OpenAlex is the main source; only supplement if clearly below target.
+                # Stop once the first source meets the target; only supplement if clearly below it.
                 if len(hits) >= max(5, int(max_results_per_query * TOPUP_THRESHOLD)):
                     break
             except Exception as exc:  # noqa: BLE001
@@ -403,10 +403,10 @@ _ANY_TAG = re.compile(r"</?[A-Za-z][^<>]*>")
 
 
 def _hit_abstract(item: Mapping[str, Any], source: str = "") -> str:
-    """Return a provider hit's abstract: plain text, or rebuilt from an inverted index; only CrossRef (JATS) hits lose markup tags."""
+    """Return a provider hit's plain-text abstract; only CrossRef (JATS) hits lose markup tags."""
     text = item.get("abstract")
-    if not isinstance(text, str) or not text.strip():
-        text = abstract_from_inverted_index(item.get("abstract_inverted_index"))
+    if not isinstance(text, str):
+        text = ""
     if source == "crossref":
         text = _ANY_TAG.sub("", _JATS_BLOCK_TAG.sub(" ", text))
     return re.sub(r"\s+", " ", text).strip()
@@ -583,7 +583,7 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
         title = str(row.get("title") or "")
         raw_doi = str(row.get("doi") or (row.get("identifiers") or {}).get("doi") or "")
         doi = normalize_doi(raw_doi)
-        for source, query in (("crossref", raw_doi), ("semantic_scholar", title), ("openalex", title)):
+        for source, query in (("crossref", raw_doi), ("semantic_scholar", title)):
             if not query or source not in registry:
                 continue
             if source in exhausted:

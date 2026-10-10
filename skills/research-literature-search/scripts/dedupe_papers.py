@@ -70,7 +70,7 @@ def merge_records(canonical: dict[str, Any], other: dict[str, Any]) -> dict[str,
     right_ids = other.get("identifiers") if isinstance(other.get("identifiers"), dict) else {}
     identifiers = {
         key: (left_ids.get(key) or right_ids.get(key))
-        for key in ("doi", "pmid", "arxiv", "openalex", "semantic_scholar")
+        for key in ("doi", "pmid", "arxiv", "semantic_scholar")
     }
     identifiers["doi"] = normalize_doi(identifiers.get("doi"))
     merged["identifiers"] = identifiers
@@ -81,7 +81,7 @@ def merge_records(canonical: dict[str, Any], other: dict[str, Any]) -> dict[str,
     # Keep flat compatibility fields aligned with canonical identifiers.
     ids = merged.get("identifiers") if isinstance(merged.get("identifiers"), dict) else {}
     merged["doi"] = normalize_doi(ids.get("doi") or merged.get("doi"))
-    for key, flat in (("pmid", "pmid"), ("openalex", "openalex_id"), ("semantic_scholar", "semantic_scholar_id"), ("arxiv", "arxiv_id")):
+    for key, flat in (("pmid", "pmid"), ("semantic_scholar", "semantic_scholar_id"), ("arxiv", "arxiv_id")):
         merged[flat] = ids.get(key) or merged.get(flat)
     return merged
 

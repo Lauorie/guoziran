@@ -12,7 +12,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "skills/research-literature-search/scripts"))
 
-from candidate_schema import abstract_from_inverted_index  # noqa: E402
 from search_runner import enrich_abstracts  # noqa: E402
 
 TITLE = "Peritumoral radiomics for renal mass characterization on CT"
@@ -24,7 +23,7 @@ def _run(record: dict, fetchers: dict, **kwargs) -> tuple[dict, dict]:
     with tempfile.TemporaryDirectory() as tmp:
         src, dst = Path(tmp) / "in.jsonl", Path(tmp) / "out.jsonl"
         src.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
-        offline = {name: (lambda q, **k: []) for name in ("crossref", "semantic_scholar", "openalex")}
+        offline = {name: (lambda q, **k: []) for name in ("crossref", "semantic_scholar")}
         summary = enrich_abstracts(src, dst, fetchers={**offline, **fetchers}, **kwargs)
         row = json.loads(dst.read_text(encoding="utf-8").splitlines()[0])
     return summary, row
@@ -42,8 +41,8 @@ class EnrichAbstractsMatchTests(unittest.TestCase):
 
     def test_all_mismatched_leaves_abstract_missing(self) -> None:
         hits = [{"title": "Liver fibrosis staging", "abstract": OTHER}, {"title": "Another unrelated paper", "abstract": OTHER}]
-        fetchers = {"semantic_scholar": lambda q, **k: hits, "openalex": lambda q, **k: hits}
-        summary, row = _run({"title": TITLE}, fetchers)
+        fetchers = {"semantic_scholar": lambda q, **k: hits, "crossref": lambda q, **k: hits}
+        summary, row = _run({"title": TITLE, "doi": "10.5555/zz.9"}, fetchers)
         self.assertEqual(row["abstract_status"], "missing")
         self.assertNotIn("abstract", row)
         self.assertEqual(row["abstract_provenance"]["rejected_mismatch"], 4)
@@ -58,19 +57,9 @@ class EnrichAbstractsMatchTests(unittest.TestCase):
     def test_existing_abstract_does_not_call_fetchers(self) -> None:
         def boom(q, **k):
             raise AssertionError("fetcher must not be called")
-        summary, row = _run({"title": TITLE, "abstract": LONG}, {"crossref": boom, "semantic_scholar": boom, "openalex": boom})
+        summary, row = _run({"title": TITLE, "abstract": LONG}, {"crossref": boom, "semantic_scholar": boom})
         self.assertEqual(row["abstract_status"], "present")
         self.assertEqual(summary["attempted"], 0)
-
-    def test_openalex_inverted_index_is_rebuilt(self) -> None:
-        index: dict[str, list[int]] = {}
-        for pos, word in enumerate(LONG.split()):
-            index.setdefault(word, []).append(pos)
-        hits = [{"title": TITLE, "abstract_inverted_index": index}]
-        summary, row = _run({"title": TITLE}, {"openalex": lambda q, **k: hits})
-        self.assertEqual(row["abstract"], LONG)
-        self.assertEqual(row["abstract_provenance"]["source"], "openalex")
-        self.assertEqual(summary["filled"], 1)
 
     def test_crossref_jats_tags_are_stripped(self) -> None:
         hits = [{"title": TITLE, "doi": "10.5555/x.1", "abstract": f"<jats:title>Abstract</jats:title><jats:p>{LONG}</jats:p>"}]
@@ -118,7 +107,7 @@ class EnrichAbstractsMatchTests(unittest.TestCase):
 
     def test_comparison_signs_in_plain_abstracts_survive(self) -> None:
         text = "Sensitivity <90% and specificity >80% were seen in the retrospective renal mass cohort of this study."
-        for fetchers in ({"openalex": lambda q, **k: [{"title": TITLE, "abstract": text}]},
+        for fetchers in ({"semantic_scholar": lambda q, **k: [{"title": TITLE, "abstract": text}]},
                          {"crossref": lambda q, **k: [{"title": TITLE, "doi": "10.5555/x.1", "abstract": text}]}):
             _, row = _run({"title": TITLE, "doi": "10.5555/x.1"}, fetchers)
             self.assertEqual(row.get("abstract"), text)
@@ -152,7 +141,7 @@ def _run_many(records: list[dict], fetchers: dict, **kwargs) -> tuple[dict, list
     with tempfile.TemporaryDirectory() as tmp:
         src, dst = Path(tmp) / "in.jsonl", Path(tmp) / "out.jsonl"
         src.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records), encoding="utf-8")
-        offline = {name: (lambda q, **k: []) for name in ("crossref", "semantic_scholar", "openalex")}
+        offline = {name: (lambda q, **k: []) for name in ("crossref", "semantic_scholar")}
         summary = enrich_abstracts(src, dst, fetchers={**offline, **fetchers}, **kwargs)
         rows = [json.loads(line) for line in dst.read_text(encoding="utf-8").splitlines()]
     return summary, rows
@@ -164,31 +153,27 @@ class EnrichExhaustedProviderTests(unittest.TestCase):
     def test_rate_limited_provider_is_skipped_for_later_records(self) -> None:
         for make_error in (lambda: RuntimeError("HTTP 429 Too Many Requests"), lambda: _StatusError(429), lambda: _ResponseError(429)):
             with self.subTest(error=type(make_error()).__name__):
-                calls = {"openalex": 0, "semantic_scholar": 0}
+                calls = {"semantic_scholar": 0}
 
-                def semantic(q, **k):
+                def semantic(q, _make=make_error, **k):
                     calls["semantic_scholar"] += 1
-                    return []
-
-                def openalex(q, _make=make_error, **k):
-                    calls["openalex"] += 1
                     raise _make()
                 waits: list[float] = []
-                summary, rows = _run_many(self.RECORDS, {"semantic_scholar": semantic, "openalex": openalex}, retries=2, sleep=waits.append)
-                self.assertEqual(calls, {"openalex": 3, "semantic_scholar": 3})
+                summary, rows = _run_many(self.RECORDS, {"semantic_scholar": semantic}, retries=2, sleep=waits.append)
+                self.assertEqual(calls, {"semantic_scholar": 3})
                 self.assertEqual(waits, [2.0, 4.0])
-                self.assertEqual(summary["exhausted_providers"], ["openalex"])
+                self.assertEqual(summary["exhausted_providers"], ["semantic_scholar"])
                 self.assertEqual(rows[0]["abstract_provenance"]["attempts"][-1]["status"], "error")
                 for row in rows[1:]:
-                    self.assertIn({"source": "openalex", "status": "skipped_exhausted"}, row["abstract_provenance"]["attempts"])
+                    self.assertIn({"source": "semantic_scholar", "status": "skipped_exhausted"}, row["abstract_provenance"]["attempts"])
 
     def test_server_error_is_not_counted_as_exhausted(self) -> None:
         calls: list[str] = []
 
-        def openalex(q, **k):
+        def semantic(q, **k):
             calls.append(q)
             raise RuntimeError("HTTP 500 Internal Server Error")
-        summary, rows = _run_many(self.RECORDS[:2], {"openalex": openalex}, retries=2, sleep=lambda s: None)
+        summary, rows = _run_many(self.RECORDS[:2], {"semantic_scholar": semantic}, retries=2, sleep=lambda s: None)
         self.assertEqual(len(calls), 6)
         self.assertEqual(summary["exhausted_providers"], [])
         for row in rows:
@@ -199,31 +184,23 @@ class EnrichExhaustedProviderTests(unittest.TestCase):
         self.assertEqual(summary["exhausted_providers"], [])
 
     def test_filled_attempt_count_excludes_skipped_providers(self) -> None:
-        def semantic(q, **k):
+        def crossref(q, **k):
             raise RuntimeError("HTTP 429 Too Many Requests")
-        openalex = lambda q, **k: [{"title": q, "abstract": LONG}]  # noqa: E731
-        summary, rows = _run_many(self.RECORDS[:2], {"semantic_scholar": semantic, "openalex": openalex}, sleep=lambda s: None)
-        self.assertEqual(summary["exhausted_providers"], ["semantic_scholar"])
+        semantic = lambda q, **k: [{"title": q, "abstract": LONG}]  # noqa: E731
+        records = [{**r, "doi": "10.5555/a.1"} for r in self.RECORDS[:2]]
+        summary, rows = _run_many(records, {"crossref": crossref, "semantic_scholar": semantic}, sleep=lambda s: None)
+        self.assertEqual(summary["exhausted_providers"], ["crossref"])
         self.assertEqual([row["abstract_provenance"]["attempts"] for row in rows], [2, 1])
 
     def test_only_first_status_in_message_counts(self) -> None:
         calls: list[str] = []
 
-        def openalex(q, **k):
+        def semantic(q, **k):
             calls.append(q)
             raise RuntimeError("HTTP 503 Service Unavailable after HTTP 429")
-        summary, _ = _run_many(self.RECORDS[:2], {"openalex": openalex}, retries=2, sleep=lambda s: None)
+        summary, _ = _run_many(self.RECORDS[:2], {"semantic_scholar": semantic}, retries=2, sleep=lambda s: None)
         self.assertEqual(len(calls), 6)
         self.assertEqual(summary["exhausted_providers"], [])
-
-
-class InvertedIndexTests(unittest.TestCase):
-    def test_rebuilds_in_position_order(self) -> None:
-        self.assertEqual(abstract_from_inverted_index({"b": [1], "a": [0]}), "a b")
-
-    def test_empty_or_malformed_gives_empty_string(self) -> None:
-        for bad in ({}, None, "x", [1], {"a": "0"}, {"a": [True]}):
-            self.assertEqual(abstract_from_inverted_index(bad), "")
 
 
 SCRIPT = ROOT / "skills/research-literature-search/scripts/search_runner.py"
@@ -253,15 +230,15 @@ class EnrichReuseTests(unittest.TestCase):
         def fetch(q, **k):
             self.calls.append(q)
             return []
-        return {name: fetch for name in ("crossref", "semantic_scholar", "openalex")}
+        return {name: fetch for name in ("crossref", "semantic_scholar")}
 
     def test_prior_abstract_reused_by_record_id_without_request(self) -> None:
         _write_rows(self.prior, [{"record_id": "doi:10.5555/a", "title": TITLE, "abstract": LONG, "abstract_status": "present",
-                                  "abstract_provenance": {"source": "openalex", "method": "post_selection"}}])
+                                  "abstract_provenance": {"source": "semantic_scholar", "method": "post_selection"}}])
         summary = enrich_abstracts(self.src, self.dst, fetchers=self._fetchers(), reuse_path=self.prior)
         rows = _read_rows(self.dst)
         self.assertEqual((rows[0]["abstract"], rows[0]["abstract_status"]), (LONG, "present"))
-        self.assertEqual(rows[0]["abstract_provenance"], {"source": "openalex", "method": "post_selection", "reused_from": "prior.jsonl"})
+        self.assertEqual(rows[0]["abstract_provenance"], {"source": "semantic_scholar", "method": "post_selection", "reused_from": "prior.jsonl"})
         self.assertNotIn(TITLE, self.calls)
         self.assertEqual((summary["reused"], summary["attempted"], summary["reuse_file"]), (1, 1, "prior.jsonl"))
 

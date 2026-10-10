@@ -28,7 +28,7 @@ python3 skills/research-literature-search/scripts/search_runner.py validate \
   --bundle ./.bensz-api/search-bundle
 ```
 
-可用 `--provider-order openalex,semantic_scholar,crossref` 固定来源顺序，
+可用 `--provider-order semantic_scholar,crossref` 固定来源顺序，
 并用 `--min-year/--max-year`、`--publication-type`、`--language`、`--open-access`
 设置过滤条件；指定 `--scope-root` 可强制 bundle 留在任务工作区内。
 
@@ -48,7 +48,7 @@ python3 skills/research-literature-search/scripts/search_runner.py validate \
 
 provider 返回 `null` 记录或其它非对象条目时，检索器会跳过坏条目、继续处理合法候选，并在 `manifest.json` / `search_log.json` 中记录 `empty_records`、`invalid_records` 和对应 warning。若所有返回条目均无法规范化，则返回 `failed`，`failure_code` 为 `no_valid_candidates`。
 
-OpenAlex 候选缺少嵌套来源元数据（例如 `primary_location.source` 为 `null`）时，检索器保留候选并将 `venue` 规范化为 `null`；候选的 `quality_warnings` 会记录 `missing_venue`，不会因此中断整个 bundle。
+候选的来源元数据缺少刊名时，检索器保留候选并将 `venue` 规范化为 `null`；候选的 `quality_warnings` 会记录 `missing_venue`，不会因此中断整个 bundle。
 
 ## 依赖
 

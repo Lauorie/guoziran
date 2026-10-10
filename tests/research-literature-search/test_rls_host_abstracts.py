@@ -27,7 +27,7 @@ def _boom(*_a: object, **_k: object) -> list:
     raise AssertionError("no network request is allowed in offline mode")
 
 
-NO_NET = {name: _boom for name in ("crossref", "semantic_scholar", "openalex")}
+NO_NET = {name: _boom for name in ("crossref", "semantic_scholar")}
 
 
 def _host(path: Path, entries: list[tuple[str, list[dict]]]) -> Path:

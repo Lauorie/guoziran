@@ -11,7 +11,7 @@ from typing import Any, Iterable
 
 SCHEMA_VERSION = "rls.paper.v1"
 DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
-IDENTIFIER_KEYS = ("doi", "pmid", "arxiv", "openalex", "semantic_scholar")
+IDENTIFIER_KEYS = ("doi", "pmid", "arxiv", "semantic_scholar")
 
 
 class CandidateNormalizationError(ValueError):
@@ -49,17 +49,6 @@ def _text(value: Any) -> str | None:
     return text or None
 
 
-def abstract_from_inverted_index(index: Any) -> str:
-    """Rebuild an abstract from an OpenAlex word -> positions index; return "" if unusable."""
-    if not isinstance(index, dict):
-        return ""
-    terms: list[tuple[int, str]] = []
-    for token, positions in index.items():
-        if isinstance(positions, list):
-            terms.extend((pos, str(token)) for pos in positions if isinstance(pos, int) and not isinstance(pos, bool))
-    return " ".join(token for _, token in sorted(terms))
-
-
 def _bool_or_none(value: Any) -> bool | None:
     if value is None:
         return None
@@ -79,7 +68,7 @@ def stable_record_id(record: dict[str, Any], *, fallback_index: int = 0) -> str:
     doi = normalize_doi(identifiers.get("doi") or record.get("doi"))
     if doi:
         return f"doi:{doi}"
-    for key in ("pmid", "openalex", "semantic_scholar", "arxiv"):
+    for key in ("pmid", "semantic_scholar", "arxiv"):
         value = _text(identifiers.get(key) or record.get(key))
         if value:
             return f"{key}:{value.lower()}"
@@ -111,7 +100,7 @@ def _authors(value: Any) -> list[str]:
 
 
 def _source_envelope(raw: dict[str, Any], *, provider: str, query_id: str | None, rank: int | None) -> dict[str, Any]:
-    provider_id = raw.get("provider_record_id") or raw.get("id") or raw.get("openalex_id")
+    provider_id = raw.get("provider_record_id") or raw.get("id")
     envelope: dict[str, Any] = {
         "provider": provider or "unknown",
         "provider_record_id": str(provider_id) if provider_id else None,
@@ -140,8 +129,6 @@ def normalize_record(
     incoming = raw.get("identifiers") if isinstance(raw.get("identifiers"), dict) else {}
     for key in IDENTIFIER_KEYS:
         identifiers[key] = _text(incoming.get(key) or raw.get(key))
-    if provider == "openalex" and not identifiers["openalex"]:
-        identifiers["openalex"] = _text(raw.get("id"))
     if provider == "semantic_scholar" and not identifiers["semantic_scholar"]:
         identifiers["semantic_scholar"] = _text(raw.get("paperId") or raw.get("id"))
     if provider == "semantic_scholar":
@@ -171,8 +158,6 @@ def normalize_record(
     year = normalize_year(year_value)
     authors = _authors(raw.get("authors") or raw.get("authorships") or raw.get("author"))
     abstract = _text(raw.get("abstract"))
-    if not abstract:
-        abstract = abstract_from_inverted_index(raw.get("abstract_inverted_index")) or None
     abstract_status = str(raw.get("abstract_status") or ("present" if abstract else "missing"))
     if abstract_status not in {"present", "missing", "attempted", "not_requested"}:
         abstract_status = "present" if abstract else "missing"
@@ -253,7 +238,6 @@ def normalize_record(
     record.update({
         "doi": identifiers["doi"],
         "pmid": identifiers["pmid"],
-        "openalex_id": identifiers["openalex"],
         "semantic_scholar_id": identifiers["semantic_scholar"],
         "arxiv_id": identifiers["arxiv"],
         "source": provider or (sources[0].get("provider") if sources else "unknown"),
