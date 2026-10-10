@@ -690,6 +690,31 @@ class MissingFigureFileTest(unittest.TestCase):
         self.body("草稿见 proposal/assumptions.md。\n")
         self.assertTrue([f for f in check_project(self.root).needs_review if f.kind == "process_text_in_body"])
 
+    def test_star_space_and_split_forms(self) -> None:
+        forms = {
+            "split": "图示\n\\includegraphics[width=0.95\\textwidth]\n  {figures/nsfc-proposal/fig5.png}\n",
+            "space": "图示\n\\includegraphics [width=0.95\\textwidth] {figures/nsfc-proposal/fig5.png}\n",
+            "star": "图示\n\\includegraphics*{figures/nsfc-proposal/fig5.png}\n",
+        }
+        target = self.root / "figures" / "nsfc-proposal" / "fig5.png"
+        for label, text in forms.items():
+            self.body(text)
+            target.unlink(missing_ok=True)
+            report = check_project(self.root)
+            missing = [f for f in report.errors if f.kind == "missing_figure_file"]
+            self.assertEqual([(f.line, "fig5.png" in f.detail) for f in missing], [(2, True)], label)
+            self.assertEqual([f for f in report.needs_review if f.kind == "process_text_in_body"], [], label)
+            target.write_bytes(b"x")
+            report = check_project(self.root)
+            self.assertEqual([f for f in report.errors if f.kind == "missing_figure_file"], [], label)
+            self.assertEqual([f for f in report.needs_review if f.kind == "process_text_in_body"], [], label)
+
+    def test_split_command_keeps_real_process_text(self) -> None:
+        (self.root / "figures" / "nsfc-proposal" / "fig6.png").write_bytes(b"x")
+        self.body("\\includegraphics[width=\\linewidth]\n{figures/nsfc-proposal/fig6.png}经核实的文献表明。\n")
+        hits = [f for f in check_project(self.root).needs_review if f.kind == "process_text_in_body"]
+        self.assertEqual([(f.line, "经核实" in f.detail, "proposal/" in f.detail) for f in hits], [(2, True, False)])
+
     def test_path_outside_project_root_is_reported(self) -> None:
         (self.root.parent / "outside.png").write_bytes(b"x")
         self.body("\\includegraphics{../outside.png}\n")

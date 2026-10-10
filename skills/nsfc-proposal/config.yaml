@@ -40,6 +40,7 @@ figures:
   design_aspect_ratio: "16:9"             # 各研究的设计图
   max_rerenders: 2                        # 自检不合格时最多重画次数
   timeout_s: 300
+  total_timeout_s: 560                    # 单张图的总时限（秒，含重试与等待）；每次请求的超时取 min(timeout_s, 剩余时间)，留在 600 秒的 Bash 超时之内
   max_image_bytes: 31457280               # 30 MB
 
 consistency:

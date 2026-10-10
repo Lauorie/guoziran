@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """用 WisImage 生成研究框架图与各研究的设计图。
 
-render：读 T 下的提示词文件，POST 到 WISMODEL_IMAGE_URL，把返回的图片写成 P/figures/nsfc-proposal/<名称>.png；
-提示词副本写 T/nsfc-proposal/output/figures/<名称>.prompt.md；每次运行在同目录的 index.json 追加一条记录。
+render：读 T 下的提示词文件，POST 到 WISMODEL_IMAGE_URL，按返回的格式把图片写成 P/figures/nsfc-proposal/<名称>.png
+或 <名称>.jpg（其他格式记 unsupported_format，不写文件），标准输出给出实际路径；提示词副本写 T/nsfc-proposal/output/figures/<名称>.prompt.md；每次运行在同目录的 index.json 追加一条记录。
 凭据与地址（WISMODEL_IMAGE_URL、WISMODEL_API_KEY、DEPLOY_REGION）的查找顺序：已有环境变量 → 当前目录及各级父目录的
 .env → project_root 及各级父目录的 .env → skill 目录。输出、日志与索引不含地址、token 和模型名。
-退出码：0 已生成；1 生成失败（不写 PNG）；2 参数或路径错误；3 未配置或 figures.enabled 为 false（不发请求）。
+单张图的总时限为 figures.total_timeout_s（含重试与等待），每次请求的超时取 min(timeout_s, 剩余时间)。
+退出码：0 已生成；1 生成失败（不写图片）；2 参数或路径错误；3 未配置或 figures.enabled 为 false（不发请求）。
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ SCHEMA = "nsfc-proposal.figures.v1"
 USER_AGENT = "nsfc-proposal-figures/0.1"
 CHANNEL = "qiewenclaw"
 URL_KEY, TOKEN_KEY, REGION_KEY = "WISMODEL_IMAGE_URL", "WISMODEL_API_KEY", "DEPLOY_REGION"
-NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,47}$")
+NAME_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,47}")  # 用 fullmatch
 ASPECT_RATIOS = ("1:1", "16:9", "9:16", "21:9")
 IMAGE_SIZES = ("1K", "2K", "4K")
 FIGURES_DIR = "figures/nsfc-proposal"
@@ -44,8 +45,13 @@ OUTPUT_DIR = "nsfc-proposal/output/figures"
 MAX_TOKENS = 16000
 RETRY_DELAY_S = 3
 DEFAULT_TIMEOUT_S = 300
+DEFAULT_TOTAL_TIMEOUT_S = 560
+MIN_ATTEMPT_S = 30          # 重试前剩余时间（扣除等待）少于此值时不再重试，记 timeout
 DEFAULT_MAX_IMAGE_BYTES = 31457280
 REFUSAL_CHARS = 200
+SAVED_EXTENSIONS = {"png": "png", "jpeg": "jpg"}   # 返回格式 -> 文件扩展名；其余格式不保存
+MAGIC = ((b"\x89PNG\r\n\x1a\n", "png"), (b"\xff\xd8\xff", "jpeg"), (b"GIF87a", "gif"), (b"GIF89a", "gif"),
+         (b"II*\x00", "tiff"), (b"MM\x00*", "tiff"), (b"BM", "bmp"))
 DATA_URL_RE = re.compile(r"^data:image/[A-Za-z0-9.+-]+;base64,(.*)$", re.S)
 URL_IN_TEXT_RE = re.compile(r"(?i)\b(?:[a-z][a-z0-9+.-]*://|www\.)\S+")
 CATEGORIES = {
@@ -53,8 +59,10 @@ CATEGORIES = {
     "credit": "额度不足",
     "http_5xx": "服务端错误（HTTP 5xx），已重试 1 次",
     "network": "网络错误，已重试 1 次",
+    "timeout": "超时（单次请求超时，或剩余时间不够重试）",
     "no_image": "没有返回图片",
-    "bad_image": "返回的不是 PNG、JPEG 或 WebP 图片",
+    "bad_image": "返回的不是可识别的图片",
+    "unsupported_format": "图片格式不是 PNG 或 JPEG（如 WebP）",
     "too_large": "图片超过 figures.max_image_bytes",
 }
 
@@ -62,7 +70,7 @@ logger = logging.getLogger(__name__)
 
 
 class FigureError(RuntimeError):
-    """出图失败；category 取 CATEGORIES 的键，text 是去掉网址、截断后的拒绝文字。"""
+    """出图失败；category 取 CATEGORIES 的键，text 是去掉网址的拒绝文字（未脱敏、未截断）。"""
 
     def __init__(self, category: str, *, status: int | None = None, text: str = "") -> None:
         super().__init__(category)
@@ -85,11 +93,12 @@ class ImageSettings:
         return "ImageSettings(<已隐藏>)"
 
     def redact(self, text: str) -> str:
-        """去掉文字中的地址、主机名与 token。"""
+        """遮盖文字中的 token、完整地址与主机名（地址与主机名不区分大小写）。先对全文遮盖，再由调用方截取。"""
+        text = text.replace(self.api_key, "<已隐藏>") if self.api_key else text
         host = urllib.parse.urlparse(self.url).hostname or ""
-        for secret in (self.url, host, self.api_key):
+        for secret in (self.url, host):
             if secret:
-                text = text.replace(secret, "<已隐藏>")
+                text = re.sub(re.escape(secret), "<已隐藏>", text, flags=re.IGNORECASE)
         return text
 
 
@@ -99,7 +108,7 @@ class Job:
     task: Path
     name: str
     prompt: str
-    png: Path
+    targets: dict  # 扩展名 -> P 下的目标路径
     prompt_copy: Path
     index: Path
     aspect: str
@@ -107,7 +116,9 @@ class Job:
     enabled: bool
     model: str
     timeout: float
+    total_timeout: float
     max_bytes: int
+    force: bool
 
 
 def load_settings(project_root: Path | str, *, cwd: Path | str | None = None,
@@ -130,8 +141,8 @@ def load_settings(project_root: Path | str, *, cwd: Path | str | None = None,
     if parsed is None or parsed.scheme not in ("http", "https") or not host:
         raise FiguresNotConfigured(f"{URL_KEY} 不是 http(s) 地址")
     for key in (TOKEN_KEY, REGION_KEY):
-        if re.search(r"\s", values[key]):
-            raise FiguresNotConfigured(f"{key} 含空白")
+        if re.search(r"\s", values[key]) or not values[key].isascii():
+            raise FiguresNotConfigured(f"{key} 含空白或非 ASCII 字符")
     return ImageSettings(url=url, api_key=values[TOKEN_KEY], region=values[REGION_KEY])
 
 
@@ -146,10 +157,18 @@ def build_payload(prompt: str, model: str, aspect: str, size: str) -> dict:
 
 
 def call_gateway(settings: ImageSettings, payload: dict, *, post: Callable[..., Any] | None = None,
-                 sleep: Callable[[float], Any] | None = None, timeout: float = DEFAULT_TIMEOUT_S) -> dict:
-    """POST 一次；5xx 与网络错误等 3 秒重试 1 次，4xx 立即失败（402 记 credit）。post、sleep 在调用时解析，可注入。"""
+                 sleep: Callable[[float], Any] | None = None, clock: Callable[[], float] | None = None,
+                 timeout: float = DEFAULT_TIMEOUT_S, total_timeout: float = DEFAULT_TOTAL_TIMEOUT_S) -> dict:
+    """POST 一次；5xx、网络错误与请求超时等 3 秒重试 1 次，4xx 立即失败（402 记 credit）。
+
+    每次请求的超时取 min(timeout, 剩余时间)；重试前剩余时间扣除等待后少于 MIN_ATTEMPT_S 时不再重试，记 timeout。
+    post、sleep、clock 在调用时解析，可注入。
+    """
     send = post or requests.post
     wait = sleep or time.sleep
+    now = clock or time.monotonic
+    deadline = now() + total_timeout
+    failure = FigureError("network")
     headers = {
         "Authorization": f"Bearer {settings.api_key}",
         "Content-Type": "application/json",
@@ -159,15 +178,18 @@ def call_gateway(settings: ImageSettings, payload: dict, *, post: Callable[..., 
         "User-Agent": USER_AGENT,
     }
     for attempt in (1, 2):
+        if attempt == 2:
+            if deadline - now() - RETRY_DELAY_S < MIN_ATTEMPT_S:
+                logger.warning("WisImage 剩余时间不够重试")
+                raise FigureError("timeout", status=failure.status)
+            wait(RETRY_DELAY_S)
         try:
-            response = send(settings.url, headers=headers, json=payload, timeout=timeout,
+            response = send(settings.url, headers=headers, json=payload, timeout=min(timeout, max(deadline - now(), 1.0)),
                             proxies={"http": None, "https": None})
         except requests.RequestException as exc:
             logger.warning("WisImage 网络错误（%s，第 %d 次）", type(exc).__name__, attempt)
-            if attempt == 1:
-                wait(RETRY_DELAY_S)
-                continue
-            raise FigureError("network") from None
+            failure = FigureError("timeout" if isinstance(exc, requests.Timeout) else "network")
+            continue
         status = int(response.status_code)
         if 200 <= status < 300:
             try:
@@ -178,36 +200,29 @@ def call_gateway(settings: ImageSettings, payload: dict, *, post: Callable[..., 
                 raise FigureError("no_image", status=status)
             return data
         logger.warning("WisImage 返回 HTTP %d（第 %d 次）", status, attempt)
-        if status >= 500:
-            if attempt == 1:
-                wait(RETRY_DELAY_S)
-                continue
-            raise FigureError("http_5xx", status=status)
-        raise FigureError("credit" if status == 402 else "http_4xx", status=status)
-    raise FigureError("network")
+        if status < 500:
+            raise FigureError("credit" if status == 402 else "http_4xx", status=status)
+        failure = FigureError("http_5xx", status=status)
+    raise failure
 
 
 def image_format(data: bytes) -> str | None:
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "png"
-    if data.startswith(b"\xff\xd8\xff"):
-        return "jpeg"
+    """按魔数识别图片格式；不认识时返回 None。"""
     if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "webp"
-    return None
+    return next((fmt for magic, fmt in MAGIC if data.startswith(magic)), None)
 
 
 def _refusal_text(message: Any) -> str:
-    """模型的文字回复：去掉网址，压缩空白，取前 REFUSAL_CHARS 字。"""
+    """模型的文字回复：去掉网址，压缩空白；不截断，由调用方脱敏后再截取。"""
     content = message.get("content") if isinstance(message, dict) else None
     if isinstance(content, list):
         content = " ".join(str(p.get("text") or "") for p in content if isinstance(p, dict))
-    text = " ".join(URL_IN_TEXT_RE.sub("", str(content or "")).split())
-    return text[:REFUSAL_CHARS]
+    return " ".join(URL_IN_TEXT_RE.sub("", str(content or "")).split())
 
 
 def extract_image(result: Mapping[str, Any], max_bytes: int) -> bytes:
-    """取 choices[0].message.images[0].image_url.url 中的 data URL 并解码；校验大小与魔数。"""
+    """取 choices[0].message.images[0].image_url.url 中的 data URL 并解码；校验大小与魔数，只接受 PNG、JPEG。"""
     choices = result.get("choices")
     first = choices[0] if isinstance(choices, list) and choices else None
     message = first.get("message") if isinstance(first, dict) else None
@@ -229,8 +244,11 @@ def extract_image(result: Mapping[str, Any], max_bytes: int) -> bytes:
         raise FigureError("bad_image") from None
     if len(data) > max_bytes:
         raise FigureError("too_large")
-    if image_format(data) is None:
+    fmt = image_format(data)
+    if fmt is None:
         raise FigureError("bad_image")
+    if fmt not in SAVED_EXTENSIONS:
+        raise FigureError("unsupported_format")
     return data
 
 
@@ -244,7 +262,7 @@ def _prepare(project_root: Path | str, task_root: Path | str, prompt_file: Path 
     task = Path(task_root).expanduser().resolve()
     if not task.name.startswith("task-") or task.parent.name != ".bensz-api":
         raise ProposalError(f"--task-root 必须指向 .bensz-api/task-*/ 目录：{task}")
-    if not NAME_RE.match(name or ""):
+    if not NAME_RE.fullmatch(name or ""):
         raise ProposalError(f"--name 须匹配 {NAME_RE.pattern}：{name!r}")
     root = resolve_project_root(project_root)
     source = Path(prompt_file).expanduser().resolve()
@@ -265,16 +283,18 @@ def _prepare(project_root: Path | str, task_root: Path | str, prompt_file: Path 
     size = size or str(section.get("image_size") or "2K")
     if aspect not in ASPECT_RATIOS or size not in IMAGE_SIZES:
         raise ProposalError(f"画幅须为 {'|'.join(ASPECT_RATIOS)}，尺寸须为 {'|'.join(IMAGE_SIZES)}")
-    png = project_path(root, f"{FIGURES_DIR}/{name}.png")
-    if png.exists() and not force:
-        raise ProposalError(f"{FIGURES_DIR}/{name}.png 已存在：重画用新名称（如 {name}-v2），或加 --force 覆盖")
+    targets = {ext: project_path(root, f"{FIGURES_DIR}/{name}.{ext}") for ext in SAVED_EXTENSIONS.values()}
+    existing = [f"{FIGURES_DIR}/{name}.{ext}" for ext, path in targets.items() if path.exists()]
+    if existing and not force:
+        raise ProposalError(f"{existing[0]} 已存在：重画用新名称（如 {name}-v2），或加 --force 覆盖")
     out_dir = (task / OUTPUT_DIR).resolve()
     if not _inside(task, out_dir):
         raise ProposalError(f"{OUTPUT_DIR} 越出任务目录")
-    return Job(root=root, task=task, name=name, prompt=prompt, png=png, prompt_copy=out_dir / f"{name}.prompt.md",
+    return Job(root=root, task=task, name=name, prompt=prompt, targets=targets, prompt_copy=out_dir / f"{name}.prompt.md",
                index=out_dir / "index.json", aspect=aspect, size=size, enabled=bool(section.get("enabled", True)),
                model=model, timeout=float(section.get("timeout_s") or DEFAULT_TIMEOUT_S),
-               max_bytes=int(section.get("max_image_bytes") or DEFAULT_MAX_IMAGE_BYTES))
+               total_timeout=float(section.get("total_timeout_s") or DEFAULT_TOTAL_TIMEOUT_S),
+               max_bytes=int(section.get("max_image_bytes") or DEFAULT_MAX_IMAGE_BYTES), force=force)
 
 
 def _write_atomic(path: Path, data: bytes) -> None:
@@ -284,8 +304,8 @@ def _write_atomic(path: Path, data: bytes) -> None:
     os.replace(tmp, path)
 
 
-def _append_index(job: Job, status: str, **fields: Any) -> None:
-    """index.json 追加一条记录；文件缺失或格式不符时重建。路径相对 P（png）或 T（prompt）。"""
+def _append_index(job: Job, status: str, png: str | None = None, **fields: Any) -> None:
+    """index.json 追加一条记录；文件缺失或格式不符时重建。png 为实际文件路径（相对 P，JPEG 时以 .jpg 结尾），prompt 相对 T。"""
     entries: list = []
     if job.index.exists():
         try:
@@ -296,7 +316,7 @@ def _append_index(job: Job, status: str, **fields: Any) -> None:
                 logger.warning("index.json 格式不符，重建索引")
         except (OSError, ValueError):
             logger.warning("index.json 无法读取，重建索引")
-    entry = {"name": job.name, "png": f"{FIGURES_DIR}/{job.name}.png" if status == "ok" else None,
+    entry = {"name": job.name, "png": png,
              "prompt": f"{OUTPUT_DIR}/{job.name}.prompt.md", "aspect_ratio": job.aspect, "image_size": job.size,
              "status": status, **fields, "created": datetime.now().astimezone().isoformat(timespec="seconds")}
     text = json.dumps({"schema": SCHEMA, "figures": entries + [entry]}, ensure_ascii=False, indent=2) + "\n"
@@ -306,8 +326,8 @@ def _append_index(job: Job, status: str, **fields: Any) -> None:
 def render(project_root: Path | str, task_root: Path | str, prompt_file: Path | str, name: str,
            aspect: str | None = None, size: str | None = None, force: bool = False, *,
            post: Callable[..., Any] | None = None, sleep: Callable[[float], Any] | None = None,
-           cwd: Path | str | None = None, skill_dir: Path | str | None = None,
-           config: Mapping[str, Any] | None = None) -> int:
+           clock: Callable[[], float] | None = None, cwd: Path | str | None = None,
+           skill_dir: Path | str | None = None, config: Mapping[str, Any] | None = None) -> int:
     """生成一张图，返回退出码。aspect 不给时：名称含 framework 取 framework_aspect_ratio，否则取 design_aspect_ratio。"""
     try:
         job = _prepare(project_root, task_root, prompt_file, name, aspect, size, force, config)
@@ -327,22 +347,25 @@ def render(project_root: Path | str, task_root: Path | str, prompt_file: Path | 
         return 3
     try:
         result = call_gateway(settings, build_payload(job.prompt, job.model, job.aspect, job.size), post=post,
-                              sleep=sleep, timeout=job.timeout)
+                              sleep=sleep, clock=clock, timeout=job.timeout, total_timeout=job.total_timeout)
         data = extract_image(result, job.max_bytes)
     except FigureError as exc:
         extra = {"http_status": exc.status} if exc.status else {}
         _append_index(job, "failed", category=exc.category, **extra)
-        print(f"WisImage 出图失败：{exc.category}（{CATEGORIES.get(exc.category, '')}）；未写 PNG。", file=sys.stderr)
+        print(f"WisImage 出图失败：{exc.category}（{CATEGORIES.get(exc.category, '')}）；未写图片。", file=sys.stderr)
         if exc.text:
-            print(f"返回的文字：{settings.redact(exc.text)}", file=sys.stderr)
+            print(f"返回的文字：{settings.redact(exc.text)[:REFUSAL_CHARS]}", file=sys.stderr)
         return 1
-    _write_atomic(job.png, data)
-    fmt = image_format(data)
+    fmt = image_format(data) or "png"
+    ext = SAVED_EXTENSIONS[fmt]
+    _write_atomic(job.targets[ext], data)
+    for other, path in job.targets.items():
+        if other != ext and job.force:
+            path.unlink(missing_ok=True)  # --force 重画换了格式时，删去旧格式的同名图
+    rel = f"{FIGURES_DIR}/{job.name}.{ext}"
     logger.info("WisImage 返回 %d 字节（%s）", len(data), fmt)
-    _append_index(job, "ok", sha256=hashlib.sha256(data).hexdigest(), bytes=len(data), format=fmt)
-    if fmt != "png":
-        print(f"⚠️ 返回的是 {fmt} 数据，已按 .png 文件名保存；编译报错时改用 PNG 重画。", file=sys.stderr)
-    print(f"已生成 {FIGURES_DIR}/{job.name}.png")
+    _append_index(job, "ok", png=rel, sha256=hashlib.sha256(data).hexdigest(), bytes=len(data), format=fmt)
+    print(f"已生成 {rel}")
     return 0
 
 
@@ -351,7 +374,7 @@ def main(argv: list[str] | None = None, *, post: Callable[..., Any] | None = Non
          skill_dir: Path | str | None = None) -> int:
     parser = argparse.ArgumentParser(prog="figures.py", description="用 WisImage 生成研究框架图与设计图")
     sub = parser.add_subparsers(dest="command", required=True)
-    cmd = sub.add_parser("render", help="生成一张图，写入 P/figures/nsfc-proposal/<名称>.png")
+    cmd = sub.add_parser("render", help="生成一张图，写入 P/figures/nsfc-proposal/<名称>.png 或 .jpg")
     cmd.add_argument("--project-root", required=True)
     cmd.add_argument("--task-root", required=True, help="本任务的 .bensz-api/task-*/ 目录")
     cmd.add_argument("--prompt-file", required=True, help="任务目录下的提示词文件")
@@ -359,9 +382,10 @@ def main(argv: list[str] | None = None, *, post: Callable[..., Any] | None = Non
     cmd.add_argument("--aspect-ratio", choices=ASPECT_RATIOS,
                      help="不给时：名称含 framework 取 figures.framework_aspect_ratio，否则取 figures.design_aspect_ratio")
     cmd.add_argument("--image-size", choices=IMAGE_SIZES, help="不给时取 figures.image_size")
-    cmd.add_argument("--force", action="store_true", help="覆盖已存在的同名 PNG")
+    cmd.add_argument("--force", action="store_true", help="覆盖已存在的同名图片")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
+    logging.getLogger("urllib3").setLevel(logging.ERROR)  # urllib3 的警告可能带地址或主机名
     return render(args.project_root, args.task_root, args.prompt_file, args.name, args.aspect_ratio, args.image_size,
                   args.force, post=post, sleep=sleep, cwd=cwd, skill_dir=skill_dir)
 

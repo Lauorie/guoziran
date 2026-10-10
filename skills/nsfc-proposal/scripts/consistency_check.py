@@ -18,12 +18,11 @@ from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 from case_validate import case_ids, claim_ids
 from citation_ledger import entry_sha256, load_ledger
+from figure_check import missing_figures, strip_includegraphics
 from latex_files import bib_entry_texts, read_bib_index, relpath, scan_latex_tree
 from proposal_common import ProposalError, load_config, project_path, proposal_paths, read_yaml, resolve_project_root, split_latex_comment
 
 CITE_RE = re.compile(r"\\[A-Za-z]*cite[A-Za-z]*\*?(?:\[[^\]]*\]){0,2}\{([^}]*)\}")
-INCLUDEGRAPHICS_RE = re.compile(r"\\includegraphics(\[[^\]]*\])?\{([^}]*)\}")
-FIGURE_EXTENSIONS = (".png", ".pdf", ".jpg", ".jpeg")
 NUMBER_RE = re.compile(
     r"\d+(?:\.\d+)?(?:\s?(?:---|--|[–\-~～至到])\s?\d+(?:\.\d+)?)?[\s~]?(?:\\(?=%))?"
     r"(?P<unit>mm|cm|毫米|厘米|例(?!如)|名|家|年|个月|月|%|HU|kV|mAs|层|项|个(?!别))(?![A-Za-z])"
@@ -233,10 +232,11 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
         if is_tex and rel not in compiled:
             report.needs_review.append(Finding("file_not_compiled", rel, None, "main.tex 未引用该文件，内容不会进入 PDF"))
         raw_lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        file_bodies: list[str] = []
-        for number, raw in enumerate(raw_lines, 1):
-            body, comment = split_latex_comment(raw) if is_tex else (raw, "")
-            file_bodies.append(body)
+        parts = [split_latex_comment(raw) if is_tex else (raw, "") for raw in raw_lines]
+        file_bodies = [body for body, _ in parts]
+        # 过程说明扫描前删去 \includegraphics（可跨行），按行号对回
+        figure_free = strip_includegraphics("\n".join(file_bodies)).split("\n") if is_tex else file_bodies
+        for number, (body, comment) in enumerate(parts, 1):
             if comment and any(word in comment for word in hidden_words):
                 report.errors.append(Finding("hidden_placeholder", rel, number, comment.strip()[:80]))
             for match in NUMBER_RE.finditer(body):
@@ -254,8 +254,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                     detail = f"{_excerpt(scanned[match.start():], 40)}；请改成「【待补充：……】」并列入占位清单"
                     report.errors.append(Finding("placeholder_nonstandard", rel, number, detail))
             if process_patterns and entry.get("writer") != PROCESS_DESCRIBING_WRITER:
-                scanned = INCLUDEGRAPHICS_RE.sub("", placeholder_re.sub("", body))  # 图片路径含 nsfc-proposal/，不算过程说明
-                _check_process_text(report, rel, number, scanned, process_patterns)
+                _check_process_text(report, rel, number, placeholder_re.sub("", figure_free[number - 1]), process_patterns)
         bodies.extend(file_bodies)
         if is_tex:
             joined = JoinedText.from_lines(raw_lines, file_bodies)
@@ -271,7 +270,8 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                         _check_ledger_key(report, ledger, entry_texts, ledger_flagged, rel, number, key)
             if ledger is not None:
                 _check_cite_numbers(report, ledger, rel, joined)
-            _check_figures(report, root, rel, joined)
+            for pos, detail in missing_figures(root, joined.text):
+                report.errors.append(Finding("missing_figure_file", rel, joined.line_of(pos), detail))
             report.citations[rel] = len(cited)
             if entry.get("writer") == JUSTIFICATION_WRITER and len(cited) < min_refs:
                 report.needs_review.append(Finding("few_citations", rel, None, f"引用 {len(cited)} 篇不同文献，下限 {min_refs} 篇"))
@@ -319,26 +319,6 @@ def _check_cite_numbers(report: Report, ledger: Mapping[str, Mapping[str, Any]],
         for value in numbers:
             if not any(number_in_text(value, text) for text in abstracts):
                 report.needs_review.append(Finding("number_not_in_evidence", rel, number, f"{value}：{excerpt}"))
-
-
-def _figure_found(root: Path, arg: str) -> bool:
-    """路径相对 P 解析，须仍在 P 内；原样找不到时依次加 .png、.pdf、.jpg、.jpeg 再找。"""
-    if not arg:
-        return False
-    try:
-        return any(project_path(root, arg + ext).is_file() for ext in ("", *FIGURE_EXTENSIONS))
-    except ProposalError:
-        return False
-
-
-def _check_figures(report: Report, root: Path, rel: str, joined: JoinedText) -> None:
-    """去注释、跨行拼接后的正文中，\\includegraphics 指向的文件必须存在。"""
-    for match in INCLUDEGRAPHICS_RE.finditer(joined.text):
-        arg = match.group(2).strip()
-        if not _figure_found(root, arg):
-            command = re.sub(r"\s+", " ", match.group(0))
-            report.errors.append(Finding("missing_figure_file", rel, joined.line_of(match.start()),
-                                         f"{arg or '（空）'}：{command}"))
 
 
 def _check_process_text(report: Report, rel: str, number: int, text: str, patterns: list[str]) -> None:

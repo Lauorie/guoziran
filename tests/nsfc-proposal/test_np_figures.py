@@ -55,16 +55,31 @@ class FakeResponse:
 class FakePost:
     """依次返回给定的响应；元素是异常时抛出。"""
 
-    def __init__(self, *responses: Any) -> None:
+    def __init__(self, *responses: Any, tick: Any = None) -> None:
         self.responses = list(responses)
         self.calls: list[tuple[str, dict]] = []
+        self.tick = tick
 
     def __call__(self, url: str, **kwargs: Any) -> FakeResponse:
         self.calls.append((url, kwargs))
+        if self.tick:
+            self.tick()
         value = self.responses.pop(0)
         if isinstance(value, BaseException):
             raise value
         return value
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 16
+WEBP = b"RIFF\x10\x00\x00\x00WEBPVP8 " + b"\x00" * 8
 
 
 def image_result(data: bytes = PNG_1X1, mime: str = "image/png") -> dict:
@@ -191,11 +206,29 @@ class RenderSuccessTest(FiguresBase):
             self.assertEqual(self.render(force=True, post=post), 0)
         self.assertEqual(self.png().read_bytes(), PNG_1X1)
 
-    def test_jpeg_and_webp_bytes_are_accepted(self) -> None:
-        jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 16
-        webp = b"RIFF\x10\x00\x00\x00WEBPVP8 " + b"\x00" * 8
-        for data in (jpeg, webp):
-            self.assertEqual(figures.extract_image(image_result(data, "image/jpeg"), 1024), data)
+    def test_existing_jpg_also_needs_force_and_is_replaced(self) -> None:
+        self.configure()
+        jpg = self.png().with_suffix(".jpg")
+        jpg.parent.mkdir(parents=True)
+        jpg.write_bytes(JPEG)
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(self.render(), 2)
+        post = FakePost(FakeResponse(200, image_result()))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.render(force=True, post=post), 0)
+        self.assertEqual((self.png().read_bytes(), jpg.exists()), (PNG_1X1, False))
+
+    def test_jpeg_is_saved_as_jpg(self) -> None:
+        self.configure()
+        post = FakePost(FakeResponse(200, image_result(JPEG, "image/jpeg")))
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            self.assertEqual(self.render(post=post), 0)
+        self.assertEqual(stdout.getvalue().strip(), "已生成 figures/nsfc-proposal/fig1-framework.jpg")
+        self.assertEqual(self.png().with_suffix(".jpg").read_bytes(), JPEG)
+        self.assertFalse(self.png().exists())
+        entry = self.index()[-1]
+        self.assertEqual((entry["png"], entry["format"]), ("figures/nsfc-proposal/fig1-framework.jpg", "jpeg"))
 
 
 class NotConfiguredTest(FiguresBase):
@@ -219,6 +252,17 @@ class NotConfiguredTest(FiguresBase):
         for url in ("gw.example.test/img", "ftp://gw.example.test/img", f"{URL}#x", f"{URL} x"):
             self.configure(url=url)
             self.assert_not_configured()
+
+    def test_non_ascii_token_or_region_is_not_configured(self) -> None:
+        for token, region in (("sk-密钥-1", REGION), (TOKEN, "华东")):
+            self.configure(token=token, region=region)
+            stderr = io.StringIO()
+            post = FakePost()
+            with contextlib.redirect_stderr(stderr):
+                self.assertEqual(self.render(post=post), 3)
+            self.assertEqual(post.calls, [])
+            self.assertNotIn("密钥", stderr.getvalue() + json.dumps(self.index(), ensure_ascii=False))
+            self.assertNotIn("华东", stderr.getvalue() + json.dumps(self.index(), ensure_ascii=False))
 
     def test_disabled_in_config(self) -> None:
         self.configure()
@@ -266,9 +310,9 @@ class DotenvTest(FiguresBase):
 
 
 class GatewayFailureTest(FiguresBase):
-    def failed(self, *responses: Any, **kwargs: Any) -> tuple[int, FakePost, dict, str]:
+    def failed(self, *responses: Any, tick: Any = None, **kwargs: Any) -> tuple[int, FakePost, dict, str]:
         self.configure()
-        post = FakePost(*responses)
+        post = FakePost(*responses, tick=tick)
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr), contextlib.redirect_stdout(io.StringIO()):
             code = self.render(post=post, **kwargs)
@@ -294,9 +338,26 @@ class GatewayFailureTest(FiguresBase):
     def test_5xx_twice_and_network_twice(self) -> None:
         code, post, entry, _ = self.failed(FakeResponse(503), FakeResponse(500))
         self.assertEqual((code, len(post.calls), entry["category"]), (1, 2, "http_5xx"))
-        code, post, entry, _ = self.failed(requests.ConnectionError("refused"), requests.Timeout("slow"))
+        code, post, entry, _ = self.failed(requests.ConnectionError("refused"), requests.ConnectionError("refused"))
         self.assertEqual((code, len(post.calls), entry["category"]), (1, 2, "network"))
+        code, post, entry, _ = self.failed(requests.Timeout("slow"), requests.Timeout("slow"))
+        self.assertEqual((code, len(post.calls), entry["category"]), (1, 2, "timeout"))
         self.assertFalse(self.png().exists())
+
+    def test_total_timeout_caps_each_request_and_skips_late_retry(self) -> None:
+        config = {"figures": {"model": "m", "timeout_s": 300, "total_timeout_s": 560}}
+        clock = FakeClock()
+
+        def advance(seconds: float) -> Any:
+            return lambda: setattr(clock, "now", clock.now + seconds)
+
+        code, post, _, _ = self.failed(FakeResponse(502), FakeResponse(200, image_result()), config=config,
+                                       clock=clock, tick=advance(400))
+        self.assertEqual(code, 0)
+        self.assertEqual([kw["timeout"] for _, kw in post.calls], [300, 160])
+        clock.now = 0.0
+        code, post, entry, _ = self.failed(FakeResponse(502), config=config, clock=clock, tick=advance(540), force=True)
+        self.assertEqual((code, len(post.calls), entry["category"]), (1, 1, "timeout"))
 
     def test_200_without_image(self) -> None:
         code, post, entry, stderr = self.failed(
@@ -309,8 +370,12 @@ class GatewayFailureTest(FiguresBase):
         self.assertEqual((code, entry["category"]), (1, "no_image"))
 
     def test_bad_image_and_too_large(self) -> None:
-        code, _, entry, _ = self.failed(FakeResponse(200, image_result(b"GIF89a" + b"\x00" * 20, "image/gif")))
+        code, _, entry, _ = self.failed(FakeResponse(200, image_result(b"not an image at all", "image/png")))
         self.assertEqual((code, entry["category"]), (1, "bad_image"))
+        for data in (WEBP, b"GIF89a" + b"\x00" * 20):
+            code, _, entry, _ = self.failed(FakeResponse(200, image_result(data, "image/webp")))
+            self.assertEqual((code, entry["category"], entry["png"]), (1, "unsupported_format", None))
+        self.assertEqual(list((self.project / "figures" / "nsfc-proposal").glob("*")), [])
         code, _, entry, _ = self.failed(FakeResponse(200, image_result(b"\x89PNG" + b"\x00" * 100)),
                                         config={"figures": {"model": "m", "max_image_bytes": 50}})
         self.assertEqual((code, entry["category"]), (1, "too_large"))
@@ -328,7 +393,7 @@ class ArgumentTest(FiguresBase):
     def test_bad_name_target_and_prompt_location(self) -> None:
         self.configure()
         with contextlib.redirect_stderr(io.StringIO()):
-            for name in ("../x", "Fig1", "-fig", "a" * 49, ""):
+            for name in ("../x", "Fig1", "-fig", "a" * 49, "", "fig1\n"):
                 self.assertEqual(self.render(name), 2, name)
             outside = self.base / "prompt.txt"
             outside.write_text("提示词", encoding="utf-8")
@@ -350,9 +415,20 @@ class ArgumentTest(FiguresBase):
                     figures.main(argv + extra)
                 self.assertEqual(caught.exception.code, 2)
 
+    def test_main_quiets_urllib3(self) -> None:
+        urllib3_logger = logging.getLogger("urllib3")
+        self.addCleanup(urllib3_logger.setLevel, urllib3_logger.level)
+        urllib3_logger.setLevel(logging.NOTSET)
+        argv = ["render", "--project-root", str(self.project), "--task-root", str(self.task),
+                "--prompt-file", str(self.prompt), "--name", "Bad"]
+        with mock.patch.object(logging, "basicConfig"), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(figures.main(argv), 2)
+        self.assertEqual(urllib3_logger.level, logging.ERROR)
+
     def test_cli_script_runs_standalone(self) -> None:
         env = {k: v for k, v in os.environ.items() if k not in ENV_KEYS}
         env["PYTHONPYCACHEPREFIX"] = str(ROOT / ".bensz-api" / "pycache")
+        env["WISMODEL_IMAGE_URL"] = "not-a-url"
         proc = subprocess.run([sys.executable, str(SCRIPTS / "figures.py"), "render", "--project-root", str(self.project),
                                "--task-root", str(self.task), "--prompt-file", str(self.prompt), "--name", "Bad/Name"],
                               cwd=self.cwd, env=env, capture_output=True, text=True, timeout=60)
@@ -387,7 +463,14 @@ class SecretTest(FiguresBase):
 
     def assert_clean(self, text: str) -> None:
         self.assertNotIn(SENTINEL_TOKEN, text)
-        self.assertNotIn(SENTINEL_HOST, text)
+        self.assertNotIn(SENTINEL_HOST, text.lower())
+
+    def test_host_is_masked_regardless_of_case(self) -> None:
+        self.configure(url="https://GW.Sentinel.test/img", token=SENTINEL_TOKEN)
+        for host in ("GW.Sentinel.test", "gw.sentinel.test", "Gw.SENTINEL.Test"):
+            text = self.captured(FakePost(FakeResponse(200, refusal_result(f"无法生成 {host} 拒绝"))))
+            self.assert_clean(text)
+            self.assertIn("无法生成", text)
 
     def test_sentinels_never_leak(self) -> None:
         self.configure(url=SENTINEL_URL, token=SENTINEL_TOKEN)
@@ -402,6 +485,12 @@ class SecretTest(FiguresBase):
         for post in cases:
             self.assert_clean(self.captured(post))
             self.assertTrue(post.calls)
+        for prefix in ("x" * 190, "x" * 195, "x" * 199):
+            for secret in (SENTINEL_TOKEN, SENTINEL_HOST, SENTINEL_HOST.upper()):
+                text = self.captured(FakePost(FakeResponse(200, refusal_result(prefix + secret + " 之后的文字"))))
+                self.assert_clean(text)
+                self.assertNotIn("sk-SENT", text)
+                self.assertNotIn("gw.sent", text.lower())
         os.environ["WISMODEL_IMAGE_URL"] = f"{SENTINEL_HOST}/img"
         post = FakePost()
         text = self.captured(post)
