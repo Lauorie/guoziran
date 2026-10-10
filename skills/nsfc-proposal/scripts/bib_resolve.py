@@ -78,6 +78,12 @@ class Settings:
         )
 
 
+CROSSREF_TYPES = {"journal-article": "article", "proceedings-article": "inproceedings", "book-chapter": "incollection",
+                  "book-part": "incollection", "book-section": "incollection", "book": "book", "monograph": "book",
+                  "edited-book": "book", "reference-book": "book"}
+OPENALEX_TYPES = {"article": "article", "book-chapter": "incollection", "book": "book"}
+
+
 @dataclass(frozen=True)
 class WorkMeta:
     title: str
@@ -89,6 +95,7 @@ class WorkMeta:
     pages: str | None
     doi: str | None
     entry_type: str = "article"
+    publisher: str | None = None
 
 
 @dataclass
@@ -136,10 +143,11 @@ def crossref_meta(item: Mapping[str, Any]) -> WorkMeta | None:
     journals = item.get("container-title")
     journal = journals[0] if isinstance(journals, list) and journals else None
     kind = item.get("type")
-    entry_type = "article" if kind in (None, "journal-article") else ("inproceedings" if kind == "proceedings-article" else "misc")
+    entry_type = "article" if kind is None else CROSSREF_TYPES.get(kind, "misc")
     return WorkMeta(title=title, authors=tuple(authors), journal=_str(journal), year=_crossref_year(item),
                     volume=_str(item.get("volume")), issue=_str(item.get("issue")), pages=_str(item.get("page")),
-                    doi=normalize_doi(item.get("DOI")), entry_type=entry_type)
+                    doi=normalize_doi(item.get("DOI")), entry_type=entry_type,
+                    publisher=_str(item.get("publisher")))
 
 
 def openalex_meta(item: Mapping[str, Any]) -> WorkMeta | None:
@@ -159,7 +167,9 @@ def openalex_meta(item: Mapping[str, Any]) -> WorkMeta | None:
     year = item.get("publication_year") if isinstance(item.get("publication_year"), int) else None
     return WorkMeta(title=title, authors=tuple(authors), journal=_str(source.get("display_name")), year=year,
                     volume=_str(biblio.get("volume")), issue=_str(biblio.get("issue")), pages=pages,
-                    doi=normalize_doi(item.get("doi")))
+                    doi=normalize_doi(item.get("doi")),
+                    entry_type=OPENALEX_TYPES.get(item.get("type"), "article"),
+                    publisher=_str(source.get("host_organization_name")))
 
 
 def _norm_title(text: str) -> str:
@@ -204,13 +214,16 @@ def _escape(text: str) -> str:
 
 
 def to_bibtex(meta: WorkMeta, key: str) -> str:
-    venue_field = {"article": "journal", "inproceedings": "booktitle"}.get(meta.entry_type, "howpublished")
+    venue_field = {"article": "journal", "inproceedings": "booktitle", "incollection": "booktitle", "book": None}.get(
+        meta.entry_type, "howpublished")
+    with_publisher = meta.entry_type not in ("article", "inproceedings")
     authors = " and ".join(f"{_escape(f)}, {_escape(g)}" if g else _escape(f) for f, g in meta.authors)
     pages = meta.pages.replace("-", "--") if meta.pages and "--" not in meta.pages else meta.pages
     fields = [
         ("title", "{" + _escape(meta.title) + "}"),
         ("author", authors or None),
-        (venue_field, _escape(meta.journal) if meta.journal else None),
+        (venue_field, _escape(meta.journal) if meta.journal and venue_field else None),
+        ("publisher", _escape(meta.publisher) if meta.publisher and with_publisher else None),
         ("year", str(meta.year) if meta.year else None),
         ("volume", meta.volume),
         ("number", meta.issue),

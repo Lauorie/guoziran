@@ -37,4 +37,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - wispaper 检索改由 `scripts/wispaper_search.py` 执行：传输层并入自 academic-literature，原始返回逐字存档，断点续查，汇成 rls.host_results.v1；不再用 MCP 工具做检索轮次（来源：funded-2 验证运行，280 条记录只能手抄）。
 - 作图提示词的标签不加括号、引号、书名号，自检查清单外符号；动作不同的条件间比较神经或生理信号时，设动作匹配的对照；编译命令不带相对路径的 `--project-dir`（来源：funded-2 验证运行）。
 - 过程说明词加入「正式申请书」「正式稿」「请申请人」；内文只有省略号的【待补充：……】视为格式说明，不计入占位（来源：funded-2 验证运行）。
+- bib_resolve 按 CrossRef/OpenAlex 类型写条目：书章为 @incollection（booktitle、publisher），图书为 @book；其余 @misc 也带 publisher。参考文献样式不渲染 howpublished，书章此前没有出处（来源：funded-2 验证运行）。
 - 本分支未写 BAC 记录，经负责人同意。

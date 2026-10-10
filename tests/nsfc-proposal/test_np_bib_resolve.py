@@ -16,7 +16,7 @@ SCRIPTS = ROOT / "skills/nsfc-proposal/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import bib_resolve  # noqa: E402
-from bib_resolve import CROSSREF_WORKS, OPENALEX_WORKS, USER_AGENT, WorkMeta, make_bibkey, run, title_matches, to_bibtex  # noqa: E402
+from bib_resolve import CROSSREF_WORKS, OPENALEX_WORKS, USER_AGENT, WorkMeta, crossref_meta, make_bibkey, openalex_meta, run, title_matches, to_bibtex  # noqa: E402
 
 TITLE_1 = "Peritumoral texture and invasiveness of test nodules in a multicenter cohort study"
 CROSSREF_ITEM_1 = {
@@ -271,6 +271,45 @@ class ResolveTest(unittest.TestCase):
 
 
 class HelperTest(unittest.TestCase):
+    def test_crossref_book_chapter_becomes_incollection(self) -> None:
+        item = {"type": "book-chapter", "title": ["Divergent Thinking as a Process"], "author": [{"family": "Doe", "given": "Jane"}],
+                "container-title": ["Handbook of Test Methods"], "publisher": "Test Press", "page": "3-16",
+                "issued": {"date-parts": [[2023]]}, "DOI": "10.1000/ch1"}
+        meta = crossref_meta(item)
+        self.assertEqual((meta.entry_type, meta.publisher), ("incollection", "Test Press"))
+        entry = to_bibtex(meta, "k")
+        self.assertTrue(entry.startswith("@incollection{k,"))
+        self.assertIn("booktitle = {Handbook of Test Methods}", entry)
+        self.assertIn("publisher = {Test Press}", entry)
+        self.assertNotIn("howpublished", entry)
+
+    def test_crossref_book_and_other_types(self) -> None:
+        book = crossref_meta({"type": "monograph", "title": ["A Book"], "publisher": "P", "issued": {"date-parts": [[2020]]}})
+        self.assertEqual(book.entry_type, "book")
+        self.assertIn("publisher = {P}", to_bibtex(book, "b"))
+        other = crossref_meta({"type": "dataset", "title": ["Some Data"], "container-title": ["Data Hub"], "publisher": "Hub Inc"})
+        entry = to_bibtex(other, "d")
+        self.assertTrue(entry.startswith("@misc{d,"))
+        self.assertIn("publisher = {Hub Inc}", entry)
+        self.assertIn("howpublished = {Data Hub}", entry)
+
+    def test_chapter_without_container_or_publisher_does_not_fail(self) -> None:
+        meta = crossref_meta({"type": "book-chapter", "title": ["Lonely Chapter"], "issued": {"date-parts": [[2021]]}})
+        entry = to_bibtex(meta, "c")
+        self.assertTrue(entry.startswith("@incollection{c,"))
+        self.assertNotIn("booktitle", entry)
+        self.assertNotIn("publisher", entry)
+
+    def test_openalex_book_chapter(self) -> None:
+        item = {"title": "Chapter T", "type": "book-chapter", "publication_year": 2019,
+                "primary_location": {"source": {"display_name": "Book B", "host_organization_name": "Pub P"}}}
+        meta = openalex_meta(item)
+        self.assertEqual((meta.entry_type, meta.journal, meta.publisher), ("incollection", "Book B", "Pub P"))
+
+    def test_article_entry_ignores_publisher(self) -> None:
+        item = {"type": "journal-article", "title": ["T"], "container-title": ["J"], "publisher": "Elsevier"}
+        self.assertNotIn("publisher", to_bibtex(crossref_meta(item), "a"))
+
     def test_bibkey_collision_and_escape(self) -> None:
         meta = WorkMeta(title="The & test", authors=(("Tëster", "Ann"),), journal="J % Test", year=2024, volume=None, issue=None, pages=None, doi=None)
         taken = {"tester2024test"}
