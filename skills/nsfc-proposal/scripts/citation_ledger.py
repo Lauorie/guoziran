@@ -3,8 +3,9 @@
 
 每条进入 .bib 的文献留一条记录：来自哪条检索记录、元数据出自 CrossRef 还是 OpenAlex、
 写入 .bib 的条目文本哈希、可用的摘要原文。一致性检查据此拒绝手写或手改的条目。
-事件：add（bib_resolve 写入）、register_user（申请人确认由其提供、用 register-user --key 登记的条目）、
-drop（作废）。case.py init 只建空台账，不登记任何条目。不做 revise：要改一条文献，先 drop，再用 bib_resolve 重新解析。
+事件：add（bib_resolve 写入；bib_refresh 按台账中的 DOI 重新取元数据、原 key 重写条目后再记一条，reason 为 refresh）、
+register_user（申请人确认由其提供、用 register-user --key 登记的条目）、drop（作废）。case.py init 只建空台账，不登记任何条目。
+条目文本只由脚本写，不接受手改。同一篇文献的条目有误时用 bib_refresh；要换成另一篇，先 drop，再用 bib_resolve 重新解析。
 退出码：0 正常；1 audit 发现问题；2 输入或路径错误。
 """
 
@@ -92,9 +93,9 @@ def dropped_keys(path: Path) -> set[str]:
 
 
 def add_event(bibkey: str, *, source: str | None, entry_text: str, doi: str | None, abstract: str | None,
-              provenance: Mapping[str, Any]) -> dict[str, Any]:
+              provenance: Mapping[str, Any], reason: str | None = None) -> dict[str, Any]:
     return {"event": "add", "bibkey": bibkey, "time": now_iso(), "source": source, "doi": doi,
-            "entry_sha256": entry_sha256(entry_text), "abstract": abstract, "provenance": dict(provenance), "reason": None}
+            "entry_sha256": entry_sha256(entry_text), "abstract": abstract, "provenance": dict(provenance), "reason": reason}
 
 
 def _record_provenance(record: Mapping[str, Any], record_id: str) -> dict[str, Any]:

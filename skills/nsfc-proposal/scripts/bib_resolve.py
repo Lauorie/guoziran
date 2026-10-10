@@ -4,6 +4,7 @@
 输入：rls.paper.v1 记录（JSONL）。有 DOI 时查 CrossRef 并核对标题；没有 DOI 或核对失败时，
 按标题查 CrossRef，再查 OpenAlex。核对成功的条目追加到 main.tex 指向的第一个 .bib
 （写前备份，按 DOI 去重）；其余写入 proposal/literature_leads.md，标 [unverified]，正文不得引用。
+已写入的条目要按来源更新时，用 bib_refresh.py。
 退出码：0 完成（含未核实条目）；2 输入或路径错误。
 """
 
@@ -256,16 +257,23 @@ def _record_fields(record: Mapping[str, Any]) -> tuple[str | None, str, int | No
     return doi, title, year if isinstance(year, int) and not isinstance(year, bool) else None
 
 
-def _authoritative_by_doi(doi: str, title: str, *, session: HttpSession, settings: Settings) -> WorkMeta | None:
-    """用 DOI 回 CrossRef 取元数据；查询失败、无此 DOI 或标题不符时返回 None。"""
+def crossref_by_doi(doi: str, title: str, *, session: HttpSession, settings: Settings) -> tuple[WorkMeta | None, str | None]:
+    """用 DOI 回 CrossRef 取元数据，返回 (元数据, 失败原因)；给了标题时要求标题相符。"""
     try:
         data = _get_json(session, f"{CROSSREF_WORKS}/{quote(doi, safe='/')}", None, settings)
-    except (requests.RequestException, ValueError):
-        return None
+    except (requests.RequestException, ValueError) as exc:
+        return None, f"CrossRef DOI 查询失败（{failure_label(exc)}）"
     meta = crossref_meta((data or {}).get("message") or {}) if data else None
-    if meta is None or not title_matches(title, meta.title, settings.doi_title_similarity):
-        return None
-    return meta
+    if meta is None:
+        return None, "CrossRef 没有这个 DOI"
+    if title and not title_matches(title, meta.title, settings.doi_title_similarity):
+        return None, f"DOI {doi} 对应的标题与记录不符"
+    return meta, None
+
+
+def _authoritative_by_doi(doi: str, title: str, *, session: HttpSession, settings: Settings) -> WorkMeta | None:
+    """用 DOI 回 CrossRef 取元数据；查询失败、无此 DOI 或标题不符时返回 None。"""
+    return crossref_by_doi(doi, title, session=session, settings=settings)[0]
 
 
 def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Settings) -> tuple[WorkMeta | None, str | None, str | None]:
@@ -273,18 +281,10 @@ def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Setting
     doi, title, year = _record_fields(record)
     failures: list[str] = []
     if doi:
-        try:
-            data = _get_json(session, f"{CROSSREF_WORKS}/{quote(doi, safe='/')}", None, settings)
-        except (requests.RequestException, ValueError) as exc:
-            failures.append(f"CrossRef DOI 查询失败（{failure_label(exc)}）")
-        else:
-            meta = crossref_meta((data or {}).get("message") or {}) if data else None
-            if meta is None:
-                failures.append("CrossRef 没有这个 DOI")
-            elif title and not title_matches(title, meta.title, settings.doi_title_similarity):
-                failures.append(f"DOI {doi} 对应的标题与记录不符")
-            else:
-                return meta, "crossref", None
+        meta, failure = crossref_by_doi(doi, title, session=session, settings=settings)
+        if meta is not None:
+            return meta, "crossref", None
+        failures.append(failure)
     if not title:
         return None, None, "；".join(failures + ["记录没有标题"])
     query = re.sub(r"\s+", " ", ELLIPSIS_RE.sub(" ", title)).strip()
@@ -339,6 +339,14 @@ def resolve_records(records: Iterable[Mapping[str, Any]], *, session: HttpSessio
     return outcomes, entries
 
 
+def backup_file(path: Path, backup_dir: Path) -> Path:
+    """把 path 复制到 backup_dir，文件名加时间戳；返回备份路径。"""
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup = backup_dir / f"{path.name}.{datetime.now().strftime('%Y%m%d%H%M%S%f')}.bak"
+    shutil.copy2(path, backup)
+    return backup
+
+
 def append_entries(bib_path: Path, entries: list[str], backup_dir: Path) -> Path | None:
     """追加条目；写前备份。没有条目时不碰文件。"""
     if not entries:
@@ -346,9 +354,7 @@ def append_entries(bib_path: Path, entries: list[str], backup_dir: Path) -> Path
     backup = None
     text = ""
     if bib_path.exists():
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        backup = backup_dir / f"{bib_path.name}.{datetime.now().strftime('%Y%m%d%H%M%S%f')}.bak"
-        shutil.copy2(bib_path, backup)
+        backup = backup_file(bib_path, backup_dir)
         text = bib_path.read_text(encoding="utf-8")
     else:
         bib_path.parent.mkdir(parents=True, exist_ok=True)
@@ -382,12 +388,18 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def run(project_root: Path, records_path: Path, task_root: Path, *, session: HttpSession | None = None, dry_run: bool = False,
-        sleep: Callable[[float], None] | None = None) -> dict[str, Any]:
-    root = resolve_project_root(project_root)
+def check_task_root(task_root: Path) -> Path:
+    """返回解析后的任务目录；不是 .bensz-api/task-*/ 时报错。"""
     task = Path(task_root).expanduser().resolve()
     if not task.name.startswith("task-") or task.parent.name != ".bensz-api":
         raise ProposalError(f"--task-root 必须指向 .bensz-api/task-*/ 目录：{task}")
+    return task
+
+
+def run(project_root: Path, records_path: Path, task_root: Path, *, session: HttpSession | None = None, dry_run: bool = False,
+        sleep: Callable[[float], None] | None = None) -> dict[str, Any]:
+    root = resolve_project_root(project_root)
+    task = check_task_root(task_root)
     records = _read_jsonl(records_path)
     tree = scan_latex_tree(root)
     if not tree.bib_files:

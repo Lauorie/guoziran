@@ -17,6 +17,7 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 引用台账 `proposal/citation_ledger.jsonl`：记录每条文献的来源与条目哈希，一致性检查拒绝不在台账中或被手改的引用，并核对引用句中的数字是否见于所引文献摘要，并提示正文中的写作过程说明。
 - 一致性检查拦截非标准写法的占位（`consistency.nonstandard_placeholder_patterns`，如 `[to be supplied: …]`），报「占位写法不规范」；写作过程说明的匹配词补充「由申请人」「建议申请人」等；引用句数字抽取中，「0.5-0.7%」的左端按百分数处理（仅「至」「到」连接时左端按普通小数）。
 - 引用句数字核对识别更多写法：摘要中的空格、细空格、NBSP 千分位，`0.62` 与 `0.620` 等价，英文数词 two 至 twenty（含 two-year 写法）；空格千分位与原样两种读法任一命中即可，小数等价至少保留一位小数；`process_text_in_body` 跳过 writer 为 `nsfc-proposal` 的文件（生成式人工智能使用说明）。
+- `scripts/bib_refresh.py`：按引用台账中的 DOI 重新取 CrossRef 元数据，用原 key 重写 `.bib` 条目，台账追加 `reason` 为 `refresh` 的 add 事件；申请人登记的条目与没有 DOI 的条目不刷新（来源：fresh-1 验证运行）。
 
 ### Changed（变更）
 
