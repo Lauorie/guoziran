@@ -5,7 +5,7 @@
 - `2.2 特色与创新`
 - `2.3 年度研究计划`
 
-目标是形成"研究内容 → 创新点 → 年度计划"的一致闭环。
+目标是形成“研究内容 → 创新点 → 年度计划”的一致闭环。
 
 ## 参数（建议显式提供）
 
@@ -22,8 +22,8 @@ project_root：projects/NSFC_Young
 信息表：请按 skills/nsfc-research-content-writer/references/info_form.md 提供
 输出：写入 extraTex/2.1.研究内容.tex、extraTex/2.2.特色与创新.tex、extraTex/2.3.年度研究计划.tex
 output_mode：apply（默认）/ preview（只预览不写入）
-研究类型：基础研究 / 应用研究（用于选择更贴合的组织框架；不确定时按"问题→目标→内容→路线→验证"通用主线组织）
-篇幅目标（推荐）：研究内容 12–15 页（含图表），纯文字约 7000–15000 字；以"页数控制"为主，不要以字数为导向
+研究类型：基础研究 / 应用研究（用于选择更贴合的组织框架；不确定时按“问题→目标→内容→路线→验证”通用主线组织）
+篇幅目标（推荐）：研究内容 12–15 页（含图表），纯文字约 7000–15000 字；以“页数控制”为主，不要以字数为导向
 额外要求：内部规划时子目标编号 S1–S4（编号不写入正文）；每个子目标必须写清 指标+对照+数据来源；2.2/2.3 用自然语言回溯对应的子目标
 禁止改动：不要改 main.tex、extraTex/@config.tex、任何 .cls/.sty
 ```
@@ -32,7 +32,7 @@ output_mode：apply（默认）/ preview（只预览不写入）
 
 - 研究内容推荐页数：12–15 页（含图表），约占标书总页数（≤28 页）的 50%
 - 研究内容推荐字数：7000–15000 字（纯文字部分；图表多时取低值）
-- 评审标准已从"字数控制"转向"页数控制"，建议先按页数规划结构，再用图表提质
+- 评审标准已从“字数控制”转向“页数控制”，建议先按页数规划结构，再用图表提质
 - 技术路线图建议放在研究内容开头
 - 参考：`skills/nsfc-research-content-writer/references/page_budget.md`
 
@@ -47,7 +47,7 @@ output_mode：apply（默认）/ preview（只预览不写入）
 - 按 `skills/nsfc-research-content-writer/references/dod_checklist.md` 快速自检（重点看 2.2 可回溯、2.3 覆盖 S1–S4）
 - 可选脚本自检（只读）：`python3 skills/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root projects/NSFC_Young`
   - 年度计划按研究期限核对：默认 3 年；面上项目等加 `--project-type "面上项目"`（年数取 `config.yaml` 的 `yearly_plan`）或 `--years 4`。
-  - 更严格（将"首次提出/领先"等绝对化措辞视为错误）：`python3 skills/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root projects/NSFC_Young --fail-on-risk-phrases`
+  - 更严格（将“首次提出/领先”等绝对化措辞视为错误）：`python3 skills/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root projects/NSFC_Young --fail-on-risk-phrases`
   - 检查把正确的专业写法（如 L5–S1、S100β）报成 S 编号时，把该写法加入 `config.yaml` 的 `checks.allowed_s_tokens`。
   - 一键执行（先校验 skill 再自检输出）：`python3 skills/nsfc-research-content-writer/scripts/run_checks.py --project-root projects/NSFC_Young --fail-on-risk-phrases`
 
