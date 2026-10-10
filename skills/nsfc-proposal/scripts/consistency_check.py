@@ -133,7 +133,7 @@ _NUMBER_WORDS = {w: str(i) for i, w in enumerate(
     "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty".split())}
 _NUMBER_WORD_RE = re.compile(r"(?<![\w-])(" + "|".join(w for w in _NUMBER_WORDS if w not in ("zero", "one")) + r")(?!\w|-(?:one|two|three|four|five|six|seven|eight|nine)\b)", re.IGNORECASE)
 _LATEX_LENGTH_RE = re.compile(r"\s?(?:em|pt|ex)(?![A-Za-z])|\s?\\(?:text|line|column)width(?![A-Za-z])")
-_PERCENT_WORDS = r"(?:per\s*cent|percentage[\s-]points?)\b"
+_PERCENT_WORDS = r"(?:per\s*cent)\b"
 _PERCENT_RANGE_RE = re.compile(r"(\d+(?:\.\d+)?)(\s*(?:[–—\-~～]|to)\s*)(\d+(?:\.\d+)?)\s*" + _PERCENT_WORDS, re.IGNORECASE)
 _PERCENT_WORD_RE = re.compile(r"(\d+(?:\.\d+)?)\s*" + _PERCENT_WORDS, re.IGNORECASE)
 
@@ -165,12 +165,12 @@ def sentence_numbers(sentence: str) -> list[str]:
 
 
 def _evidence_readings(text: str) -> list[str]:
-    """摘要的两种读法：原样，以及把空格类千分位并回；数字声称见于任一读法即算有据。percent 写法读作 %。"""
+    """摘要的两种读法：原样，以及把空格类千分位并回；数字声称见于任一读法即算有据。percent、per cent 读作 %；percentage points 是另一个量，不读作 %。"""
     text = re.sub(r"\\%", "%", text).replace("％", "%")
+    text = _NUMBER_WORD_RE.sub(lambda m: _NUMBER_WORDS[m.group(1).lower()], _THOUSANDS_RE.sub("", text))
     text = _PERCENT_RANGE_RE.sub(r"\1%\2\3%", text)
     text = _PERCENT_WORD_RE.sub(r"\1%", text)
     text = re.sub(r"\s+%", "%", text)
-    text = _NUMBER_WORD_RE.sub(lambda m: _NUMBER_WORDS[m.group(1).lower()], _THOUSANDS_RE.sub("", text))
     return [text, _SPACE_THOUSANDS_RE.sub(r"\1", text)]
 
 

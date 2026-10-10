@@ -339,13 +339,16 @@ class LedgerConsistencyTest(unittest.TestCase):
         self.assertEqual(self._number_details("混投下降3.5\\%\\cite{wu2021value}。\n", a), [])
         self.assertEqual(self._number_details("占比由12\\%升至15\\%\\cite{wu2021value}。\n", a), [])
         self.assertEqual(len(self._number_details("用电量下降30\\%\\cite{wu2021value}。\n", a)), 1)
+        self.assertEqual(len(self._number_details("正确率提高7\\%\\cite{wu2021value}。\n", a)), 1)
 
     def test_number_in_text_reads_percent_words(self) -> None:
         from consistency_check import number_in_text
         text = "Rates rose by 10-20 Percent and by 4.5 per cent; another arm gained 6 percentage-points."
-        for value in ("10%", "20%", "4.5%", "6%"):
+        for value in ("10%", "20%", "4.5%"):
             self.assertTrue(number_in_text(value, text), value)
+        self.assertFalse(number_in_text("6%", text))
         self.assertFalse(number_in_text("45%", text))
+        self.assertTrue(number_in_text("10%", "Use fell by ten percent overall."))
 
     def test_month_after_year_is_not_extracted(self) -> None:
         from consistency_check import sentence_numbers

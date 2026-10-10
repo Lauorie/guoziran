@@ -168,7 +168,7 @@ python3 S/scripts/case.py render --project-root P
 - 规则 5：凡是叙述研究现状、他人方法或结论、流行病学数据的句子，必须 `\cite`，且只能引用同时满足三条的 bibkey：(a) 是 `bib_resolve.py` 的 `added`，或 `exists` 且该 key 在台账中有有效记录；(b) 列在这句话所表达的那条论断的 `evidence` 中，`role` 为 supporting；(c) 措辞不超过该论断的 `support`。内容没有对应论断时，先按第 3 步把论断补进 `evidence_map.yaml`，或按 `unsupported` 的两类处理、删去。`unsupported` 论断分两类。缺口类，即本项目要回答的认知缺口：写「尚不清楚」「尚未检验」，每个缺口写一次，不在相邻句子重复推测词。背景类，即背景与现状论断（领域事实，申请人在材料中写明的现有不足）：不逐句改成「可能」。集中写成一段，作为本项目对现状的判断，段末放一处可见占位，逐条列出要补的文献，例如 `【待补充：支持上述判断的文献——(1) 现有模型多基于单中心数据；(2) 外部验证中性能下降；(3) 已有瘤周研究所用的环带宽度】`。占位列入占位清单。这一段不写凭记忆的研究名称、作者、年份，也不写任何凭记忆的具体数字。每条背景类判断都要在 `evidence_map.yaml` 中有对应论断，`support` 为 `unsupported`，以便追溯。「已有研究做到哪一步」（创新点的参照）按背景类处理：在线时引用；离线时列进同一处占位。不把某项具体研究的结果改写成「可能」来回避引用：转述某项研究发现了什么的句子，必须引用该研究。一个段落讲几项研究，就逐项引用，不在段末堆一个引用。申请人自己的结果按申请人材料写或写占位，不需 `\cite`（材料本身是已入 `.bib` 的已发表论文时才引用）；本项目自己的设计、目标和假设不是现状，不需引用；教科书级定义不需引用，除非引用具体标准或指南（此时引用，或按下句写明名称）。国家或部门的政策文件、诊疗规范、行业指南，联网到发文机关的官方网站核对文件名、发文机关与年份后，可在正文写明，如「《“健康中国2030”规划纲要》（中共中央、国务院，2016）」，不进 `.bib`，网址与核对日期写入 `P/proposal/literature_leads.md` 的「## 官方文件」一节（`init` 已建好）。核对不到的不写，按背景类论断处理。正文只写文件明文规定的内容。示例见 `references/evidence_wording.md` 的「哪些句子必须引用」与「政策文件」。
 - 规则 6：证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标。不用推测或泛泛的背景凑字数；字数不足的原因写进收尾报告。
 - 规则 7：被调用的写作 skill 若在自己的说明里要向用户提问（确认 project_root 或 output_mode、确认后创建 `extraTex`、nsfc-abstract 多次超长裁剪后让用户选方案等），一律不问，取保守默认（保留已有文件、按配置先预览再应用、停止裁剪并保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md`，并列入最终报告。整个流程只有第 5 步向用户提问。
-- 规则 8：`citation_ledger.py register-user` 只用于申请人逐条确认过、由申请人提供的文献：`python3 S/scripts/citation_ledger.py register-user --project-root P --key K`，每条一个 `--key`（可重复）。本流程只用 `--key`，不用一次登记全部未入账条目的 `--all`。AI 不得用它登记自己写的或改过的条目。`register-user` 登记的条目只能支持 `applicant_material` 论断，不计入 `single_verified`、`multi_verified` 的篇数。不得手写或手改 `.bib`（例外：只删不改。删去已 `drop` 的条目，或删去不属于申请人的未入账条目，如模板示例）。要修正某条文献：仍是同一篇、只是条目文本有误（如期刊名显示 `&amp;`、类型或字段缺失）时，运行 `python3 S/scripts/bib_refresh.py --project-root P --task-root T --key K`（可重复 `--key`），按台账中的 DOI 重新取 CrossRef 元数据，原 key 不变，台账追加一条记录；退出码 1 表示有条目没有刷新，原样保留，原因见 `T/nsfc-proposal/output/bib_refresh.json`。要换成另一篇，或条目是申请人登记的、台账中没有 DOI，先 `python3 S/scripts/citation_ledger.py drop --project-root P --key K --reason "…"`，从 `.bib` 删去该条，再用 `bib_resolve` 重新解析（仍留在 `.bib` 的作废条目会被报为 `exists`）。不在台账中的文献不得引用。
+- 规则 8：`citation_ledger.py register-user` 只用于申请人逐条确认过、由申请人提供的文献：`python3 S/scripts/citation_ledger.py register-user --project-root P --key K`，每条一个 `--key`（可重复）。本流程只用 `--key`，不用一次登记全部未入账条目的 `--all`。AI 不得用它登记自己写的或改过的条目。`register-user` 登记的条目只能支持 `applicant_material` 论断，不计入 `single_verified`、`multi_verified` 的篇数。不得手写或手改 `.bib`（例外：只删不改。删去已 `drop` 的条目，或删去不属于申请人的未入账条目，如模板示例）。要修正某条文献：仍是同一篇、只是条目文本有误（如期刊名显示 `&amp;`、类型或字段缺失）时，运行 `python3 S/scripts/bib_refresh.py --project-root P --task-root T --key K`（可重复 `--key`），按台账中的 DOI 重新取 CrossRef 元数据，原 key 不变，台账追加一条记录；退出码 1 表示有条目没有刷新，原样保留，原因见 `T/nsfc-proposal/output/bib_refresh.json`。同一条目重跑仍失败（如 CrossRef 没有这个 DOI、标题不符）时，按下一句的 drop 流程处理。要换成另一篇，或条目是申请人登记的、台账中没有 DOI，先 `python3 S/scripts/citation_ledger.py drop --project-root P --key K --reason "…"`，从 `.bib` 删去该条，再用 `bib_resolve` 重新解析（仍留在 `.bib` 的作废条目会被报为 `exists`）。不在台账中的文献不得引用。
 - 规则 9：正文中，「核实」「检索」「文献支持」「本次未」等描述写作过程的话，以及 `proposal/` 下的文件名，只写进 `assumptions.md`、`stages.md` 或收尾报告，不进正文；可见占位不受此限；第 8 步由本 skill 写的 AI 使用说明也不受此限。写给申请人的嘱咐（如「建议申请人优先补充……」「不补充的条目应在提交前删去」）放进对应占位的括号内或 `assumptions.md`。对申请人原有口径的改动，只在 `assumptions.md` 的「AI 拟定项」中说明；正文直接写采用的口径和理由，不写「申请人提出的原始口径是……」。
 
 6.1 立项依据：
@@ -248,7 +248,7 @@ python3 S/scripts/consistency_check.py --project-root P
 - 正式交付物写在 `P` 中。过程文件只写在 `T` 中：材料解析结果（`T/shared/materials/`）、wispaper 原始返回、检索 bundle、信息表、`.bib` 备份、`bib_resolve.json`（试运行为 `bib_resolve.dryrun.json`）、`bib_refresh.json`（`bib_refresh.py` 写入，同在 `T/nsfc-proposal/output/`）、出图提示词与 `index.json`（`T/nsfc-proposal/output/figures/`）、运行日志。
 - `P/figures/nsfc-proposal/` 是本 skill 写图的目录，列在 `config.yaml` 的 `guardrails.allowed_write_dirs` 中；只由 `figures.py` 写入。重画用新名称，不覆盖已有的图。
 - `T` 中不保存密钥、令牌和个人身份信息；HTTP 请求不附带个人邮箱。
-- 不修改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`；`.bib` 只追加；例外只有规则 8 的两种删除：`drop` 之后删去该条目，以及删去不属于申请人的未入账条目（如模板示例）。
+- 不修改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`；`.bib` 只追加；例外有三种，都按规则 8：`drop` 之后删去该条目；删去不属于申请人的未入账条目（如模板示例）；`bib_refresh.py` 按台账 DOI 用原 key 重写同一篇文献的条目（写前备份）。
 - `proposal/citation_ledger.jsonl` 只追加，不手改；登记和作废只用 `citation_ledger.py`。
 
 ### 校验
@@ -274,7 +274,7 @@ python3 S/scripts/consistency_check.py --project-root P
 | 编译失败 | 报告错误位置；不改动结构命令 |
 | `.bib` 写入出错 | 用 `T/nsfc-proposal/output/bib_backup/` 中的备份恢复 |
 | 台账与 `.bib` 不一致 | 找出手写或手改的条目，按规则 8 处理 |
-| `.bib` 条目显示 `&amp;` 等 HTML 实体（旧版 `bib_resolve` 写入） | 不手改。在 `.bib` 中搜 `&amp;`、`&lt;`、`&gt;`、`&#` 找出这些条目，按规则 8 用 `bib_refresh.py` 刷新 |
+| `.bib` 条目显示 `&amp;` 等 HTML 实体（旧版 `bib_resolve` 写入） | 不手改。在 `.bib` 中搜 `amp;`、`lt;`、`gt;`、`quot;`、`\&\#` 找出这些条目，按规则 8 用 `bib_refresh.py` 刷新 |
 | 材料解析警告「WisDoc 解析失败（WISDOCRS_BASE_URL 未配置或写法不对）」 | 已自动用本机文字；配置好 `WISDOCRS_BASE_URL`（环境变量或 `.env`，值不带行尾注释）后，只对该 PDF 加 `--no-cache` 重跑 `materials.py parse` |
 | `materials.py` 超时、被打断，或警告 WisDoc 超时、连接失败 | 重跑同一命令：已完成的文件命中缓存，不再上传；仍失败的 PDF 稍后只对该文件加 `--no-cache` 重跑，期间按本机文字（`local.txt`）继续 |
 | 材料解析警告「WisDoc 解析失败（服务器返回的地址不在允许范围内）」 | 已自动用本机文字。WisDoc 返回的结果地址或图片地址不是网关主机、其子域名或同一上级域名下的主机时会被拒绝；确认该主机可信后，把它写进 `WISDOC_ALLOWED_HOSTS`（环境变量或 `.env`，逗号分隔），再只对该 PDF 加 `--no-cache` 重跑 |

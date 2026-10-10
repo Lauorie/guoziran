@@ -106,11 +106,13 @@ def refresh(project_root: Path, task_root: Path, keys: Sequence[str], *, session
             outcomes.append(RefreshOutcome(key, "failed", doi=doi, reason=reason))
             continue
         text = to_bibtex(meta, key)
-        if entry_sha256(text) == entry_sha256(texts[key]):
+        new_hash = entry_sha256(text)
+        if new_hash == entry_sha256(texts[key]) == ledger[key].get("entry_sha256"):
             outcomes.append(RefreshOutcome(key, "unchanged", doi=doi))
             continue
         new_texts[key] = text
-        outcomes.append(RefreshOutcome(key, "refreshed", doi=meta.doi or doi))
+        reason = "条目文本已与检索结果一致，台账补记一条 refresh 记录" if new_hash == entry_sha256(texts[key]) else None
+        outcomes.append(RefreshOutcome(key, "refreshed", doi=meta.doi or doi, reason=reason))
     out_dir = task / "nsfc-proposal" / "output"
     backups = _rewrite(tree.bib_files, texts, new_texts, out_dir / "bib_backup")
     written = bib_entry_texts(tree.bib_files)

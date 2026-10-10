@@ -134,6 +134,34 @@ class RefreshTest(unittest.TestCase):
         self.assertEqual(summary["backups"], [])
         self.assertEqual(self._snapshot(), before)
 
+    def test_hand_fixed_entry_gets_ledger_record(self) -> None:
+        self._write_bib(CLEAN)
+        append_event(self.ledger, add_event(KEY, source="crossref", entry_text=OLD, doi=DOI, abstract=ABSTRACT,
+                                            provenance=PROVENANCE))
+        self.assertEqual(audit(self.root), ([], [KEY]))
+        before = self.bib.read_bytes()
+        summary = self._refresh(FakeSession({DOI_URL: FakeResponse(200, {"message": ITEM})}))
+        self.assertEqual(summary["counts"], {"refreshed": 1, "unchanged": 0, "failed": 0})
+        self.assertEqual(self.bib.read_bytes(), before)
+        self.assertEqual(summary["backups"], [])
+        self.assertEqual(audit(self.root), ([], []))
+        self.assertEqual(load_ledger(self.ledger)[KEY]["reason"], "refresh")
+
+    def test_mixed_success_refreshes_only_good_keys(self) -> None:
+        key2, doi2 = "tester2024second", "10.5555/nsfc.test.002"
+        second = "@article{tester2024second,\n  title = {{Second paper}},\n  year = {2024},\n  doi = {10.5555/nsfc.test.002},\n}\n"
+        self.bib.write_text(self.bib.read_text(encoding="utf-8") + "\n" + second, encoding="utf-8")
+        append_event(self.ledger, add_event(key2, source="crossref", entry_text=bib_entry_texts([self.bib])[key2],
+                                            doi=doi2, abstract=None, provenance={"record_id": "r2"}))
+        second_before = bib_entry_texts([self.bib])[key2]
+        routes = {DOI_URL: FakeResponse(200, {"message": ITEM})}
+        summary = self._refresh(FakeSession(routes), KEY, key2)
+        self.assertEqual(summary["counts"], {"refreshed": 1, "unchanged": 0, "failed": 1})
+        self.assertEqual(bib_entry_texts([self.bib])[key2], second_before)
+        self.assertEqual(audit(self.root), ([], []))
+        with mock.patch.object(bib_refresh.requests, "Session", return_value=FakeSession(routes)):
+            self.assertEqual(self._main(KEY, key2), 1)
+
     def test_network_failure_leaves_entry_and_ledger(self) -> None:
         before = self._snapshot()
         summary = self._refresh(FakeSession({DOI_URL: requests.ConnectionError("down")}))

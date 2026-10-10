@@ -57,7 +57,7 @@ consistency:
   nonstandard_placeholder_patterns: ["\\[to be (?:supplied|added|confirmed)", "\\[TBD", "\\[待补充", "\\[请补充", "【请补充", "［待补充", "(?<![A-Za-z])XXX(?![A-Za-z])"]
 
 guardrails:
-  # 本 skill 自己写入的正文文件；proposal/ 下的文件；.bib 只追加、写前备份（目标由 main.tex 解析）
+  # 本 skill 自己写入的正文文件；proposal/ 下的文件；.bib 只追加（规则 8 的删除与 bib_refresh 重写除外）、写前备份（目标由 main.tex 解析）
   allowed_write_files:   # 供执行说明引用，脚本不读取
     - extraTex/4.5.生成式人工智能.tex
   allowed_write_dirs:    # 供执行说明引用，脚本不读取
