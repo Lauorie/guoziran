@@ -46,4 +46,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 第 3 步第 6 项：再次补全摘要时用 `enrich-abstracts --reuse` 沿用前次结果，不手工合并（来源：fresh-1 验证运行）。
 - `bib_resolve` 只查 CrossRef：删去 OpenAlex 兜底。CrossRef 查不到的记录写入线索清单，正文不引用。
 - 第 3 步只用 wispaper：bundle 加 `--provider-order mcp`；补摘要改为按标题检索 wispaper（`abstract-queries`、`enrich-abstracts --offline`）；wispaper 不可用时停在第 3 步，不改用其他检索源。
+- 研究内容的小标题按每项研究的类型选，一章中两类研究都有时各用各的；设计图中的实物与刺激材料画成线描图标，自检时照片或写实渲染判为不合格。
 - 本分支未写 BAC 记录，经负责人同意。

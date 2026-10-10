@@ -119,5 +119,21 @@ class RoundFiveRetrievalDocsTest(unittest.TestCase):
         self.assertIn("不改用其他检索源", row[0])
 
 
+class RoundFiveWritingDocsTest(unittest.TestCase):
+    def test_subheadings_follow_each_study_type(self) -> None:
+        bounds = (SKILL / "references" / "section_boundaries.md").read_text(encoding="utf-8")
+        self.assertIn("小标题按每项研究的类型选", bounds)
+        self.assertIn("各用各的一组", bounds)
+        self.assertNotIn("全章一致", bounds)
+        self.assertIn("不为统一改用另一组", TEXT)
+        self.assertNotIn("要求每项研究内容用同一组，全章一致", TEXT)
+
+    def test_figures_draw_stimuli_as_icons_and_reject_photos(self) -> None:
+        guide = (SKILL / "references" / "figure_guide.md").read_text(encoding="utf-8")
+        self.assertEqual(guide.count("无照片、无写实渲染"), 2)
+        self.assertIn("画成线描图标", guide)
+        self.assertIn("没有照片或写实渲染的图像", guide)
+
+
 if __name__ == "__main__":
     unittest.main()
