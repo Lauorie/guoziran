@@ -233,6 +233,9 @@ skills/*/tests/
 !/tests/nsfc-proposal/
 /tests/nsfc-proposal/*
 !/tests/nsfc-proposal/*.py
+!/tests/nsfc-ref-alignment/
+/tests/nsfc-ref-alignment/*
+!/tests/nsfc-ref-alignment/*.py
 !/tests/bensz-thesis/
 !/tests/bensz-thesis/**
 /tests/bensz-thesis/.DS_Store

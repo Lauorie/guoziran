@@ -105,7 +105,7 @@ python3 skills/nsfc-ref-alignment/scripts/run_ref_alignment.py \
 | `project_root` | （必填） | 标书项目根目录 |
 | `main_tex` | `main.tex` | 主入口 tex（相对 `project_root`） |
 | `report_dir` | `references` | 交付报告输出目录（相对当前工作目录） |
-| `verify_online` | `false` | 是否在线核验 DOI（Crossref/OpenAlex） |
+| `verify_online` | `false` | 是否在线核验 DOI（Crossref） |
 
 ---
 

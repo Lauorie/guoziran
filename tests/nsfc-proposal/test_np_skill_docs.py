@@ -136,5 +136,14 @@ class RoundFiveWritingDocsTest(unittest.TestCase):
         self.assertIn("没有照片或写实渲染的图像", guide)
 
 
+class NsfcSkillsHaveNoOpenAlexTest(unittest.TestCase):
+    def test_no_nsfc_skill_mentions_openalex(self) -> None:
+        suffixes = {".py", ".md", ".yaml", ".yml", ".json", ".txt", ".tex", ".sh"}
+        hits = [str(p.relative_to(ROOT)) for d in sorted(SKILLS.glob("nsfc-*")) for p in d.rglob("*")
+                if p.is_file() and p.suffix in suffixes and p.name != "CHANGELOG.md" and "__pycache__" not in p.parts
+                and "openalex" in p.read_text(encoding="utf-8", errors="ignore").lower()]
+        self.assertEqual(hits, [])
+
+
 if __name__ == "__main__":
     unittest.main()

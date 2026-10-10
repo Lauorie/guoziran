@@ -7,7 +7,7 @@ run_ref_alignment.py - nsfc-ref-alignment 的确定性入口（只读）
 - 抽取所有引用（\cite{...} 等）与其句子级上下文
 - 发现并解析 .bib（\bibliography / \addbibresource）
 - 进行确定性完整性检查：缺失 bibkey / 重复条目 / 字段缺失 / DOI 格式
-- 可选：在线核验 DOI（Crossref/OpenAlex，只做存在性与元信息粗比对；失败降级）
+- 可选：在线核验 DOI（Crossref，只做存在性与元信息粗比对；失败降级）
 - 生成：
   - 中间产物：{project_root}/.bensz-api/task-{yyyymmdd-hhmm}-{简短描述}/nsfc-ref-alignment/{timestamp}/input|output|log/...
   - 交付报告（确定性草稿）：{report_dir}/NSFC-REF-ALIGNMENT-v{timestamp}.md
@@ -76,7 +76,7 @@ def main() -> int:
     ap.add_argument("--main-tex", default="main.tex", help="入口 tex（相对 project_root），默认 main.tex")
     ap.add_argument("--report-dir", default="references", help="交付报告输出目录（相对当前工作目录），默认 ./references")
     ap.add_argument("--prepare", action="store_true", help="生成结构化输入与确定性报告（默认执行）")
-    ap.add_argument("--verify-online", action="store_true", help="在线核验 DOI（Crossref/OpenAlex）")
+    ap.add_argument("--verify-online", action="store_true", help="在线核验 DOI（Crossref）")
     args = ap.parse_args()
 
     skill_root = Path(__file__).resolve().parents[1]
@@ -200,12 +200,10 @@ def main() -> int:
             online_summary["checked"] += 1
             online_results[k] = res.to_dict()
 
-            # mark failures: no provider ok OR title mismatch suspicious (when both titles present)
+            # mark failures: Crossref lookup failed OR title mismatch suspicious (when both titles present)
             title_mismatch = False
             if res.crossref_ok and res.crossref_title and e.get("title"):
                 title_mismatch = res.title_similarity_crossref < 0.2
-            if res.openalex_ok and res.openalex_title and e.get("title"):
-                title_mismatch = title_mismatch or (res.title_similarity_openalex < 0.2)
 
             if not res.ok or title_mismatch:
                 online_summary["failed"] += 1
@@ -215,7 +213,6 @@ def main() -> int:
                         "doi": doi,
                         "error": res.error or ("title mismatch suspicious" if title_mismatch else ""),
                         "title_similarity_crossref": res.title_similarity_crossref,
-                        "title_similarity_openalex": res.title_similarity_openalex,
                     }
                 )
             else:
