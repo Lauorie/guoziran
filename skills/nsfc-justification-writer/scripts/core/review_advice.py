@@ -51,13 +51,13 @@ def _fallback_review_markdown(*, report: DiagnosticReport, dod_checklist: str, s
         ]
     structure_enabled = bool(getattr(t1, "structure_check_enabled", False))
     if structure_enabled and not t1.structure_ok:
-        qs.insert(0, "用户或 legacy 配置要求的结构是否满足？若无显式要求，不要新增标题命令。")
+        qs.insert(0, "用户或 legacy 配置要求的结构是否满足？若无显式要求，只新增 allowed_new_heading_commands 允许的标题命令。")
     if not t1.citation_ok:
         qs.insert(0, f"缺失引用 keys：{', '.join(t1.missing_citation_keys[:10])}（是否需要补 bib 或删除未核验引用）？")
 
     adv: List[str] = []
     if structure_enabled and not t1.structure_ok:
-        adv.append("按用户或 legacy 配置修复缺失结构；未显式要求时只修正文论证链，不新增标题。")
+        adv.append("按用户或 legacy 配置修复缺失结构；未显式要求时只修正文论证链，只新增 allowed_new_heading_commands 允许的标题。")
     if not t1.citation_ok:
         adv.append("修复所有缺失 bibkey：提供 DOI/链接（或可核验题录信息），补齐 references/*.bib 后再写入 \\cite{...}。")
     if t1.avoid_commands_hits:
