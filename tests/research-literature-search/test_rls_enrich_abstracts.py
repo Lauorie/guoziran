@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -222,6 +224,72 @@ class InvertedIndexTests(unittest.TestCase):
     def test_empty_or_malformed_gives_empty_string(self) -> None:
         for bad in ({}, None, "x", [1], {"a": "0"}, {"a": [True]}):
             self.assertEqual(abstract_from_inverted_index(bad), "")
+
+
+SCRIPT = ROOT / "skills/research-literature-search/scripts/search_runner.py"
+
+
+def _write_rows(path: Path, rows: list[dict]) -> None:
+    path.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
+
+
+def _read_rows(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+class EnrichReuseTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.base = Path(self.tmp.name)
+        self.src, self.prior, self.dst = self.base / "in.jsonl", self.base / "prior.jsonl", self.base / "out.jsonl"
+        _write_rows(self.src, [{"record_id": "doi:10.5555/a", "title": TITLE},
+                               {"record_id": "title:other", "title": "Another paper about household sorting habits"}])
+        self.calls: list[str] = []
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _fetchers(self) -> dict:
+        def fetch(q, **k):
+            self.calls.append(q)
+            return []
+        return {name: fetch for name in ("crossref", "semantic_scholar", "openalex")}
+
+    def test_prior_abstract_reused_by_record_id_without_request(self) -> None:
+        _write_rows(self.prior, [{"record_id": "doi:10.5555/a", "title": TITLE, "abstract": LONG, "abstract_status": "present",
+                                  "abstract_provenance": {"source": "openalex", "method": "post_selection"}}])
+        summary = enrich_abstracts(self.src, self.dst, fetchers=self._fetchers(), reuse_path=self.prior)
+        rows = _read_rows(self.dst)
+        self.assertEqual((rows[0]["abstract"], rows[0]["abstract_status"]), (LONG, "present"))
+        self.assertEqual(rows[0]["abstract_provenance"], {"source": "openalex", "method": "post_selection", "reused_from": "prior.jsonl"})
+        self.assertNotIn(TITLE, self.calls)
+        self.assertEqual((summary["reused"], summary["attempted"], summary["reuse_file"]), (1, 1, "prior.jsonl"))
+
+    def test_prior_without_usable_abstract_is_not_reused(self) -> None:
+        _write_rows(self.prior, [{"record_id": "doi:10.5555/a", "title": TITLE, "abstract": None, "abstract_status": "missing"},
+                                 {"record_id": "title:other", "abstract": "too short", "abstract_status": "present"}])
+        summary = enrich_abstracts(self.src, self.dst, fetchers=self._fetchers(), reuse_path=self.prior)
+        self.assertEqual((summary["reused"], summary["attempted"]), (0, 2))
+        self.assertIn(TITLE, self.calls)
+
+    def test_reuse_file_may_be_the_output_file(self) -> None:
+        _write_rows(self.dst, [{"record_id": "doi:10.5555/a", "title": TITLE, "abstract": LONG, "abstract_status": "present"}])
+        summary = enrich_abstracts(self.src, self.dst, fetchers=self._fetchers(), reuse_path=self.dst)
+        rows = _read_rows(self.dst)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["abstract"], LONG)
+        self.assertEqual(summary["reused"], 1)
+
+    def test_without_reuse_summary_reports_zero(self) -> None:
+        summary = enrich_abstracts(self.src, self.dst, fetchers=self._fetchers())
+        self.assertEqual((summary["reused"], summary["reuse_file"]), (0, None))
+
+    def test_cli_missing_reuse_file_exits_2(self) -> None:
+        env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+        proc = subprocess.run([sys.executable, str(SCRIPT), "enrich-abstracts", "--input", str(self.src), "--output", str(self.dst),
+                               "--reuse", str(self.base / "missing.jsonl")], env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertFalse(self.dst.exists())
 
 
 if __name__ == "__main__":

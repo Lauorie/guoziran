@@ -119,6 +119,8 @@ python3 SK/research-literature-search/scripts/search_runner.py enrich-abstracts 
 
    汇总写在 `T/nsfc-proposal/output/selected_enriched.jsonl.summary.json`。`filled / attempted` 低于一半（`attempted` 为 0 时不算），或 `exhausted_providers` 不为空时，背景类论断也可以写成论断问句检索，以拿到带完整摘要的记录：问句写入新的 `claim_queries_<n>.json`（n 接在已有文件之后），按本步第 4、5 项检索，再回到本项挑选并补全摘要。在 `stages.md` 记录这一偏离及原因。
 
+   补检后重新挑选、再次补全摘要时，命令加 `--reuse T/nsfc-proposal/output/selected_enriched.jsonl`（与 `--output` 相同即可，脚本先读旧文件再覆盖）：同一 `record_id` 上一次已补到的摘要直接沿用，不再请求。汇总的 `reused` 是沿用条数，不计入 `attempted`；判断「低于一半」时也不计入。不手工合并两次运行的结果。在 `stages.md` 记下 `reused` 条数。
+
 7. 核对元数据并写入 `.bib`。申请人论文与检索记录先合并成一个文件，`bib_resolve` 只对它运行一次（每次运行都会覆盖 `T/nsfc-proposal/output/bib_resolve.json`；加 `--dry-run` 时只查询，不写 `.bib`、引用台账和线索文件，汇总写入同目录的 `bib_resolve.dryrun.json`，不覆盖前者）：
 
 ```bash

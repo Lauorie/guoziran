@@ -103,6 +103,7 @@
 - 将尚未上线的 `research-paper-interpretation`、`research-paper-radar` 重命名为 `research-literature-interpretation`、`research-literature-radar`，同步目录、交叉引用、运行路径和系统级安装；不保留旧名兼容。
 - `nsfc-proposal` 0.1.0：新增 `bib_refresh.py`，按台账 DOI 刷新已写入的 `.bib` 条目，key 与正文引用不变。
 - `nsfc-proposal` 0.1.0：引用句数字核对认摘要中的 percent 写法。
+- `research-literature-search` 1.1.0：`enrich-abstracts` 新增 `--reuse`，沿用前次补到的摘要；nsfc-proposal 第 3 步第 6 项改用它。
 
 ## [4.1.0] - 2026-09-03
 

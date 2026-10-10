@@ -448,9 +448,22 @@ def _fetch_with_retry(fetch: ProviderFn, query: str, *, timeout: float, retries:
     return []
 
 
+def _reusable_abstracts(path: Path, min_chars: int) -> dict[str, dict[str, Any]]:
+    """前一次 enrich-abstracts 输出中已有足够长摘要的记录，按 record_id 索引；同一 id 取先出现的。"""
+    found: dict[str, dict[str, Any]] = {}
+    for row in _read_jsonl(path):
+        record_id, abstract = row.get("record_id"), row.get("abstract")
+        if (isinstance(record_id, str) and record_id and row.get("abstract_status") == "present"
+                and isinstance(abstract, str) and len(abstract.strip()) >= min_chars):
+            found.setdefault(record_id, row)
+    return found
+
+
 def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 200, min_chars: int = 80, timeout: float = 3, fetchers: Mapping[str, ProviderFn] | None = None,
-                     retries: int = 2, backoff_s: float = 2.0, sleep: Callable[[float], None] = time.sleep) -> dict[str, Any]:
+                     retries: int = 2, backoff_s: float = 2.0, sleep: Callable[[float], None] = time.sleep, reuse_path: Path | None = None) -> dict[str, Any]:
     rows = _read_jsonl(input_path)
+    reusable = _reusable_abstracts(reuse_path, min_chars) if reuse_path is not None else {}  # read before output is overwritten
+    reused = 0
     output = [dict(row) for row in rows]
     attempted = filled = 0
     registry = _provider_registry(fetchers)
@@ -459,6 +472,15 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
         abstract = row.get("abstract")
         if isinstance(abstract, str) and len(abstract.strip()) >= min_chars:
             row["abstract_status"] = "present"
+            continue
+        prior = reusable.get(str(row.get("record_id") or ""))
+        if prior is not None:
+            previous = prior.get("abstract_provenance")
+            row["abstract"] = prior["abstract"].strip()
+            row["abstract_status"] = "present"
+            row["abstract_provenance"] = {**(previous if isinstance(previous, dict) else {"method": "post_selection"}),
+                                          "reused_from": Path(reuse_path).name}
+            reused += 1
             continue
         attempted += 1
         row["abstract_status"] = "attempted"
@@ -502,8 +524,10 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
         if row.get("abstract_status") == "missing" and "missing_abstract" not in row["quality_warnings"]:
             row["quality_warnings"].append("missing_abstract")
     _write_jsonl(output_path, output)
-    summary = {"mode": "selected", "attempted": attempted, "filled": filled, "missing": sum(1 for row in output if row.get("abstract_status") == "missing"), "min_abstract_chars": min_chars, "max_papers_total": max_papers,
-               "exhausted_providers": exhausted}
+    summary = {"mode": "selected", "attempted": attempted, "filled": filled, "reused": reused,
+               "missing": sum(1 for row in output if row.get("abstract_status") == "missing"), "min_abstract_chars": min_chars,
+               "max_papers_total": max_papers, "exhausted_providers": exhausted,
+               "reuse_file": Path(reuse_path).name if reuse_path is not None else None}
     write_json(output_path.with_suffix(output_path.suffix + ".summary.json"), summary)
     return summary
 
@@ -541,6 +565,7 @@ def main() -> int:
     enrich.add_argument("--min-abstract-chars", type=int, default=80)
     enrich.add_argument("--retries", type=int, default=2, help="遇 429/5xx 时的重试次数")
     enrich.add_argument("--backoff-s", type=float, default=2.0, help="首次重试前等待秒数，之后每次加倍")
+    enrich.add_argument("--reuse", type=Path, help="前一次 enrich-abstracts 的输出：同一 record_id 已补到的摘要直接沿用，不再请求；可与 --output 相同")
     validate = sub.add_parser("validate")
     validate.add_argument("--bundle", required=True, type=Path)
     args = parser.parse_args()
@@ -564,7 +589,11 @@ def main() -> int:
         print(json.dumps(manifest, ensure_ascii=False, indent=2))
         return 0 if manifest.get("status") in {"success", "partial_success"} else 1
     if args.command == "enrich-abstracts":
-        print(json.dumps(enrich_abstracts(args.input, args.output, max_papers=args.max_papers, min_chars=args.min_abstract_chars, timeout=3, retries=args.retries, backoff_s=args.backoff_s), ensure_ascii=False, indent=2))
+        if args.reuse is not None and not args.reuse.is_file():
+            print(f"✗ --reuse 文件不存在：{args.reuse}", file=sys.stderr)
+            return 2
+        print(json.dumps(enrich_abstracts(args.input, args.output, max_papers=args.max_papers, min_chars=args.min_abstract_chars, timeout=3,
+                                          retries=args.retries, backoff_s=args.backoff_s, reuse_path=args.reuse), ensure_ascii=False, indent=2))
         return 0
     errors = validate_bundle(args.bundle)
     if errors:
