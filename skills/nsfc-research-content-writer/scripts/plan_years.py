@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from pathlib import Path
 from typing import NamedTuple
 
@@ -46,18 +47,27 @@ def load_yearly_plan(config_path: Path | None = None) -> YearlyPlan:
         raise ValueError("config.yaml yearly_plan: duration_by_keyword must be a non-empty list of [keyword, years]")
     rules = []
     for entry in entries:
-        if not (isinstance(entry, list) and len(entry) == 2 and isinstance(entry[0], str) and entry[0].strip()):
+        if not (isinstance(entry, list) and len(entry) == 2 and isinstance(entry[0], str) and normalize_type(entry[0])):
             raise ValueError(f"config.yaml yearly_plan: bad duration_by_keyword entry {entry!r}")
         rules.append((entry[0].strip(), _int_in_range(entry[1], 1, max_years, f"years for {entry[0]!r}")))
     return YearlyPlan(tuple(rules), default_years, max_years)
 
 
+def normalize_type(text: str) -> str:
+    """NFKC 规范化并去掉所有空白：「（Ａ 类）」与「(A类)」视为相同。"""
+    return "".join(unicodedata.normalize("NFKC", text).split())
+
+
 def duration_years(project_type: str, config_path: Path | None = None) -> tuple[int, bool]:
-    """返回（年数, 是否命中关键词）。按表中顺序匹配，先命中先用；都不命中时用 default_years。"""
+    """返回（年数, 是否命中关键词）。
+
+    项目类型与表中关键词都先规范化（normalize_type）再比较；按表中顺序匹配，先命中先用；
+    都不命中时用 default_years。
+    """
     plan = load_yearly_plan(config_path)
-    text = project_type.strip() if isinstance(project_type, str) else ""
+    text = normalize_type(project_type) if isinstance(project_type, str) else ""
     for keyword, years in plan.rules:
-        if keyword in text:
+        if normalize_type(keyword) in text:
             return years, True
     return plan.default_years, False
 

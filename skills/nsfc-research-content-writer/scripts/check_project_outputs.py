@@ -22,8 +22,8 @@ DEFAULT_ALLOWED_S_TOKENS = ["L5-S1", "L5–S1", "S100", "S100β", "S1P", "S1 受
 # 紧跟在字母、数字或连字符后的 S+数字（如 L5–S1、T12-S2 中的 S1、S2）是解剖节段等写法，不算编号。
 INTERNAL_SUBGOAL_ID_RE = re.compile(r"(?<![A-Za-z0-9\-‐‑–—−])S\d+(?![A-Za-z0-9])")
 LATEX_COMMENT_RE = re.compile(r"(?<!\\)%.*$")
-# 年度标题：「第1年」「第 1 年」「第一年」……「第十年」；「第N年度」不算
-YEAR_HEADER_RE = re.compile(rf"第\s*(\d{{1,2}}|[{CN_NUMERALS}]{{1,3}})\s*年(?!度)")
+# 年度标题：「第1年」「第 1 年」「第一年」……「第十年」；「第N年度」同样算第N年
+YEAR_HEADER_RE = re.compile(rf"第\s*(\d{{1,2}}|[{CN_NUMERALS}]{{1,3}})\s*年")
 
 
 def _err(message: str) -> int:

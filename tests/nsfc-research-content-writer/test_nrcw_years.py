@@ -32,6 +32,8 @@ class DurationYearsTest(unittest.TestCase):
             "地区科学基金项目": (4, True),
             "重点项目": (5, True),
             "青年科学基金项目（A类）": (5, True),
+            "青年科学基金项目（A 类）": (5, True),
+            "青年科学基金项目（Ａ类）": (5, True),
             "国家杰出青年科学基金": (5, True),
             "青年科学基金项目（B类）": (3, True),
             "重点支持领域的面上项目": (4, True),
@@ -41,6 +43,15 @@ class DurationYearsTest(unittest.TestCase):
         }
         for text, expected in cases.items():
             self.assertEqual(py.duration_years(text), expected, text)
+
+    def test_keywords_in_table_are_normalized(self):
+        py = _load_plan_years()
+        config = {"yearly_plan": {"duration_by_keyword": [["Ａ 类", 5]], "default_years": 3, "max_years": 5}}
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.yaml"
+            path.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
+            self.assertEqual(py.duration_years("青年科学基金项目（A类）", path), (5, True))
+            self.assertEqual(py.duration_years("  ", path), (3, False))
 
     def test_years_out_of_range_is_config_error(self):
         py = _load_plan_years()
@@ -117,20 +128,20 @@ class CheckerYearsTest(unittest.TestCase):
             self.assertNotEqual(res.returncode, 0)
             self.assertIn("第5年", res.stderr)
 
-    def test_year_du_not_counted_as_year(self):
-        # 「第N年度」不算第N年的标题
-        yearly = "第一年度：任务。\n第2年度：任务。\n第三年：任务。\n"
+    def test_year_du_headers_count(self):
+        # 「第N年度」是常见的年度标题写法，算第N年
+        yearly = "".join(f"\\subsubsubsection{{第{cn}年度（{2026 + i}.01–{2026 + i}.12）}}\n任务。\n"
+                         for i, cn in enumerate("一二三四", start=1))
         with tempfile.TemporaryDirectory() as d:
             root = _project(Path(d), yearly)
-            res = self.run_checker(root)
-            self.assertNotEqual(res.returncode, 0)
-            self.assertIn("第1年", res.stderr)
-            self.assertIn("第2年", res.stderr)
-            self.assertNotIn("第3年", res.stderr)
-        with tempfile.TemporaryDirectory() as d:
-            root = _project(Path(d), THREE_YEARS + "第4年度经费另行说明。\n")
-            res = self.run_checker(root, "--years", "3")
+            res = self.run_checker(root, "--project-type", "面上项目")
             self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        with tempfile.TemporaryDirectory() as d:
+            root = _project(Path(d), "第1年度：任务。\n第 2 年度：任务。\n第三年度：任务。\n第4年度：任务。\n")
+            res = self.run_checker(root, "--years", "3")
+            self.assertNotEqual(res.returncode, 0)
+            self.assertIn("第4年", res.stderr)
+            self.assertNotIn("missing", res.stderr)
 
     def test_unmatched_type_uses_default_and_warns(self):
         with tempfile.TemporaryDirectory() as d:
