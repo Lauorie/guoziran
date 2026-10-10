@@ -32,6 +32,16 @@ materials:
   wisdoc_poll_interval_s: 5    # WisDoc 解析任务的轮询间隔（秒）
   wisdoc_total_timeout_s: 560  # 单个 PDF 交 WisDoc 的总时限（秒，从提交算起）；轮询或取结果时超过则本次 WisDoc 记为超时、改用本机文字；只在下载图片时超过则停止下载，其余图片记为「（图片未下载）」
 
+figures:
+  enabled: true
+  model: google/gemini-3.1-flash-image   # 生图模型；对用户与正文一律称 WisImage
+  image_size: 2K                          # 1K / 2K / 4K
+  framework_aspect_ratio: "1:1"           # 研究框架图
+  design_aspect_ratio: "16:9"             # 各研究的设计图
+  max_rerenders: 2                        # 自检不合格时最多重画次数
+  timeout_s: 300
+  max_image_bytes: 31457280               # 30 MB
+
 consistency:
   max_fix_rounds: 2
   hidden_placeholder_words: [待补, 待核实, 待确认, 待填写, TODO]
@@ -48,6 +58,7 @@ guardrails:
     - extraTex/4.5.生成式人工智能.tex
   allowed_write_dirs:    # 供执行说明引用，脚本不读取
     - proposal
+    - figures/nsfc-proposal
 
 # 篇幅预算的唯一来源；按文件名与其中 match 通配符匹配
 length_budget_source: ../nsfc-length-aligner/config.yaml

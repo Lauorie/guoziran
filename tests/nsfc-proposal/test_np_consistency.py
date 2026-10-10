@@ -631,5 +631,71 @@ class CitationCountTest(unittest.TestCase):
         self.assertEqual(load_config()["literature"]["min_distinct_refs_justification"], 30)
 
 
+class MissingFigureFileTest(unittest.TestCase):
+    """\\includegraphics 指向的文件不存在时报 missing_figure_file。"""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = build(Path(self.tmp.name), body_11="多模态影像信息\\cite{wu2021value}。\n【待补充：预实验结果】\n")
+        write_yaml(self.root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
+            {"file": "extraTex/2.1.研究内容.tex", "writer": "nsfc-research-content-writer", "written_with_case_version": 2}]})
+        (self.root / "figures" / "nsfc-proposal").mkdir(parents=True)
+
+    def body(self, text: str) -> None:
+        (self.root / "extraTex" / "2.1.研究内容.tex").write_text(text, encoding="utf-8")
+
+    def missing(self) -> list:
+        return [f for f in check_project(self.root).errors if f.kind == "missing_figure_file"]
+
+    def test_missing_file_is_error_and_cli_exits_1(self) -> None:
+        self.body("研究内容。\n\\begin{figure}[htbp]\n\\includegraphics[width=\\linewidth]{figures/nsfc-proposal/fig9.png}\n\\end{figure}\n")
+        [finding] = self.missing()
+        self.assertEqual((finding.file, finding.line), ("extraTex/2.1.研究内容.tex", 3))
+        self.assertIn("figures/nsfc-proposal/fig9.png", finding.detail)
+        env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
+        cmd = [sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(self.root)]
+        proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+        self.assertIn("图片文件不存在", proc.stdout)
+        (self.root / "figures" / "nsfc-proposal" / "fig9.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(self.missing(), [])
+        ok = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+
+    def test_extensionless_path_tries_known_extensions(self) -> None:
+        self.body("\\includegraphics{figures/nsfc-proposal/fig2}\n")
+        self.assertEqual(len(self.missing()), 1)
+        for ext in (".jpeg", ".jpg", ".pdf", ".png"):
+            target = self.root / "figures" / "nsfc-proposal" / f"fig2{ext}"
+            target.write_bytes(b"x")
+            self.assertEqual(self.missing(), [], ext)
+            target.unlink()
+
+    def test_commented_and_cross_line_includegraphics(self) -> None:
+        self.body("% \\includegraphics{figures/nsfc-proposal/old.png}\n"
+                  "图示 \\includegraphics[\n  width=0.95\\textwidth]{figures/nsfc-proposal/new.png}\n")
+        [finding] = self.missing()
+        self.assertEqual(finding.line, 2)
+        self.assertIn("new.png", finding.detail)
+
+    def test_figure_path_is_not_process_text(self) -> None:
+        (self.root / "figures" / "nsfc-proposal" / "fig1-framework.png").write_bytes(b"x")
+        self.body("\\begin{figure}[htbp]\n  \\includegraphics[width=0.95\\textwidth]{figures/nsfc-proposal/fig1-framework.png}\n"
+                  "  \\caption{研究框架。}\n  \\label{fig:np-framework}\n\\end{figure}\n如图~\\ref{fig:np-framework}所示。\n")
+        report = check_project(self.root)
+        self.assertEqual(self.missing(), [])
+        self.assertEqual([f for f in report.needs_review if f.kind == "process_text_in_body"], [])
+        self.body("草稿见 proposal/assumptions.md。\n")
+        self.assertTrue([f for f in check_project(self.root).needs_review if f.kind == "process_text_in_body"])
+
+    def test_path_outside_project_root_is_reported(self) -> None:
+        (self.root.parent / "outside.png").write_bytes(b"x")
+        self.body("\\includegraphics{../outside.png}\n")
+        [finding] = self.missing()
+        self.assertIn("../outside.png", finding.detail)
+
+
 if __name__ == "__main__":
     unittest.main()

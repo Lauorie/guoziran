@@ -3,7 +3,7 @@
 
 复制自团队 peer-review skill 的 WisDoc 客户端（wisdoc_parse.py），改动：
 - 删去 MCP serve 模式与 serve 子命令，保留 parse_pdf_to_markdown() 和 parse 子命令；
-- 并入 peer-review envfile.py 的 .env 查找逻辑，不改写 os.environ：已有环境变量 → 当前目录及其各级父目录的
+- 并入 peer-review envfile.py 的 .env 查找逻辑（现在放在同目录的 envfile.py，与出图脚本共用），不改写 os.environ：已有环境变量 → 当前目录及其各级父目录的
   .env → 调用方传入的额外目录及其各级父目录 → 本 skill 目录；同一个键取先找到的值，只解析需要的键；
   未加引号的值在「空白 + #」处截断（与 python-dotenv 相同）；
 - WISDOCRS_BASE_URL 缺失、含空白或 #、不是 http(s) 地址时，在发出任何请求前抛出 WisDocNotConfigured；
@@ -45,6 +45,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+import envfile
+from envfile import dotenv_value as _dotenv_value  # noqa: F401  旧名，测试与调用方沿用
+
 SKILL_DIR = Path(__file__).resolve().parents[1]
 USER_AGENT = "nsfc-proposal-materials/0.1"
 DEFAULT_CANARY_HEADER = "grey"
@@ -61,7 +64,6 @@ MAX_ERROR_TEXT_LEN = 400
 REDACTED = "<WISDOCRS_BASE_URL>"
 ASSET_PLACEHOLDER = "（图片未下载）"
 JOB_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
-DOTENV_COMMENT_RE = re.compile(r"\s+#.*$")
 IMAGE_REF_RE = re.compile(r"!\[[^\]]*]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 HTML_IMG_RE = re.compile(r"<img\b[^>]*\bsrc=[\"']([^\"']+)[\"'][^>]*>", re.IGNORECASE)
 
@@ -96,57 +98,21 @@ def _now() -> float:
     return time.monotonic()
 
 
-# ---------- .env 读取（并入自 peer-review 的 envfile.py） ----------
+# ---------- .env 读取（实现在 envfile.py，与出图脚本共用） ----------
 
 def dotenv_candidates(extra_dirs: Iterable[Path | str] = (), cwd: Path | str | None = None) -> list[Path]:
     """按查找顺序列出 .env 候选：当前目录及各级父目录 → 额外目录及各级父目录 → skill 目录。"""
-    start = Path(cwd if cwd is not None else Path.cwd()).resolve()
-    paths = [d / ".env" for d in (start, *start.parents)]
-    for extra in extra_dirs:
-        base = Path(extra).expanduser().resolve()
-        paths += [d / ".env" for d in (base, *base.parents)]
-    paths.append(SKILL_DIR / ".env")
-    ordered: list[Path] = []
-    for path in paths:
-        if path not in ordered:
-            ordered.append(path)
-    return ordered
-
-
-def _dotenv_value(raw: str) -> str:
-    """引号内的值原样取出；未加引号的值在「空白 + #」处截断。"""
-    raw = raw.strip()
-    if raw[:1] in ("'", '"'):
-        end = raw.find(raw[0], 1)
-        return raw[1:end] if end != -1 else raw[1:]
-    return DOTENV_COMMENT_RE.sub("", raw).strip()
+    return envfile.dotenv_candidates(extra_dirs, cwd, skill_dir=SKILL_DIR)
 
 
 def read_dotenv_value(name: str, extra_dirs: Iterable[Path | str] = (), cwd: Path | str | None = None) -> str | None:
     """按 dotenv_candidates 的顺序找 name，返回第一个找到的值；只解析这一个键。"""
-    for path in dotenv_candidates(extra_dirs, cwd):
-        if not path.is_file():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        for line in text.splitlines():
-            key, sep, raw = line.strip().partition("=")
-            key = key.strip()
-            if key.startswith("export "):
-                key = key[len("export "):].strip()
-            if sep and key == name:
-                return _dotenv_value(raw)
-    return None
+    return envfile.read_dotenv_value(name, extra_dirs, cwd, skill_dir=SKILL_DIR)
 
 
 def resolve_setting(name: str, extra_dirs: Iterable[Path | str] = (), cwd: Path | str | None = None) -> str:
     """已有环境变量优先，其次按 dotenv_candidates 的顺序找 .env；都没有时返回空串。"""
-    value = (os.environ.get(name) or "").strip()
-    if value:
-        return value
-    return (read_dotenv_value(name, extra_dirs, cwd) or "").strip()
+    return envfile.resolve_setting(name, extra_dirs, cwd, skill_dir=SKILL_DIR)
 
 
 def _check_base_url(base: str) -> str:
