@@ -134,6 +134,69 @@ class EnrichAbstractsMatchTests(unittest.TestCase):
         self.assertEqual(row["abstract_status"], "missing")
 
 
+class _StatusError(Exception):
+    def __init__(self, status: int) -> None:
+        super().__init__("request failed")
+        self.status_code = status
+
+
+class _ResponseError(Exception):
+    def __init__(self, status: int) -> None:
+        super().__init__("request failed")
+        self.response = type("Resp", (), {"status_code": status})()
+
+
+def _run_many(records: list[dict], fetchers: dict, **kwargs) -> tuple[dict, list[dict]]:
+    with tempfile.TemporaryDirectory() as tmp:
+        src, dst = Path(tmp) / "in.jsonl", Path(tmp) / "out.jsonl"
+        src.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records), encoding="utf-8")
+        offline = {name: (lambda q, **k: []) for name in ("crossref", "semantic_scholar", "openalex")}
+        summary = enrich_abstracts(src, dst, fetchers={**offline, **fetchers}, **kwargs)
+        rows = [json.loads(line) for line in dst.read_text(encoding="utf-8").splitlines()]
+    return summary, rows
+
+
+class EnrichExhaustedProviderTests(unittest.TestCase):
+    RECORDS = [{"title": f"{TITLE} part {n}"} for n in (1, 2, 3)]
+
+    def test_rate_limited_provider_is_skipped_for_later_records(self) -> None:
+        for make_error in (lambda: RuntimeError("HTTP 429 Too Many Requests"), lambda: _StatusError(429), lambda: _ResponseError(429)):
+            with self.subTest(error=type(make_error()).__name__):
+                calls = {"openalex": 0, "semantic_scholar": 0}
+
+                def semantic(q, **k):
+                    calls["semantic_scholar"] += 1
+                    return []
+
+                def openalex(q, _make=make_error, **k):
+                    calls["openalex"] += 1
+                    raise _make()
+                waits: list[float] = []
+                summary, rows = _run_many(self.RECORDS, {"semantic_scholar": semantic, "openalex": openalex}, retries=2, sleep=waits.append)
+                self.assertEqual(calls, {"openalex": 3, "semantic_scholar": 3})
+                self.assertEqual(waits, [2.0, 4.0])
+                self.assertEqual(summary["exhausted_providers"], ["openalex"])
+                self.assertEqual(rows[0]["abstract_provenance"]["attempts"][-1]["status"], "error")
+                for row in rows[1:]:
+                    self.assertIn({"source": "openalex", "status": "skipped_exhausted"}, row["abstract_provenance"]["attempts"])
+
+    def test_server_error_is_not_counted_as_exhausted(self) -> None:
+        calls: list[str] = []
+
+        def openalex(q, **k):
+            calls.append(q)
+            raise RuntimeError("HTTP 500 Internal Server Error")
+        summary, rows = _run_many(self.RECORDS[:2], {"openalex": openalex}, retries=2, sleep=lambda s: None)
+        self.assertEqual(len(calls), 6)
+        self.assertEqual(summary["exhausted_providers"], [])
+        for row in rows:
+            self.assertNotIn("skipped_exhausted", [a["status"] for a in row["abstract_provenance"]["attempts"]])
+
+    def test_no_failures_gives_empty_exhausted_list(self) -> None:
+        summary, _ = _run_many(self.RECORDS[:1], {})
+        self.assertEqual(summary["exhausted_providers"], [])
+
+
 class InvertedIndexTests(unittest.TestCase):
     def test_rebuilds_in_position_order(self) -> None:
         self.assertEqual(abstract_from_inverted_index({"b": [1], "a": [0]}), "a b")

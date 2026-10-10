@@ -57,7 +57,7 @@ search_log.json               # 可读审计日志
 
 ### 失败与恢复
 
-provider 返回 `null`、非对象或嵌套 source 为 `null` 时跳过/保留并记录计数或 warning；无合法候选返回 `no_valid_candidates`，不得静默丢弃。preprint 按领域 profile（`auto`→computer_science/mathematics/biology/medicine/general）标记并审计，搜索层不认证结论。旧 `title/year/id` 仅经显式 legacy adapter 并附 `legacy_adapted` warning；新增 provider/union 策略需升级 contract。
+provider 返回 `null`、非对象或嵌套 source 为 `null` 时跳过/保留并记录计数或 warning；无合法候选返回 `no_valid_candidates`，不得静默丢弃。preprint 按领域 profile（`auto`→computer_science/mathematics/biology/medicine/general）标记并审计，搜索层不认证结论。旧 `title/year/id` 仅经显式 legacy adapter 并附 `legacy_adapted` warning；新增 provider/union 策略需升级 contract。`enrich-abstracts` 中某个服务重试用尽后仍报 429 时，本次运行不再请求它：后续记录的 `attempts` 记 `skipped_exhausted`，汇总 `exhausted_providers` 列出这些服务。
 
 ## 约束
 

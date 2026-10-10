@@ -415,12 +415,25 @@ def _hit_abstract(item: Mapping[str, Any], source: str = "") -> str:
 _RETRYABLE_STATUS = re.compile(r"(?i)\b(?:http|status(?: code)?)[\s:=/]*(?:\d\.\d\s+)?(429|5\d\d)\b")
 
 
+def _error_status(exc: BaseException) -> int | None:
+    status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+    return status if isinstance(status, int) else None
+
+
 def _is_retryable(exc: BaseException) -> bool:
     """Whether a fetcher error looks like HTTP 429 or 5xx (status attribute, response, or message)."""
-    status = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
-    if isinstance(status, int):
+    status = _error_status(exc)
+    if status is not None:
         return status == 429 or 500 <= status <= 599
     return bool(_RETRYABLE_STATUS.search(str(exc)))
+
+
+def _is_rate_limited(exc: BaseException) -> bool:
+    """Whether a fetcher error is HTTP 429 (status attribute, response, or message)."""
+    status = _error_status(exc)
+    if status is not None:
+        return status == 429
+    return any(match.group(1) == "429" for match in _RETRYABLE_STATUS.finditer(str(exc)))
 
 
 def _fetch_with_retry(fetch: ProviderFn, query: str, *, timeout: float, retries: int, backoff_s: float, sleep: Callable[[float], None]) -> list[Any]:
@@ -440,6 +453,7 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
     output = [dict(row) for row in rows]
     attempted = filled = 0
     registry = _provider_registry(fetchers)
+    exhausted: list[str] = []  # providers still answering 429 after retries; not requested again in this run
     for row in output[: max_papers if max_papers > 0 else len(output)]:
         abstract = row.get("abstract")
         if isinstance(abstract, str) and len(abstract.strip()) >= min_chars:
@@ -453,6 +467,9 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
         doi = normalize_doi(raw_doi)
         for source, query in (("crossref", raw_doi), ("semantic_scholar", title), ("openalex", title)):
             if not query or source not in registry:
+                continue
+            if source in exhausted:
+                provenance["attempts"].append({"source": source, "status": "skipped_exhausted"})
                 continue
             try:
                 hits = _fetch_with_retry(registry[source], query, timeout=timeout, retries=retries, backoff_s=backoff_s, sleep=sleep)
@@ -475,6 +492,8 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
                     break
             except Exception as exc:  # noqa: BLE001
                 provenance["attempts"].append({"source": source, "status": "error", "error": _safe_error(exc)})
+                if _is_rate_limited(exc):
+                    exhausted.append(source)
         if row.get("abstract_status") != "present":
             row["abstract_status"] = "missing"
             row["abstract_provenance"] = provenance
@@ -482,7 +501,8 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
         if row.get("abstract_status") == "missing" and "missing_abstract" not in row["quality_warnings"]:
             row["quality_warnings"].append("missing_abstract")
     _write_jsonl(output_path, output)
-    summary = {"mode": "selected", "attempted": attempted, "filled": filled, "missing": sum(1 for row in output if row.get("abstract_status") == "missing"), "min_abstract_chars": min_chars, "max_papers_total": max_papers}
+    summary = {"mode": "selected", "attempted": attempted, "filled": filled, "missing": sum(1 for row in output if row.get("abstract_status") == "missing"), "min_abstract_chars": min_chars, "max_papers_total": max_papers,
+               "exhausted_providers": exhausted}
     write_json(output_path.with_suffix(output_path.suffix + ".summary.json"), summary)
     return summary
 

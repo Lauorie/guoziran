@@ -18,6 +18,7 @@
 - `nsfc-proposal` 0.1.0：新增 `figures.py`，用团队的生图服务 WisImage 生成研究框架图与各研究的设计图，第 6.2 步先出图再写研究内容；一致性检查新增 `missing_figure_file`；评审后按返回格式存 `.png` 或 `.jpg`，单张图设总时限，拒绝文字先脱敏后截取。
 - `nsfc-research-foundation-writer` 0.2.0、`nsfc-abstract` 2.1.3：接入 nsfc-proposal。
 - `research-literature-search` 1.1.0：`run` 新增 `--host-results`，接收 wispaper 结果。
+- `research-literature-search` 1.1.0：`enrich-abstracts` 遇到重试后仍报 429 的服务，本次运行的后续记录跳过它，汇总写 `exhausted_providers`。
 - `.gitignore`：放行 tests/nsfc-justification-writer、tests/nsfc-research-content-writer、tests/research-literature-search、tests/nsfc-proposal 下的测试脚本。
 - 终审修复：`nsfc-proposal` 的 `init` 不再登记 `.bib` 中已有的条目，`citation_ledger.py register-user` 改为 `--key`（全部登记须加 `--all`），没有引用台账改为必须修正，一致性检查识别跨行 `\cite`；`nsfc-research-content-writer` 新增 `checks.allowed_s_tokens`；`nsfc-justification-writer` 的 `--task-root` 须在 `.bensz-api` 下；`research-literature-search` 的 manifest 版本号改读 `config.yaml`；nsfc-proposal 计划与设计文档去掉本机路径。
 - 本分支未写 BAC 记录，经负责人同意。
