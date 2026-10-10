@@ -70,6 +70,11 @@ class RoundThreeDocsTest(unittest.TestCase):
         self.assertIn("不加括号、引号或书名号", guide)
         self.assertIn("连同〈〉一起换掉", guide)
         self.assertIn("没有清单以外的符号", guide)
+        self.assertIn("英文、拼音、汉字或符号", guide)
+        rule = [ln for ln in guide.splitlines() if ln.startswith("图中所有可见文字只能使用以下内容")]
+        self.assertEqual(len(rule), 1)
+        self.assertNotIn("〈", rule[0])
+        self.assertNotIn("〉", rule[0])
 
     def test_motor_matched_control_rule(self) -> None:
         bounds = (SKILL / "references" / "section_boundaries.md").read_text(encoding="utf-8")
