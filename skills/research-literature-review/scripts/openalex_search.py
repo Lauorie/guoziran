@@ -4,14 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
-SEARCH_ROOT = Path(os.environ.get("RESEARCH_LITERATURE_SEARCH_ROOT", str(Path(__file__).resolve().parents[2] / "research-literature-search"))).expanduser().resolve() / "scripts"
-sys.path.insert(0, str(SEARCH_ROOT))
-sys.path.append(str(Path(__file__).resolve().parent))  # after SEARCH_ROOT: both dirs hold dedupe_papers.py
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from openalex_provider import search as search_openalex  # noqa: E402
 
 

@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-SKILL_ROOT = Path(__file__).resolve().parents[1]
+SKILL_ROOT = Path(__file__).resolve().parents[2] / "skills" / "research-literature-review"
 SEARCH_SCRIPTS = SKILL_ROOT.parent / "research-literature-search" / "scripts"
 sys.path.insert(0, str(SEARCH_SCRIPTS))
 from candidate_schema import normalize_record  # noqa: E402  (before review scripts: both dirs hold dedupe_papers)
@@ -45,11 +45,18 @@ class OpenAlexConversionTests(unittest.TestCase):
         self.assertEqual(record["year"], 2020)
         self.assertEqual(record["venue"], "Radiology")
         self.assertEqual(record["identifiers"]["doi"], "10.1000/abc.123")
-        self.assertEqual(record["identifiers"]["openalex"], "https://openalex.org/W2741809807")
+        self.assertEqual(record["sources"][0]["provider_record_id"], "https://openalex.org/W2741809807")
+        self.assertEqual(len(record["authorships"]), 2)
+        self.assertIsNone(record["url"])
         self.assertEqual(record["abstract"], "We study lung nodules again")
         self.assertEqual(record["abstract_status"], "present")
         self.assertIs(record["publication"]["is_open_access"], True)
         self.assertEqual(record["publication"]["publication_type"], "article")
+
+    def test_open_access_falls_back_to_primary_location(self) -> None:
+        work = {"id": "W2", "display_name": "T", "primary_location": {"is_oa": True}}
+        record = normalize_record(openalex_provider._to_raw(work), provider="openalex")
+        self.assertIs(record["publication"]["is_open_access"], True)
 
     def test_missing_fields_become_none(self) -> None:
         raw = openalex_provider._to_raw({"id": "W1", "display_name": "Only a title"})
@@ -58,6 +65,7 @@ class OpenAlexConversionTests(unittest.TestCase):
         self.assertIsNone(raw["doi"])
         self.assertIsNone(raw["abstract"])
         self.assertIsNone(raw["venue"])
+        self.assertIsNone(raw["url"])
 
     def test_search_returns_generic_fields_and_keeps_request_params(self) -> None:
         response = MagicMock()
@@ -94,19 +102,29 @@ class OpenAlexInjectionTests(unittest.TestCase):
         self.assertTrue(fake.called)
 
     def test_bundle_dir_cli_injects_openalex(self) -> None:
-        fake = MagicMock(return_value=[openalex_provider._to_raw(WORK)])
+        self._run_cli(["--provider-order", "openalex"])
+
+    def test_bundle_dir_cli_default_order_calls_openalex(self) -> None:
+        # Simulate research-literature-search dropping openalex from its default order.
+        with patch("search_runner.DEFAULT_PROVIDER_ORDER", ["semantic_scholar", "crossref"]):
+            self._run_cli([])
+
+    def _run_cli(self, extra: list[str]) -> None:
+        # Five rows fill max_results_per_query, so no other provider is tried.
+        rows_in = [dict(openalex_provider._to_raw(WORK), title=f"{WORK['title']} {i}", doi=None) for i in range(5)]
+        fake = MagicMock(return_value=rows_in)
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             _write_queries(base / "queries.json")
             argv = ["multi_query_search.py", "--queries", str(base / "queries.json"), "--output", str(base / "out.jsonl"),
                     "--search-log", str(base / "log.json"), "--bundle-dir", str(base / "bundle"), "--scope-root", str(base),
-                    "--provider-order", "openalex", "--max-results-per-query", "5"]
+                    "--max-results-per-query", "5", *extra]
             with patch.object(multi_query_search, "search_openalex", fake), patch.object(sys, "argv", argv):
                 code = multi_query_search.main()
             self.assertEqual(code, 0)
             self.assertTrue(fake.called)
             rows = (base / "out.jsonl").read_text(encoding="utf-8")
-            self.assertIn(WORK["title"], rows)
+            self.assertIn(WORK["title"] + " 0", rows)
 
 
 if __name__ == "__main__":

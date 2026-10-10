@@ -38,6 +38,9 @@ def _to_raw(work: dict[str, Any]) -> dict[str, Any]:
     primary = work.get("primary_location") if isinstance(work.get("primary_location"), dict) else {}
     source = primary.get("source") if isinstance(primary.get("source"), dict) else {}
     open_access = work.get("open_access") if isinstance(work.get("open_access"), dict) else {}
+    is_oa = open_access.get("is_oa")
+    if is_oa is None:
+        is_oa = primary.get("is_oa")
     authors = []
     for item in work.get("authorships") or []:
         author = item.get("author") if isinstance(item, dict) and isinstance(item.get("author"), dict) else {}
@@ -48,12 +51,13 @@ def _to_raw(work: dict[str, Any]) -> dict[str, Any]:
         "id": work.get("id"),
         "title": work.get("title") or work.get("display_name"),
         "authors": authors,
+        "authorships": work.get("authorships") if isinstance(work.get("authorships"), list) else [],
         "doi": doi,
         "year": work.get("publication_year"),
         "venue": source.get("display_name"),
         "abstract": _abstract_from_inverted_index(work.get("abstract_inverted_index")) or None,
-        "url": (DOI_PREFIX + doi) if doi else primary.get("landing_page_url"),
-        "is_open_access": open_access.get("is_oa"),
+        "url": None,
+        "is_open_access": is_oa,
         "type": work.get("type"),
     }
 
