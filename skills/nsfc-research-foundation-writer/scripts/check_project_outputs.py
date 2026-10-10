@@ -98,8 +98,8 @@ def main() -> int:
     risk_items: list[str] = []
     risk_items += re.findall(r"\\subsubsubsection\{[^}]*风险[^}]*\}", foundation_text)
     risk_items += re.findall(r"\\subsubsection\{[^}]*风险[^}]*\}", foundation_text)
-    risk_items += re.findall(r"(?m)^\\s*#+\\s*.*风险.*$", foundation_text)  # markdown-like headings (rare)
-    risk_items += re.findall(r"风险\\s*(?:\\d+|[一二三四五六七八九十])", foundation_text)
+    risk_items += re.findall(r"(?m)^\s*#+\s*.*风险.*$", foundation_text)  # markdown-like headings (rare)
+    risk_items += re.findall(r"风险\s*(?:\d+|[一二三四五六七八九十])", foundation_text)
 
     # Deduplicate near-identical hits.
     risk_items = list(dict.fromkeys(risk_items))

@@ -224,6 +224,9 @@ skills/*/tests/
 !/tests/nsfc-research-content-writer/
 /tests/nsfc-research-content-writer/*
 !/tests/nsfc-research-content-writer/*.py
+!/tests/nsfc-research-foundation-writer/
+/tests/nsfc-research-foundation-writer/*
+!/tests/nsfc-research-foundation-writer/*.py
 !/tests/research-literature-search/
 /tests/research-literature-search/*
 !/tests/research-literature-search/*.py
