@@ -388,7 +388,8 @@ def run(project_root: Path, records_path: Path, task_root: Path, *, session: Htt
         "outcomes": [asdict(o) for o in outcomes],
     }
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "bib_resolve.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    name = "bib_resolve.dryrun.json" if dry_run else "bib_resolve.json"  # a dry run never overwrites the real summary
+    (out_dir / name).write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     return summary
 
 
@@ -397,7 +398,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-root", required=True)
     parser.add_argument("--records", required=True, help="rls.paper.v1 JSONL：选作证据的文献记录")
     parser.add_argument("--task-root", required=True, help="本任务的 .bensz-api/task-*/ 目录")
-    parser.add_argument("--dry-run", action="store_true", help="只查询与汇总，不写 .bib 和线索文件")
+    parser.add_argument("--dry-run", action="store_true", help="只查询，汇总写入 bib_resolve.dryrun.json；不写 .bib、引用台账、线索文件和 bib_resolve.json")
     args = parser.parse_args(argv)
     try:
         summary = run(Path(args.project_root), Path(args.records), Path(args.task_root), dry_run=args.dry_run)

@@ -107,7 +107,7 @@ python3 SK/research-literature-search/scripts/search_runner.py enrich-abstracts 
   --input T/nsfc-proposal/output/selected.jsonl --output T/nsfc-proposal/output/selected_enriched.jsonl
 ```
 
-7. 核对元数据并写入 `.bib`。申请人论文与检索记录先合并成一个文件，`bib_resolve` 只对它运行一次（每次运行都会覆盖 `T/nsfc-proposal/output/bib_resolve.json`）：
+7. 核对元数据并写入 `.bib`。申请人论文与检索记录先合并成一个文件，`bib_resolve` 只对它运行一次（每次运行都会覆盖 `T/nsfc-proposal/output/bib_resolve.json`；加 `--dry-run` 时只查询，不写 `.bib`、引用台账和线索文件，汇总写入同目录的 `bib_resolve.dryrun.json`，不覆盖前者）：
 
 ```bash
 cat T/nsfc-proposal/output/selected_enriched.jsonl T/nsfc-proposal/output/applicant.jsonl > T/nsfc-proposal/output/bib_records.jsonl
@@ -231,7 +231,7 @@ python3 S/scripts/consistency_check.py --project-root P
 
 ### 输出管理
 
-- 正式交付物写在 `P` 中。过程文件只写在 `T` 中：材料解析结果（`T/shared/materials/`）、wispaper 原始返回、检索 bundle、信息表、`.bib` 备份、`bib_resolve.json`、出图提示词与 `index.json`（`T/nsfc-proposal/output/figures/`）、运行日志。
+- 正式交付物写在 `P` 中。过程文件只写在 `T` 中：材料解析结果（`T/shared/materials/`）、wispaper 原始返回、检索 bundle、信息表、`.bib` 备份、`bib_resolve.json`（试运行为 `bib_resolve.dryrun.json`）、出图提示词与 `index.json`（`T/nsfc-proposal/output/figures/`）、运行日志。
 - `P/figures/nsfc-proposal/` 是本 skill 写图的目录，列在 `config.yaml` 的 `guardrails.allowed_write_dirs` 中；只由 `figures.py` 写入。重画用新名称，不覆盖已有的图。
 - `T` 中不保存密钥、令牌和个人身份信息；HTTP 请求不附带个人邮箱。
 - 不修改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`；`.bib` 只追加；例外只有规则 8 的两种删除：`drop` 之后删去该条目，以及删去不属于申请人的未入账条目（如模板示例）。

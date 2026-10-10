@@ -257,6 +257,18 @@ class ResolveTest(unittest.TestCase):
         self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
         self.assertEqual(self.waits, [])
 
+    def test_dry_run_writes_own_summary_and_keeps_real_one(self) -> None:
+        row = {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}}
+        session = FakeSession({doi_url("10.5555/nsfc.test.001"): FakeResponse(200, {"message": CROSSREF_ITEM_1})})
+        out = self.task / "nsfc-proposal" / "output"
+        self._run(session, row)
+        before = (out / "bib_resolve.json").read_text(encoding="utf-8")
+        run(self.root, self._records(row), self.task, session=session, sleep=self.waits.append, dry_run=True)
+        self.assertEqual((out / "bib_resolve.json").read_text(encoding="utf-8"), before)
+        dry = json.loads((out / "bib_resolve.dryrun.json").read_text(encoding="utf-8"))
+        self.assertTrue(dry["dry_run"])
+        self.assertEqual(dry["counts"]["exists"], 1)
+
 
 class HelperTest(unittest.TestCase):
     def test_bibkey_collision_and_escape(self) -> None:
