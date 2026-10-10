@@ -82,6 +82,12 @@ class Settings:
 CROSSREF_TYPES = {"journal-article": "article", "proceedings-article": "inproceedings", "book-chapter": "incollection",
                   "book-part": "incollection", "book-section": "incollection", "book": "book", "monograph": "book",
                   "edited-book": "book", "reference-book": "book"}
+NON_PUBLICATION_TYPES = frozenset({
+    "dataset", "database", "component", "peer-review", "grant", "journal", "journal-issue", "journal-volume",
+    "proceedings", "proceedings-series", "book-series", "book-set", "report-series", "standard-series",
+})
+THESIS_TYPES = ("phdthesis", "mastersthesis")
+MASTER_MARKERS = ("master", "硕士", "(ms)", "(ma)")
 
 
 @dataclass(frozen=True)
@@ -96,6 +102,7 @@ class WorkMeta:
     doi: str | None
     entry_type: str = "article"
     publisher: str | None = None
+    kind: str | None = None
 
 
 @dataclass
@@ -123,7 +130,7 @@ def _str(value: Any) -> str | None:
 
 
 def _crossref_year(item: Mapping[str, Any]) -> int | None:
-    for key in ("published-print", "published-online", "issued", "published"):
+    for key in ("published-print", "published-online", "issued", "published", "approved"):
         block = item.get(key)
         parts = block.get("date-parts") if isinstance(block, Mapping) else None
         if isinstance(parts, list) and parts and isinstance(parts[0], list) and parts[0] and isinstance(parts[0][0], int):
@@ -143,11 +150,21 @@ def crossref_meta(item: Mapping[str, Any]) -> WorkMeta | None:
     journals = item.get("container-title")
     journal = journals[0] if isinstance(journals, list) and journals else None
     kind = item.get("type")
-    entry_type = "article" if kind is None else CROSSREF_TYPES.get(kind, "misc")
+    publisher = _str(item.get("publisher"))
+    if kind == "dissertation":
+        degree = " ".join(str(d) for d in item.get("degree") or []).lower()
+        entry_type = "mastersthesis" if any(marker in degree for marker in MASTER_MARKERS) else "phdthesis"
+        institutions = item.get("institution")
+        first = institutions[0] if isinstance(institutions, list) and institutions else None
+        publisher = _str(first.get("name")) if isinstance(first, Mapping) and first.get("name") else publisher
+    elif kind == "other":
+        entry_type = "incollection" if journal and item.get("page") else "misc"
+    else:
+        entry_type = "article" if kind is None else CROSSREF_TYPES.get(kind, "misc")
     return WorkMeta(title=title, authors=tuple(authors), journal=_str(journal), year=_crossref_year(item),
                     volume=_str(item.get("volume")), issue=_str(item.get("issue")), pages=_str(item.get("page")),
                     doi=normalize_doi(item.get("DOI")), entry_type=entry_type,
-                    publisher=_str(item.get("publisher")))
+                    publisher=publisher, kind=kind)
 
 
 def _unescape_html(text: str) -> str:
@@ -203,8 +220,9 @@ def _escape(text: str) -> str:
 
 
 def to_bibtex(meta: WorkMeta, key: str) -> str:
-    venue_field = {"article": "journal", "inproceedings": "booktitle", "incollection": "booktitle", "book": None}.get(
-        meta.entry_type, "howpublished")
+    venue_field = {"article": "journal", "inproceedings": "booktitle", "incollection": "booktitle", "book": None,
+                   "phdthesis": None, "mastersthesis": None}.get(meta.entry_type, "howpublished")
+    thesis = meta.entry_type in THESIS_TYPES
     with_publisher = meta.entry_type not in ("article", "inproceedings")
     authors = " and ".join(f"{_escape(f)}, {_escape(g)}" if g else _escape(f) for f, g in meta.authors)
     pages = meta.pages.replace("-", "--") if meta.pages and "--" not in meta.pages else meta.pages
@@ -212,7 +230,8 @@ def to_bibtex(meta: WorkMeta, key: str) -> str:
         ("title", "{" + _escape(meta.title) + "}"),
         ("author", authors or None),
         (venue_field, _escape(meta.journal) if meta.journal and venue_field else None),
-        ("publisher", _escape(meta.publisher) if meta.publisher and with_publisher else None),
+        ("school", _escape(meta.publisher) if meta.publisher and thesis else None),
+        ("publisher", _escape(meta.publisher) if meta.publisher and with_publisher and not thesis else None),
         ("year", str(meta.year) if meta.year else None),
         ("volume", meta.volume),
         ("number", meta.issue),
@@ -242,6 +261,8 @@ def crossref_by_doi(doi: str, title: str, *, session: HttpSession, settings: Set
     meta = crossref_meta((data or {}).get("message") or {}) if data else None
     if meta is None:
         return None, "CrossRef 没有这个 DOI"
+    if meta.kind in NON_PUBLICATION_TYPES:
+        return None, f"DOI {doi} 在 CrossRef 中是非出版物条目（类型 {meta.kind}），不作为文献"
     if title and not title_matches(title, meta.title, settings.doi_title_similarity):
         return None, f"DOI {doi} 对应的标题与记录不符"
     return meta, None
@@ -264,11 +285,19 @@ def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Setting
     except (requests.RequestException, ValueError) as exc:
         failures.append(f"CrossRef 标题检索失败（{failure_label(exc)}）")
         return None, None, "；".join(failures)
+    skipped_kind: str | None = None
     for item in ((data or {}).get("message") or {}).get("items") or []:
         meta = crossref_meta(item) if isinstance(item, Mapping) else None
-        if meta and title_matches(title, meta.title, settings.title_similarity) and year_ok(year, meta.year, settings.year_window):
-            return meta, "crossref", None
-    failures.append("CrossRef 无标题匹配的条目")
+        if not (meta and title_matches(title, meta.title, settings.title_similarity) and year_ok(year, meta.year, settings.year_window)):
+            continue
+        if meta.kind in NON_PUBLICATION_TYPES:
+            skipped_kind = skipped_kind or meta.kind
+            continue
+        return meta, "crossref", None
+    if skipped_kind:
+        failures.append(f"CrossRef 标题相符的只有非出版物条目（类型 {skipped_kind}，如试验注册、数据集），不作为文献")
+    else:
+        failures.append("CrossRef 无标题匹配的条目")
     return None, None, "；".join(failures)
 
 

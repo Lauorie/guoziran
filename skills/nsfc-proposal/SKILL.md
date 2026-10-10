@@ -276,6 +276,7 @@ python3 S/scripts/consistency_check.py --project-root P
 | wispaper 不可用（`wispaper_search.py` 退出码 3） | 停在第 3 步，不改用其他检索源。告诉申请人检查 `WIS_MCP_URL`、`WIS_MCP_TOKEN`（未配置，或凭据被拒）；全自动运行也停下，在报告中写明。配置好后重跑被打断的那条命令，已存档的检索式不重查 |
 | 部分检索式重跑后仍失败（退出码 1） | 补摘要的标题检索按第 3 步第 6 项处理，不改写标题。其余检索式：把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。bundle 用已取得的结果建，不改用其他检索源；建 bundle 时加 `--min-queries 1`，输出到新的 bundle 目录（如 `keyword-bundle-2`、`claims-bundle-<n>`） |
 | CrossRef 不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
+| `bib_resolve` 未核实，原因含「非出版物条目」（试验注册、数据集等） | 不引用该条。要引用这项研究，按论文题名用 wispaper 检索它正式发表的版本，挑入 `selected.jsonl` 后只对这条记录重跑 `bib_resolve`；找不到时相关论断保持 `unsupported`，在 `stages.md` 记下。已写进 `.bib` 的这类条目（旧版写入）按规则 8 的 drop 流程处理，`bib_refresh.py` 会报同样的原因 |
 | 某个写作 skill 失败 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续 |
 | 写完后科学论证又被修改 | `case.py bump` 后，一致性检查会列出依据旧版的章节，逐章重写 |
 | 一致性检查 2 轮后仍不通过 | 停止重试，问题列入报告 |

@@ -177,6 +177,14 @@ class RefreshTest(unittest.TestCase):
         self.assertIn("标题", summary["outcomes"][0]["reason"])
         self.assertEqual(self._snapshot(), before)
 
+    def test_dataset_type_fails_and_leaves_entry(self) -> None:
+        before = self._snapshot()
+        registry = {**ITEM, "type": "dataset"}
+        summary = self._refresh(FakeSession({DOI_URL: FakeResponse(200, {"message": registry})}))
+        self.assertEqual(summary["counts"], {"refreshed": 0, "unchanged": 0, "failed": 1})
+        self.assertIn("非出版物", summary["outcomes"][0]["reason"])
+        self.assertEqual(self._snapshot(), before)
+
     def test_cli_exit_codes(self) -> None:
         with mock.patch.object(bib_refresh.requests, "Session", return_value=FakeSession({})):
             self.assertEqual(self._main(KEY), 1)  # CrossRef 404：刷新失败，条目不动

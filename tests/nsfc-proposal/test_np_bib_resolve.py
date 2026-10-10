@@ -25,6 +25,17 @@ CROSSREF_ITEM_1 = {
     "container-title": ["Journal of Test Imaging"], "issued": {"date-parts": [[2024]]},
     "volume": "7", "issue": "2", "page": "100-110", "type": "journal-article",
 }
+DATASET_ITEM = {
+    "DOI": "10.5555/NSFC.TEST.REG1", "type": "dataset",
+    "title": ["Unraveling Test Commitment: Evidence from a Field Experiment on Sorting"],
+    "author": [{"family": "Tester", "given": "Alice"}], "publisher": "Test Registry",
+    "container-title": ["Test Randomized Trials"], "issued": {"date-parts": [[2021, 7, 19]]},
+}
+PAPER_ITEM = dict(DATASET_ITEM, DOI="10.5555/NSFC.TEST.PAP1", type="journal-article",
+                  title=["Unraveling Test Commitment: Evidence from a Field Experiment on Sorting"],
+                  **{"container-title": ["Journal of Test Economics"]})
+
+
 class FakeResponse:
     def __init__(self, status: int, payload: Any = None, headers: dict | None = None) -> None:
         self.status_code = status
@@ -226,6 +237,27 @@ class ResolveTest(unittest.TestCase):
         self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
         self.assertEqual(self.waits, [])
 
+    def test_title_search_skips_dataset_and_takes_paper(self) -> None:
+        session = FakeSession({CROSSREF_WORKS: FakeResponse(200, {"message": {"items": [DATASET_ITEM, PAPER_ITEM]}})})
+        summary = self._run(session, {"record_id": "r9", "title": PAPER_ITEM["title"][0], "year": 2021})
+        outcome = summary["outcomes"][0]
+        self.assertEqual((outcome["status"], outcome["doi"]), ("added", "10.5555/nsfc.test.pap1"))
+
+    def test_title_search_with_only_dataset_is_unresolved(self) -> None:
+        session = FakeSession({CROSSREF_WORKS: FakeResponse(200, {"message": {"items": [DATASET_ITEM]}})})
+        summary = self._run(session, {"record_id": "r9", "title": DATASET_ITEM["title"][0], "year": 2021})
+        outcome = summary["outcomes"][0]
+        self.assertEqual(outcome["status"], "unresolved")
+        self.assertIn("非出版物", outcome["reason"])
+        self.assertNotIn("Unraveling", self.bib.read_text(encoding="utf-8"))
+
+    def test_doi_pointing_to_dataset_is_unresolved(self) -> None:
+        session = FakeSession({doi_url("10.5555/nsfc.test.reg1"): FakeResponse(200, {"message": DATASET_ITEM}),
+                               CROSSREF_WORKS: FakeResponse(200, {"message": {"items": [DATASET_ITEM]}})})
+        summary = self._run(session, {"record_id": "r9", "title": DATASET_ITEM["title"][0], "identifiers": {"doi": "10.5555/nsfc.test.reg1"}})
+        self.assertEqual(summary["outcomes"][0]["status"], "unresolved")
+        self.assertIn("类型 dataset", summary["outcomes"][0]["reason"])
+
     def test_dry_run_writes_own_summary_and_keeps_real_one(self) -> None:
         row = {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}}
         session = FakeSession({doi_url("10.5555/nsfc.test.001"): FakeResponse(200, {"message": CROSSREF_ITEM_1})})
@@ -261,6 +293,34 @@ class HelperTest(unittest.TestCase):
         self.assertTrue(entry.startswith("@misc{d,"))
         self.assertIn("publisher = {Hub Inc}", entry)
         self.assertIn("howpublished = {Data Hub}", entry)
+
+    def test_dissertation_becomes_thesis_with_school_and_approved_year(self) -> None:
+        item = {"type": "dissertation", "title": ["Reducing Test Contamination Using an Information Nudge"],
+                "author": [{"family": "Sample", "given": "Mimi"}], "publisher": "Test University Libraries",
+                "degree": ["Master of Science (MS)"], "institution": [{"name": "Test State University"}],
+                "issued": {"date-parts": [[None]]}, "approved": {"date-parts": [[2023, 5, 2]]}, "DOI": "10.5555/nsfc.test.th1"}
+        meta = crossref_meta(item)
+        self.assertEqual((meta.entry_type, meta.year, meta.publisher), ("mastersthesis", 2023, "Test State University"))
+        entry = to_bibtex(meta, "sample2023reducing")
+        self.assertIn("@mastersthesis{sample2023reducing,", entry)
+        self.assertIn("school = {Test State University}", entry)
+        self.assertNotIn("publisher", entry)
+        self.assertNotIn("howpublished", entry)
+        phd = crossref_meta(dict(item, degree=[], institution=[]))
+        self.assertEqual((phd.entry_type, phd.publisher), ("phdthesis", "Test University Libraries"))
+        self.assertIsNone(crossref_meta(dict(item, approved=None)).year)
+
+    def test_other_with_book_and_pages_becomes_incollection(self) -> None:
+        item = {"type": "other", "title": ["Yesterday's Test Habits"], "container-title": ["Test Psychology"],
+                "page": "238-250", "publisher": "Test Press", "issued": {"date-parts": [[2018, 11]]},
+                "author": [{"family": "Tester", "given": "Alice"}], "DOI": "10.5555/nsfc.test.ch24"}
+        meta = crossref_meta(item)
+        self.assertEqual(meta.entry_type, "incollection")
+        entry = to_bibtex(meta, "tester2018yesterday")
+        self.assertIn("booktitle = {Test Psychology}", entry)
+        self.assertIn("publisher = {Test Press}", entry)
+        self.assertNotIn("howpublished", entry)
+        self.assertEqual(crossref_meta(dict(item, page=None)).entry_type, "misc")
 
     def test_chapter_without_container_or_publisher_does_not_fail(self) -> None:
         meta = crossref_meta({"type": "book-chapter", "title": ["Lonely Chapter"], "issued": {"date-parts": [[2021]]}})
