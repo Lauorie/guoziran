@@ -35,4 +35,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - `bib_resolve.py --dry-run` 的汇总写入 `bib_resolve.dryrun.json`，不再覆盖正式运行的 `bib_resolve.json`；执行说明第 3 步第 7 项与「输出管理」同步。
 - 写法规则：政策文件、课程标准、行业指南经发文机关官网核对文件名、发文机关与年份后在正文写明，不进 `.bib`，网址与核对日期记入 `literature_leads.md` 的「## 官方文件」（`case.py init` 的模板新增这一节），核对不到的按背景类论断处理（规则 5、`references/evidence_wording.md`）；`enrich-abstracts` 的 `filled / attempted` 低于一半或 `exhausted_providers` 不为空时，背景类论断也可写成论断问句检索，偏离记入 `stages.md`（第 3 步）；检验力按实际检验的模型算效应量与自由度，分组单位为班级或学校时计入聚类，最小可检测效应与文献效应量比较（`references/scientific_case_guide.md` 第 9 步、`references/section_boundaries.md`）；神经或生理信号设静息或低负荷基线，可能有非特异效应的操纵设对照条件（`references/section_boundaries.md`，第 6.2 步追加到信息表）；每个分假设各写一条可单独判定的否证条件，核心假设不以「几项同时失败」判定（`references/scientific_case_guide.md` 第 4 步）。
 - wispaper 检索改由 `scripts/wispaper_search.py` 执行：传输层并入自 academic-literature，原始返回逐字存档，断点续查，汇成 rls.host_results.v1；不再用 MCP 工具做检索轮次（来源：funded-2 验证运行，280 条记录只能手抄）。
+- 作图提示词的标签不加括号、引号、书名号，自检查清单外符号；动作不同的条件间比较神经或生理信号时，设动作匹配的对照；编译命令不带相对路径的 `--project-dir`（来源：funded-2 验证运行）。
 - 本分支未写 BAC 记录，经负责人同意。

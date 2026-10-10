@@ -64,5 +64,24 @@ class SkillDocTest(unittest.TestCase):
         self.assertIn("本分支未写 BAC 记录，经负责人同意。", changelog)
 
 
+class RoundThreeDocsTest(unittest.TestCase):
+    def test_figure_labels_carry_no_brackets(self) -> None:
+        guide = (SKILL / "references" / "figure_guide.md").read_text(encoding="utf-8")
+        self.assertIn("不加括号、引号或书名号", guide)
+        self.assertIn("连同〈〉一起换掉", guide)
+        self.assertIn("没有清单以外的符号", guide)
+
+    def test_motor_matched_control_rule(self) -> None:
+        bounds = (SKILL / "references" / "section_boundaries.md").read_text(encoding="utf-8")
+        self.assertIn("动作匹配的对照", bounds)
+        self.assertIn("出声朗读", bounds)
+        self.assertIn("前三条", bounds)
+
+    def test_build_command_has_no_relative_project_dir(self) -> None:
+        skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("`python3 P/scripts/nsfc_build.py`", skill)
+        self.assertNotIn("nsfc_build.py build --project-dir P", skill)
+
+
 if __name__ == "__main__":
     unittest.main()

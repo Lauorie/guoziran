@@ -255,7 +255,7 @@ python3 S/scripts/consistency_check.py --project-root P
 - 收尾前：`consistency_check.py` 的「必须修正」为 0，或剩余问题已写入报告。
 - 收尾前：`citation_ledger.py audit --project-root P` 的「条目文本与台账哈希不一致」为 0；「`.bib` 中有、台账中无」的条目正文未引用，并已列入待核实项和收尾报告。
 - 篇幅：`python3 SK/nsfc-length-aligner/scripts/check_length.py --input P --out-dir T/nsfc-length-aligner/output`。这里 `T` 写绝对路径：`--out-dir` 的相对路径按 `--input` 解析，报告会落进 `P`。
-- 项目有编译脚本且本机字体齐全时运行它（如 `python3 P/scripts/nsfc_build.py build --project-dir P`），确认 PDF 生成，并用 `pdfinfo` 记页数；超过 28 页，报告写明页数并建议用 nsfc-length-aligner 压缩。字体缺失导致报错时，写「页数未核」。
+- 项目有编译脚本且本机字体齐全时运行它（`python3 P/scripts/nsfc_build.py`，不带参数时编译脚本所在的项目；不要传相对路径的 `--project-dir`，脚本在项目目录下解析它），确认 PDF 生成，并用 `pdfinfo` 记页数；超过 28 页，报告写明页数并建议用 nsfc-length-aligner 压缩。字体缺失导致报错时，写「页数未核」。
 
 ### 失败与恢复
 
