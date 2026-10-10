@@ -9,7 +9,7 @@
 ## [Unreleased]
 
 - 新增 `nsfc-proposal` 设计文档 `docs/superpowers/specs/2026-10-09-nsfc-proposal-design.md`：以 nsfc-* 为主线并入 nsfc-writer 的科学论证、证据图谱和章节分工，接入 wispaper 检索，修复 `nsfc-justification-writer` 3 处 bug；本轮只写设计，不修改 Skill 源码。
-- 新增 `nsfc-proposal` 0.1.0：国自然正文统一入口，建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef/OpenAlex 元数据核对，按固定顺序调用写作 skill 并做跨章一致性检查。
+- 新增 `nsfc-proposal` 0.1.0：国自然正文统一入口，建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef/OpenAlex 元数据核对，按固定顺序调用写作 skill 并做跨章一致性检查；申请人材料中的 PDF 经团队 WisDoc 服务解析，并与本机抽取的文字比对覆盖率。
 - `nsfc-justification-writer` 1.4.0：允许提案新增模板标题命令；`list-runs` 不再列出工作区目录；新增 `--task-root` 并跨任务目录查找运行记录；接入 nsfc-proposal。
 - `nsfc-research-content-writer` 1.1.0：检查脚本改为检测 S 编号泄漏（原规则与 SKILL.md 矛盾）；接入 nsfc-proposal。
 - `nsfc-research-foundation-writer` 0.2.0、`nsfc-abstract` 2.1.3：接入 nsfc-proposal。
