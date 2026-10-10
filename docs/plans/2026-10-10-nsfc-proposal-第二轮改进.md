@@ -24,7 +24,7 @@
 - 不新增必需的第三方依赖：只用标准库、PyYAML、requests。
 - 脚本用 `Path(__file__).resolve()` 定位 skill 资产；文件读写显式 `encoding="utf-8"`。
 - 输出路径限制在 project_root（P）或任务目录（T，目录名以 `task-` 开头且父目录名为 `.bensz-api`）内；越界报错，退出码 2。
-- 仓库中不得出现本机绝对路径（`git grep -n '/home/juli'` 无输出）和团队服务域名（`git grep -n 'atominnolab'` 无输出）。
+- 仓库中不得出现本机用户目录的绝对路径和团队服务的域名；检查用的 `git grep` 模式由控制者在派发任务时给出，不写进仓库。
 - 凭据（`WISMODEL_API_KEY` 等）和网关地址不得出现在标准输出、日志、异常信息、索引文件或测试快照中。
 - 对用户与正文中，生图服务一律称「WisImage」，不写底层模型名。
 - 正文占位格式固定为 `【待补充：……】`；内部编号（G1、Q1、T1、S1 等）不进正文。
@@ -395,7 +395,7 @@ def render(project_root, task_root, prompt_file, name, aspect, size, force, *, p
 
 - [ ] **Step 6: `consistency_check.py` 加 `missing_figure_file`**：在去注释、跨行拼接后的文本上匹配 `\includegraphics(\[[^\]]*\])?\{([^}]*)\}`，路径相对 P 解析，必须仍在 P 内（越界也报 `missing_figure_file`）；无扩展名时依次试 `.png`、`.pdf`、`.jpg`、`.jpeg`。
 
-- [ ] **Step 7: 运行全局测试命令，0 failed；`git grep -n 'atominnolab'` 无输出**
+- [ ] **Step 7: 运行全局测试命令，0 failed；按派发时给出的模式 `git grep` 团队服务域名，无输出**
 
 - [ ] **Step 8: 提交（两次）**
 
