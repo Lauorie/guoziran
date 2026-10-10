@@ -341,6 +341,21 @@ class HelperTest(unittest.TestCase):
         self.assertIn(r"\textasciicircum{}", entry)
         self.assertIn(r"\textbackslash{}", entry)
 
+    def test_html_entities_are_decoded_before_latex_escape(self) -> None:
+        self.assertEqual(bib_resolve._escape("Waste Management &amp; Research"), r"Waste Management \& Research")
+        self.assertEqual(bib_resolve._escape("Memory &amp;amp; Cognition"), r"Memory \& Cognition")
+        self.assertEqual(bib_resolve._escape("&lt;i&gt;In vivo&lt;/i&gt; tests of &#39;x&#39;"), "In vivo tests of 'x'")
+        self.assertEqual(bib_resolve._escape("Rate &lt; 5 &amp; 10%"), r"Rate < 5 \& 10\%")
+
+    def test_crossref_journal_with_entity_renders_plain_ampersand(self) -> None:
+        item = {"type": "journal-article", "title": ["T"], "container-title": ["Accident Analysis &amp; Prevention"]}
+        entry = to_bibtex(crossref_meta(item), "a")
+        self.assertIn(r"journal = {Accident Analysis \& Prevention}", entry)
+        self.assertNotIn("amp;", entry)
+
+    def test_title_matching_ignores_entities(self) -> None:
+        self.assertTrue(title_matches("Habits &amp; goals in daily recycling behaviour", "Habits & Goals in Daily Recycling Behaviour", 0.92))
+
 class CliTest(unittest.TestCase):
     def test_task_root_must_be_task_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

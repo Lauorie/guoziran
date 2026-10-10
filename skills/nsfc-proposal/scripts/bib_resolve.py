@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import shutil
@@ -172,8 +173,18 @@ def openalex_meta(item: Mapping[str, Any]) -> WorkMeta | None:
                     publisher=_str(source.get("host_organization_name")))
 
 
+def _unescape_html(text: str) -> str:
+    """检索源的文本常带 HTML 实体（&amp;），偶有两层编码（&amp;amp;）；最多解两层。"""
+    for _ in range(2):
+        decoded = html.unescape(text)
+        if decoded == text:
+            break
+        text = decoded
+    return text
+
+
 def _norm_title(text: str) -> str:
-    text = unicodedata.normalize("NFKC", text).lower()
+    text = unicodedata.normalize("NFKC", _unescape_html(text)).lower()
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"[^\w\s]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
@@ -209,6 +220,7 @@ def make_bibkey(meta: WorkMeta, taken: set[str]) -> str:
 
 
 def _escape(text: str) -> str:
+    text = _unescape_html(text)
     text = re.sub(r"</?(?:i|b|em|strong|sub|sup|scp|span|mml:[A-Za-z]+)(?:\s[^>]*)?>", "", text, flags=re.IGNORECASE)
     return "".join(LATEX_SPECIALS.get(ch, ch) for ch in text)
 
