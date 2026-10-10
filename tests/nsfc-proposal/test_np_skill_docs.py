@@ -125,6 +125,7 @@ class RoundFiveWritingDocsTest(unittest.TestCase):
         self.assertIn("小标题按每项研究的类型选", bounds)
         self.assertIn("各用各的一组", bounds)
         self.assertNotIn("全章一致", bounds)
+        self.assertNotIn("每项用同一组小标题", bounds)
         self.assertIn("不为统一改用另一组", TEXT)
         self.assertNotIn("要求每项研究内容用同一组，全章一致", TEXT)
 
