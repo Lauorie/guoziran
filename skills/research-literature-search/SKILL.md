@@ -31,6 +31,8 @@ python3 skills/research-literature-search/scripts/search_runner.py validate --bu
 
 再次补全同一批或扩充后的记录时加 `--reuse <上一次的输出>`（可与 `--output` 相同）：同一 `record_id` 已补到的摘要直接沿用，不再请求；汇总的 `reused` 记沿用条数，不计入 `attempted`。
 
+宿主已有检索服务（如 wispaper）时，先用 `abstract-queries --input <记录.jsonl> --output <检索式.json>` 列出缺完整摘要的记录标题，由宿主按标题检索并存为 `rls.host_results.v1` 文件，再运行 `enrich-abstracts --offline --host-results <文件>`：摘要只从该文件取，按 DOI 或标题核对是同一篇，摘要片段不算；不向其他检索服务发请求。`--offline` 不带 `--host-results` 时只沿用 `--reuse` 的结果。
+
 `run` 默认不补全全量摘要；选文后按需执行 `enrich-abstracts`。provider 按 `provider_priority` 执行 priority-fallback-topup，达到约 70% 阈值即停止，不承诺全 provider union；未传 `--host-results` 时，`mcp`/`duckduckgo` 在纯 Python runner 中记为 `skipped/host tool required`；传入后，有结果的查询把 `mcp` 记为 `success` 并标注 `host_tool`。每次尝试写入 `attempts`、Search Log、`retrieval_strategy` 和 `topup_threshold`。
 
 ### 输出

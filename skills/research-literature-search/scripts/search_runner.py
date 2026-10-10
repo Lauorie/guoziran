@@ -459,8 +459,100 @@ def _reusable_abstracts(path: Path, min_chars: int) -> dict[str, dict[str, Any]]
     return found
 
 
+ELLIPSES = ("…", "...")
+TRUNCATED_TITLE_MIN_CHARS = 30
+
+
+def _strip_ellipses(text: str) -> str:
+    text = " ".join(str(text or "").split())
+    while text.endswith(ELLIPSES):
+        text = text[:-1].rstrip() if text.endswith("…") else text[:-3].rstrip()
+    while text.startswith(ELLIPSES):
+        text = text[1:].lstrip() if text.startswith("…") else text[3:].lstrip()
+    return text
+
+
+def _needs_abstract(row: Mapping[str, Any], min_chars: int) -> bool:
+    abstract = row.get("abstract")
+    return not (isinstance(abstract, str) and len(abstract.strip()) >= min_chars)
+
+
+def _host_match(hit: Mapping[str, Any], *, title: str, doi: str | None) -> bool:
+    """wispaper 结果是否就是这条记录：DOI 都有时比 DOI；否则比标题，截断的标题按前缀比。"""
+    if _same_paper(hit, title=title, doi=doi):
+        return True
+    hit_doi = normalize_doi(hit.get("doi"))
+    if doi and hit_doi:
+        return False
+    own = _title_key(_strip_ellipses(title))
+    truncated = str(title or "").strip().endswith(ELLIPSES)
+    return truncated and len(own) >= TRUNCATED_TITLE_MIN_CHARS and _title_key(hit.get("title")).startswith(own)
+
+
+def _host_candidates(host_results: Mapping[str, list[dict[str, Any]]], title: str) -> list[tuple[str, dict[str, Any]]]:
+    """标题与检索式相同的那一组排在前面，其余按文件顺序。"""
+    own = _title_key(_strip_ellipses(title))
+    first = [(q, hit) for q, hits in host_results.items() if _title_key(q) == own for hit in hits]
+    rest = [(q, hit) for q, hits in host_results.items() if _title_key(q) != own for hit in hits]
+    return first + rest
+
+
+def _fill_from_host(row: dict[str, Any], host_results: Mapping[str, list[dict[str, Any]]], min_chars: int, name: str | None) -> None:
+    """只用宿主检索结果补一条记录的摘要；找不到则标 missing。"""
+    title = str(row.get("title") or "")
+    doi = normalize_doi(str(row.get("doi") or (row.get("identifiers") or {}).get("doi") or ""))
+    rejected = 0
+    provenance: dict[str, Any] = {"source": "wispaper", "method": "post_selection", "query": None,
+                                  "host_results": name, "rejected_mismatch": 0}
+    for query, hit in _host_candidates(host_results, title):
+        candidate = _hit_abstract(hit)
+        if len(candidate) < min_chars:
+            continue
+        if not _host_match(hit, title=title, doi=doi):
+            rejected += 1
+            continue
+        row["abstract"] = candidate
+        row["abstract_status"] = "present"
+        row["abstract_provenance"] = {**provenance, "query": query, "rejected_mismatch": rejected}
+        return
+    row["abstract_status"] = "missing"
+    row["abstract_provenance"] = {**provenance, "rejected_mismatch": rejected}
+    row.setdefault("quality_warnings", [])
+    if "missing_abstract" not in row["quality_warnings"]:
+        row["quality_warnings"].append("missing_abstract")
+
+
+def abstract_queries(input_path: Path, output_path: Path, *, max_papers: int = 200, min_chars: int = 80,
+                     reuse_path: Path | None = None) -> dict[str, Any]:
+    """列出缺完整摘要的记录标题（去重、去省略号），写成 {"queries": [...]}，供 wispaper 按标题检索。"""
+    rows = _read_jsonl(input_path)
+    reusable = _reusable_abstracts(reuse_path, min_chars) if reuse_path is not None else {}
+    queries: list[str] = []
+    seen: set[str] = set()
+    skipped_reusable = no_title = 0
+    for row in rows[: max_papers if max_papers > 0 else len(rows)]:
+        if not _needs_abstract(row, min_chars):
+            continue
+        if str(row.get("record_id") or "") in reusable:
+            skipped_reusable += 1
+            continue
+        title = _strip_ellipses(row.get("title") or "")
+        key = _title_key(title)
+        if not key:
+            no_title += 1
+            continue
+        if key not in seen:
+            seen.add(key)
+            queries.append(title)
+    write_json(output_path, {"queries": queries})
+    return {"queries": len(queries), "skipped_reusable": skipped_reusable, "no_title": no_title, "output": output_path.name}
+
+
 def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 200, min_chars: int = 80, timeout: float = 3, fetchers: Mapping[str, ProviderFn] | None = None,
-                     retries: int = 2, backoff_s: float = 2.0, sleep: Callable[[float], None] = time.sleep, reuse_path: Path | None = None) -> dict[str, Any]:
+                     retries: int = 2, backoff_s: float = 2.0, sleep: Callable[[float], None] = time.sleep, reuse_path: Path | None = None,
+                     offline: bool = False, host_results: Mapping[str, list[dict[str, Any]]] | None = None,
+                     host_results_name: str | None = None) -> dict[str, Any]:
+    offline = offline or host_results is not None
     rows = _read_jsonl(input_path)
     reusable = _reusable_abstracts(reuse_path, min_chars) if reuse_path is not None else {}  # read before output is overwritten
     reused = 0
@@ -469,8 +561,7 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
     registry = _provider_registry(fetchers)
     exhausted: list[str] = []  # providers still answering 429 after retries; not requested again in this run
     for row in output[: max_papers if max_papers > 0 else len(output)]:
-        abstract = row.get("abstract")
-        if isinstance(abstract, str) and len(abstract.strip()) >= min_chars:
+        if not _needs_abstract(row, min_chars):
             row["abstract_status"] = "present"
             continue
         prior = reusable.get(str(row.get("record_id") or ""))
@@ -484,6 +575,10 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
             continue
         attempted += 1
         row["abstract_status"] = "attempted"
+        if offline:
+            _fill_from_host(row, host_results or {}, min_chars, host_results_name)
+            filled += row["abstract_status"] == "present"
+            continue
         provenance: dict[str, Any] = {"method": "post_selection", "attempts": [], "rejected_mismatch": 0}
         title = str(row.get("title") or "")
         raw_doi = str(row.get("doi") or (row.get("identifiers") or {}).get("doi") or "")
@@ -527,6 +622,7 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
     summary = {"mode": "selected", "attempted": attempted, "filled": filled, "reused": reused,
                "missing": sum(1 for row in output if row.get("abstract_status") == "missing"), "min_abstract_chars": min_chars,
                "max_papers_total": max_papers, "exhausted_providers": exhausted,
+               "offline": offline, "host_results": host_results_name,
                "reuse_file": Path(reuse_path).name if reuse_path is not None else None}
     write_json(output_path.with_suffix(output_path.suffix + ".summary.json"), summary)
     return summary
@@ -566,6 +662,14 @@ def main() -> int:
     enrich.add_argument("--retries", type=int, default=2, help="遇 429/5xx 时的重试次数")
     enrich.add_argument("--backoff-s", type=float, default=2.0, help="首次重试前等待秒数，之后每次加倍")
     enrich.add_argument("--reuse", type=Path, help="前一次 enrich-abstracts 的输出：同一 record_id 已补到的摘要直接沿用，不再请求；可与 --output 相同")
+    enrich.add_argument("--offline", action="store_true", help="不向任何检索服务发请求；摘要只取自 --host-results 与 --reuse")
+    enrich.add_argument("--host-results", type=Path, help="rls.host_results.v1 文件（wispaper 按标题检索的结果）；给出时只从它取摘要，不发网络请求")
+    queries = sub.add_parser("abstract-queries", help="列出缺完整摘要的记录标题，供宿主按标题检索")
+    queries.add_argument("--input", required=True, type=Path)
+    queries.add_argument("--output", required=True, type=Path)
+    queries.add_argument("--reuse", type=Path, help="前一次 enrich-abstracts 的输出：已补到摘要的记录不再列出")
+    queries.add_argument("--max-papers", type=int, default=200)
+    queries.add_argument("--min-abstract-chars", type=int, default=80)
     validate = sub.add_parser("validate")
     validate.add_argument("--bundle", required=True, type=Path)
     args = parser.parse_args()
@@ -592,8 +696,28 @@ def main() -> int:
         if args.reuse is not None and not args.reuse.is_file():
             print(f"✗ --reuse 文件不存在：{args.reuse}", file=sys.stderr)
             return 2
+        host_results = None
+        if args.host_results is not None:
+            if not args.host_results.is_file():
+                print(f"✗ --host-results 文件不存在：{args.host_results}", file=sys.stderr)
+                return 2
+            try:
+                host_results = load_host_results(args.host_results)
+            except ValueError as exc:
+                print(f"✗ --host-results 读不了：{_safe_error(exc)}", file=sys.stderr)
+                return 2
         print(json.dumps(enrich_abstracts(args.input, args.output, max_papers=args.max_papers, min_chars=args.min_abstract_chars, timeout=3,
-                                          retries=args.retries, backoff_s=args.backoff_s, reuse_path=args.reuse), ensure_ascii=False, indent=2))
+                                          retries=args.retries, backoff_s=args.backoff_s, reuse_path=args.reuse, offline=args.offline,
+                                          host_results=host_results,
+                                          host_results_name=args.host_results.name if args.host_results is not None else None),
+                         ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "abstract-queries":
+        if args.reuse is not None and not args.reuse.is_file():
+            print(f"✗ --reuse 文件不存在：{args.reuse}", file=sys.stderr)
+            return 2
+        print(json.dumps(abstract_queries(args.input, args.output, max_papers=args.max_papers, min_chars=args.min_abstract_chars,
+                                          reuse_path=args.reuse), ensure_ascii=False, indent=2))
         return 0
     errors = validate_bundle(args.bundle)
     if errors:

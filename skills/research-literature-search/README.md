@@ -34,6 +34,8 @@ python3 skills/research-literature-search/scripts/search_runner.py validate \
 
 已经通过 MCP 拿到 wispaper 结果时，按 `rls.host_results.v1` 格式保存，再用 `--host-results <文件>` 传入，结果会填进 `mcp` 检索源位置。格式见 SKILL.md「输入」一节。
 
+补摘要同样可以不联网：`abstract-queries` 列出缺摘要的标题，宿主用 wispaper 按标题检索后存成同格式文件，再用 `enrich-abstracts --offline --host-results <文件>` 填入。
+
 校验通过后，下游默认读取 `candidates_deduped.jsonl`，并使用 `provenance.jsonl` 与 `dedupe_map.json` 追溯来源和合并理由。
 
 ## 与综述 Skill 的关系

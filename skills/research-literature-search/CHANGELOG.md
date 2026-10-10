@@ -9,6 +9,7 @@
 ### Added（新增）
 - `run` 新增 `--host-results`，接收宿主经 MCP 取得的 wispaper 结果（`rls.host_results.v1`），填入 `mcp` 检索源位置；从出版社链接提取 DOI；摘要片段不当作摘要。不传该参数时行为不变。
 - `enrich-abstracts` 新增 `--reuse`：沿用前次输出中同一 `record_id` 已补到的摘要，不再请求；汇总新增 `reused` 与 `reuse_file`。
+- `abstract-queries` 子命令；`enrich-abstracts` 新增 `--offline`、`--host-results`：按宿主检索结果补摘要，不发网络请求。
 
 ### Fixed（修复）
 - `enrich-abstracts` 只采用与原记录 DOI 一致或标题相似度 ≥ 0.9 的命中摘要，避免填入他篇论文的摘要。
