@@ -180,6 +180,26 @@ class McpOnlyBundleTests(unittest.TestCase):
         self.assertIn(manifest["status"], {"success", "partial_success"})
         self.assertEqual({a["provider"] for a in manifest["attempts"]}, {"mcp"})
 
+    def _fallback_flag(self, order: list, fallback: bool) -> bool:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / "q.json").write_text(json.dumps({"queries": ["alpha query", "beta query", "gamma query"]}), encoding="utf-8")
+            host = _host(base / "host.json", [("alpha query", [{"title": "Alpha paper on habits", "doi": "10.1000/a1", "year": 2020, "authors": ["A B"], "abstract": FULL}])])
+            manifest = run_search(topic="t", domain=None, query_file=base / "q.json", output_dir=base / "out", scope_root=base,
+                                  filters={}, provider_order=order, max_results_per_query=20, max_total=100, fallback_enabled=fallback,
+                                  provider_options={"min_queries": 1, "max_queries": 25}, preprint_profile="auto",
+                                  host_results=load_host_results(host), provider_functions=NO_NET)
+        return manifest["provider_policy"]["fallback_enabled"]
+
+    def test_fallback_flag_false_when_only_host_in_order(self) -> None:
+        self.assertIs(self._fallback_flag(["mcp"], True), False)
+
+    def test_fallback_flag_true_with_other_provider_and_fallback(self) -> None:
+        self.assertIs(self._fallback_flag(["mcp", "semantic_scholar"], True), True)
+
+    def test_fallback_flag_false_when_fallback_disabled(self) -> None:
+        self.assertIs(self._fallback_flag(["mcp", "semantic_scholar"], False), False)
+
 
 if __name__ == "__main__":
     unittest.main()
