@@ -72,8 +72,9 @@ quality:
 constraints: {}
 
 word_count:
-  target: 9000
-  tolerance: 800
+  # 与 nsfc-length-aligner 的立项依据预算 4500–10000 字一致（中值 ± 半宽）
+  target: 7250
+  tolerance: 2750
   mode: cjk_only
 
 writing_coach:

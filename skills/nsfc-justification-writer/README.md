@@ -133,7 +133,8 @@ python skills/nsfc-justification-writer/scripts/run.py refs --project-root <项�
 ## 独立检查工具
 
 ```bash
-# 字数（默认中文字符口径）
+# 字数（默认中文字符口径；默认目标 7250±2750，即立项依据预算 4500–10000 字）
+# 信息表里的字数要求优先于默认目标，可用 --info-form <信息表.md> 指定
 python skills/nsfc-justification-writer/scripts/run.py wordcount --project-root <项目目录>
 
 # 语义审查或写作引导（完整流程必须包含 Tier2）

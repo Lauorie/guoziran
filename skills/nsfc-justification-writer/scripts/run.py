@@ -260,7 +260,11 @@ def cmd_wordcount(args: argparse.Namespace) -> int:
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
     coord = HybridCoordinator(skill_root=skill_root, config=config)
-    status = coord.word_count_status(project_root=Path(args.project_root), mode=getattr(args, "mode", None))
+    status = coord.word_count_status(
+        project_root=Path(args.project_root),
+        mode=getattr(args, "mode", None),
+        info_form_path=Path(args.info_form) if getattr(args, "info_form", None) else None,
+    )
     print(json.dumps(status, ensure_ascii=False, indent=2))
     return 0
 
@@ -812,6 +816,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["cjk_only", "cjk_strip_commands"],
         help="统计口径：cjk_only（默认）或 cjk_strip_commands（更接近正文估计）",
     )
+    p_wc.add_argument("--info-form", help="可选：已填写的信息表文件（markdown），其中的字数要求优先于配置")
     p_wc.set_defaults(func=cmd_wordcount)
 
     p_refs = sub.add_parser("refs", help="引用核验摘要 + 生成 BibTeX 补齐/核验提示词")
