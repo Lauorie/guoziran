@@ -28,7 +28,8 @@ metadata:
 - 必需：
   - `project_root`：含 `main.tex` 和 `extraTex/` 的 NSFC 正文项目，例如 `projects/NSFC_Young` 的副本。
   - 申请人的研究信息：题目或方向、研究对象、痛点、科学问题与假设的初步想法、已有材料。
-- 可选：项目类型；要写的章节（默认全部）；协作方式；论文、数据、预实验结果等材料（PDF、DOCX、Markdown、TXT）；参考文献；生图服务凭据（`WISMODEL_IMAGE_URL`、`WISMODEL_API_KEY`、`DEPLOY_REGION`，环境变量或 `.env`）；wispaper 检索凭据（`WIS_MCP_URL`、`WIS_MCP_TOKEN`，缺失时按「wispaper 不可用」处理）；没有生图凭据时不出图，保留占位。
+  - wispaper 检索凭据：`WIS_MCP_URL`、`WIS_MCP_TOKEN`（环境变量或 `.env`）。缺失或被拒时停在第 3 步，见「失败与恢复」。
+- 可选：项目类型；要写的章节（默认全部）；协作方式；论文、数据、预实验结果等材料（PDF、DOCX、Markdown、TXT）；参考文献；生图服务凭据（`WISMODEL_IMAGE_URL`、`WISMODEL_API_KEY`、`DEPLOY_REGION`，环境变量或 `.env`）；没有生图凭据时不出图，保留占位。
 - 缺 `project_root` 时停下，请用户指定；无人值守时报错退出。
 - 申请人没提供的信息不追问（确认点除外），按保守假设处理，并记入 `assumptions.md`。
 
@@ -101,25 +102,32 @@ python3 S/scripts/case.py validate --project-root P
 python3 SK/research-literature-search/scripts/search_runner.py run --topic "<题目>" \
   --query-file T/nsfc-proposal/input/keyword_queries.json \
   --output-dir T/research-literature-search/output/keyword-bundle \
-  --max-results-per-query 20 --host-results T/nsfc-proposal/output/wispaper/keyword_host.json
+  --max-results-per-query 20 --provider-order mcp --host-results T/nsfc-proposal/output/wispaper/keyword_host.json
 python3 SK/research-literature-search/scripts/search_runner.py run --topic "<题目>" \
   --query-file T/nsfc-proposal/input/claim_queries_1.json --min-queries 1 \
   --output-dir T/research-literature-search/output/claims-bundle-1 \
-  --max-results-per-query 10 --no-fallback --host-results T/nsfc-proposal/output/wispaper/claims_1_host.json
+  --max-results-per-query 10 --provider-order mcp --host-results T/nsfc-proposal/output/wispaper/claims_1_host.json
 python3 SK/research-literature-search/scripts/search_runner.py validate --bundle <每个 bundle 目录>
 ```
 
-   没有 wispaper 时去掉 `--host-results`；论断 bundle 同时去掉 `--no-fallback`。
-6. 逐条论断从各 bundle 的 `candidates_deduped.jsonl` 中挑候选证据，原样写入 `T/nsfc-proposal/output/selected.jsonl`，再补全摘要：
+   `--provider-order` 取 `mcp`，让 bundle 只用 wispaper 的结果，不向其他检索服务发请求。wispaper 不可用时不建 bundle，见「失败与恢复」。
+6. 逐条论断从各 bundle 的 `candidates_deduped.jsonl` 中挑候选证据，原样写入 `T/nsfc-proposal/output/selected.jsonl`，再用 wispaper 补全摘要。关键词检索只返回摘要片段，片段不算完整摘要；按标题检索通常能拿到完整摘要。先列出缺完整摘要的记录标题，按标题检索，再把摘要填回记录：
 
 ```bash
-python3 SK/research-literature-search/scripts/search_runner.py enrich-abstracts \
-  --input T/nsfc-proposal/output/selected.jsonl --output T/nsfc-proposal/output/selected_enriched.jsonl
+python3 SK/research-literature-search/scripts/search_runner.py abstract-queries \
+  --input T/nsfc-proposal/output/selected.jsonl --output T/nsfc-proposal/input/abstract_queries_1.json
+python3 S/scripts/wispaper_search.py run --task-root T --name abstracts_1 --tool quick_search \
+  --query-file T/nsfc-proposal/input/abstract_queries_1.json
+python3 SK/research-literature-search/scripts/search_runner.py enrich-abstracts --offline \
+  --input T/nsfc-proposal/output/selected.jsonl --output T/nsfc-proposal/output/selected_enriched.jsonl \
+  --host-results T/nsfc-proposal/output/wispaper/abstracts_1_host.json
 ```
 
-   汇总写在 `T/nsfc-proposal/output/selected_enriched.jsonl.summary.json`。`filled / attempted` 低于一半（`attempted` 为 0 时不算），或 `exhausted_providers` 不为空时，背景类论断也可以写成论断问句检索，以拿到带完整摘要的记录：问句写入新的 `claim_queries_<n>.json`（n 接在已有文件之后），按本步第 4、5 项检索，再回到本项挑选并补全摘要。在 `stages.md` 记录这一偏离及原因。
-
-   补检后重新挑选、再次补全摘要时，命令加 `--reuse T/nsfc-proposal/output/selected_enriched.jsonl`（与 `--output` 相同即可，脚本先读旧文件再覆盖）：同一 `record_id` 上一次已补到的摘要直接沿用，不再请求。汇总的 `reused` 是沿用条数，不计入 `attempted`；判断「低于一半」时也不计入。不手工合并两次运行的结果。在 `stages.md` 记下 `reused` 条数。
+   - `wispaper_search.py` 的退出码按第 4 项处理。
+   - `abstract-queries` 输出的 `queries` 为 0 时，不运行 `wispaper_search.py`，`enrich-abstracts` 去掉 `--host-results`，保留 `--offline`。
+   - `--offline` 保证补摘要不向 wispaper 以外的服务发请求，不得去掉。
+   - 汇总写在 `T/nsfc-proposal/output/selected_enriched.jsonl.summary.json`。`filled / attempted` 低于一半（`attempted` 为 0 时不算）时，背景类论断也可以写成论断问句检索，以拿到带完整摘要的记录：问句写入新的 `claim_queries_<n>.json`（n 接在已有文件之后），按本步第 4、5 项检索，再回到本项挑选并补全摘要。在 `stages.md` 记录这一偏离及原因。
+   - 补检后重新挑选、再次补全摘要时，编号递增（`abstract_queries_2.json`、`--name abstracts_2`），`abstract-queries` 与 `enrich-abstracts` 都加 `--reuse T/nsfc-proposal/output/selected_enriched.jsonl`（与 `--output` 相同即可，脚本先读旧文件再覆盖）：同一 `record_id` 上一次已补到的摘要直接沿用，不再检索。汇总的 `reused` 是沿用条数，不计入 `attempted`；判断「低于一半」时也不计入。不手工合并两次运行的结果。在 `stages.md` 记下每次的检索式条数、`filled`、`reused`。
 
 7. 核对元数据并写入 `.bib`。申请人论文与检索记录先合并成一个文件，`bib_resolve` 只对它运行一次（每次运行都会覆盖 `T/nsfc-proposal/output/bib_resolve.json`；加 `--dry-run` 时只查询，不写 `.bib`、引用台账和线索文件，汇总写入同目录的 `bib_resolve.dryrun.json`，不覆盖前者）：
 
@@ -265,9 +273,9 @@ python3 S/scripts/consistency_check.py --project-root P
 | 情况 | 处理 |
 |---|---|
 | `case.py validate` 在第 4 步后仍有问题 | 不进入写作；按提示修改后重试 |
-| wispaper 不可用（`wispaper_search.py` 退出码 3） | 不传 `--host-results`，改用 research-literature-search 的现有检索源；论断 bundle 同时去掉 `--no-fallback` |
-| 部分检索式重跑后仍失败（退出码 1） | 关键词 bundle 照常传 `--host-results`，失败的检索式由其他检索源补。论断 bundle：OpenAlex 不接受带问号的问句，把失败的问句改写成关键词式检索式，写入新的 `claim_queries_<n>.json`，不带 `--no-fallback` 检索；在 `stages.md` 记录 |
-| CrossRef 与 OpenAlex 都不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
+| wispaper 不可用（`wispaper_search.py` 退出码 3） | 停在第 3 步，不改用其他检索源。告诉申请人检查 `WIS_MCP_URL`、`WIS_MCP_TOKEN`（未配置，或凭据被拒）；全自动运行也停下，在报告中写明。配置好后从第 3 步第 4 项继续，已存档的检索式不重查 |
+| 部分检索式重跑后仍失败（退出码 1） | 把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。bundle 用已取得的结果建，不改用其他检索源 |
+| CrossRef 不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
 | 某个写作 skill 失败 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续 |
 | 写完后科学论证又被修改 | `case.py bump` 后，一致性检查会列出依据旧版的章节，逐章重写 |
 | 一致性检查 2 轮后仍不通过 | 停止重试，问题列入报告 |
@@ -284,7 +292,7 @@ python3 S/scripts/consistency_check.py --project-root P
 | 出图失败，类别 `credit`（额度不足） | 停止出图；已通过自检的图照用，其余放占位；报告写明 |
 | 出图失败，类别 `no_image`、`bad_image`、`unsupported_format`（返回的不是 PNG 或 JPEG） | 改写提示词，换名重画，计入 `figures.max_rerenders` |
 | 出图失败，类别 `http_5xx`、`network`、`timeout`（脚本已在总时限内重试 1 次）、`http_4xx`、`too_large` | 不再重试，该图放占位；类别记入 `stages.md` 与报告 |
-| 文献服务限流 | `bib_resolve` 与 `enrich-abstracts` 自动退避重试；仍未解析的记录稍后只对未解析的子集重跑 `bib_resolve`（未解析记录见 `T/nsfc-proposal/output/bib_resolve.json` 中 status 为 unresolved 的 outcomes；按 record_id 从 `bib_records.jsonl` 取出，另存为 JSONL 作 `--records`），不重跑已写入的记录。`enrich-abstracts` 汇总的 `exhausted_providers` 不为空时，这些服务本次不再请求，按第 3 步第 6 项改用论断问句补检索 |
+| CrossRef 限流 | `bib_resolve` 自动退避重试；仍未解析的记录稍后只对未解析的子集重跑 `bib_resolve`（未解析记录见 `T/nsfc-proposal/output/bib_resolve.json` 中 status 为 unresolved 的 outcomes；按 record_id 从 `bib_records.jsonl` 取出，另存为 JSONL 作 `--records`），不重跑已写入的记录。 |
 
 ## 约束
 
@@ -302,6 +310,6 @@ python3 S/scripts/consistency_check.py --project-root P
 ### Skill 专属约束
 
 - 不编造文献、数据、病例数、前期成果和合作单位；申请人没提供的内容只写占位。
-- 文献的作者、期刊、年份、卷期页码只取自 CrossRef 或 OpenAlex 的返回，不凭记忆填写。
+- 文献的作者、期刊、年份、卷期页码只取自 CrossRef 的返回，不凭记忆填写。
 - 全流程只有一个确认点；其余步骤不打断用户。
 - 不调用 research-idea。需要系统探索选题时，建议用户先运行它，再把结论写进 `scientific_case.yaml`。

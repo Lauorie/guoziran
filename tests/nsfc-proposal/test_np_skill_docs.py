@@ -94,5 +94,30 @@ class RoundThreeDocsTest(unittest.TestCase):
         self.assertNotIn("nsfc_build.py build --project-dir P", skill)
 
 
+class RoundFiveRetrievalDocsTest(unittest.TestCase):
+    def test_flow_never_mentions_other_search_services(self) -> None:
+        for rel in ("SKILL.md", "README.md", "scripts/bib_resolve.py", "scripts/bib_refresh.py"):
+            text = (SKILL / rel).read_text(encoding="utf-8").lower()
+            for name in ("openalex", "semantic scholar", "semantic_scholar"):
+                self.assertNotIn(name, text, f"{rel}: {name}")
+
+    def test_bundles_are_wispaper_only(self) -> None:
+        self.assertEqual(TEXT.count("--provider-order mcp"), 2)
+        self.assertNotIn("--no-fallback", TEXT)
+        self.assertNotIn("其他检索源", TEXT.replace("不改用其他检索源", ""))
+
+    def test_abstracts_come_from_wispaper_offline(self) -> None:
+        self.assertIn("abstract-queries", TEXT)
+        self.assertIn("--name abstracts_1 --tool quick_search", TEXT)
+        self.assertIn("enrich-abstracts --offline", TEXT)
+        self.assertNotIn("exhausted_providers", TEXT)
+
+    def test_wispaper_unavailable_stops(self) -> None:
+        row = [ln for ln in TEXT.splitlines() if ln.startswith("| wispaper 不可用")]
+        self.assertEqual(len(row), 1)
+        self.assertIn("停在第 3 步", row[0])
+        self.assertIn("不改用其他检索源", row[0])
+
+
 if __name__ == "__main__":
     unittest.main()

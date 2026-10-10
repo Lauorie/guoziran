@@ -38,6 +38,7 @@
 - `nsfc-length-aligner`：立项依据与研究内容的字数下限下调为 4500、7000，合计下限 18000；`nsfc-research-content-writer` 推荐字数同步。
 - `nsfc-proposal` 0.1.0：`bib_resolve` 只查 CrossRef，删去 OpenAlex 兜底。
 - `research-literature-search` 1.1.0：`enrich-abstracts` 可只按 wispaper 的标题检索结果补摘要（`--offline`、`--host-results`、`abstract-queries`），不发其他网络请求。
+- `nsfc-proposal` 0.1.0：第 3 步只用 wispaper 检索与补摘要，不再请求 OpenAlex、Semantic Scholar；wispaper 不可用时停下。
 - 本分支未写 BAC 记录，经负责人同意。
 - 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。
