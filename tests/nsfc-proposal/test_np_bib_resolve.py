@@ -16,7 +16,7 @@ SCRIPTS = ROOT / "skills/nsfc-proposal/scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import bib_resolve  # noqa: E402
-from bib_resolve import CROSSREF_WORKS, OPENALEX_WORKS, USER_AGENT, WorkMeta, crossref_meta, make_bibkey, openalex_meta, run, title_matches, to_bibtex  # noqa: E402
+from bib_resolve import CROSSREF_WORKS, USER_AGENT, WorkMeta, crossref_meta, make_bibkey, run, title_matches, to_bibtex  # noqa: E402
 
 TITLE_1 = "Peritumoral texture and invasiveness of test nodules in a multicenter cohort study"
 CROSSREF_ITEM_1 = {
@@ -25,14 +25,6 @@ CROSSREF_ITEM_1 = {
     "container-title": ["Journal of Test Imaging"], "issued": {"date-parts": [[2024]]},
     "volume": "7", "issue": "2", "page": "100-110", "type": "journal-article",
 }
-OPENALEX_ITEM_3 = {
-    "title": "Reconstruction kernels & texture stability in test scans", "doi": "https://doi.org/10.5555/nsfc.test.003",
-    "publication_year": 2022, "authorships": [{"author": {"display_name": "Carol Sample"}}],
-    "primary_location": {"source": {"display_name": "Test Physics Letters"}},
-    "biblio": {"volume": "3", "issue": None, "first_page": "11", "last_page": "19"},
-}
-
-
 class FakeResponse:
     def __init__(self, status: int, payload: Any = None, headers: dict | None = None) -> None:
         self.status_code = status
@@ -136,48 +128,26 @@ class ResolveTest(unittest.TestCase):
         self.assertEqual(summary["outcomes"][0]["status"], "added")
         self.assertEqual(summary["outcomes"][0]["source"], "crossref")
 
-    def test_openalex_fallback(self) -> None:
+    def test_title_search_uses_crossref_only(self) -> None:
         unrelated = dict(CROSSREF_ITEM_1, title=["Something else entirely about cardiac imaging"])
-        session = FakeSession({
-            CROSSREF_WORKS: FakeResponse(200, {"message": {"items": [unrelated]}}),
-            OPENALEX_WORKS: FakeResponse(200, {"results": [OPENALEX_ITEM_3]}),
-        })
-        summary = self._run(session, {"record_id": "r3", "title": "Reconstruction kernels & texture stability in test scans", "year": 2022})
+        session = FakeSession({CROSSREF_WORKS: FakeResponse(200, {"message": {"items": [unrelated]}})})
+        summary = self._run(session, {"record_id": "r3", "title": "Reconstruction kernels and texture stability in test scans", "year": 2022})
         outcome = summary["outcomes"][0]
-        self.assertEqual((outcome["status"], outcome["source"]), ("added", "openalex"))
-        text = self.bib.read_text(encoding="utf-8")
-        self.assertIn("title = {{Reconstruction kernels \\& texture stability in test scans}}", text)
-        self.assertIn("author = {Sample, Carol}", text)
-        self.assertIn("doi = {10.5555/nsfc.test.003}", text)
+        self.assertEqual(outcome["status"], "unresolved")
+        self.assertIn("CrossRef 无标题匹配的条目", outcome["reason"])
+        self.assertNotIn("OpenAlex", outcome["reason"])
+        self.assertTrue(session.calls)
+        for url, _params, _headers in session.calls:
+            self.assertTrue(url.startswith(CROSSREF_WORKS), url)
 
-    def _openalex_only_routes(self) -> dict:
-        unrelated = dict(CROSSREF_ITEM_1, title=["Something else entirely about cardiac imaging"])
-        return {
-            CROSSREF_WORKS: FakeResponse(200, {"message": {"items": [unrelated]}}),
-            OPENALEX_WORKS: FakeResponse(200, {"results": [OPENALEX_ITEM_3]}),
-        }
-
-    def test_openalex_doi_goes_back_to_crossref_for_metadata(self) -> None:
-        routes = self._openalex_only_routes()
-        authoritative = {"DOI": "10.5555/NSFC.TEST.003", "title": [OPENALEX_ITEM_3["title"]],
-                         "author": [{"family": "Sample", "given": "Carol"}], "container-title": ["Test Physics Letters"],
-                         "issued": {"date-parts": [[2023]]}, "type": "journal-article"}
-        routes[doi_url("10.5555/nsfc.test.003")] = FakeResponse(200, {"message": authoritative})
-        summary = self._run(FakeSession(routes), {"record_id": "r3", "title": OPENALEX_ITEM_3["title"], "year": 2022})
-        outcome = summary["outcomes"][0]
-        self.assertEqual((outcome["status"], outcome["source"]), ("added", "crossref"))
-        self.assertIn("year = {2023}", self.bib.read_text(encoding="utf-8"))
-
-    def test_openalex_doi_crossref_404_keeps_openalex_metadata(self) -> None:
-        summary = self._run(FakeSession(self._openalex_only_routes()), {"record_id": "r3", "title": OPENALEX_ITEM_3["title"], "year": 2022})
-        outcome = summary["outcomes"][0]
-        self.assertEqual((outcome["status"], outcome["source"]), ("added", "openalex"))
-        self.assertIn("year = {2022}", self.bib.read_text(encoding="utf-8"))
+    def test_script_has_no_openalex(self) -> None:
+        source = (Path(bib_resolve.__file__)).read_text(encoding="utf-8").lower()
+        self.assertNotIn("openalex", source)
 
     def test_network_failure_goes_to_leads_and_bib_untouched(self) -> None:
         before = self.bib.read_text(encoding="utf-8")
         error = requests.ConnectionError("offline")
-        session = FakeSession({doi_url("10.5555/nsfc.test.001"): error, CROSSREF_WORKS: error, OPENALEX_WORKS: error})
+        session = FakeSession({doi_url("10.5555/nsfc.test.001"): error, CROSSREF_WORKS: error})
         summary = self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
         self.assertEqual(summary["counts"]["unresolved"], 1)
         self.assertIn("ConnectionError", summary["outcomes"][0]["reason"])
@@ -190,7 +160,6 @@ class ResolveTest(unittest.TestCase):
         session = FakeSession({
             doi_url("10.5555/nsfc.test.009"): FakeResponse(503),
             CROSSREF_WORKS: FakeResponse(503),
-            OPENALEX_WORKS: FakeResponse(503),
             doi_url("10.5555/nsfc.test.001"): FakeResponse(200, {"message": CROSSREF_ITEM_1}),
         })
         summary = self._run(session,
@@ -227,7 +196,7 @@ class ResolveTest(unittest.TestCase):
     def test_persistent_503_is_unresolved_with_status_in_reason(self) -> None:
         url = doi_url("10.5555/nsfc.test.001")
         responses = [FakeResponse(503)] * 4
-        session = SequenceSession({url: responses, CROSSREF_WORKS: [FakeResponse(404)], OPENALEX_WORKS: [FakeResponse(404)]})
+        session = SequenceSession({url: responses, CROSSREF_WORKS: [FakeResponse(404)]})
         summary = self._run(session, {"record_id": "r1", "title": TITLE_1, "identifiers": {"doi": "10.5555/nsfc.test.001"}})
         self.assertEqual(summary["counts"]["unresolved"], 1)
         self.assertIn("503", summary["outcomes"][0]["reason"])
@@ -299,12 +268,6 @@ class HelperTest(unittest.TestCase):
         self.assertTrue(entry.startswith("@incollection{c,"))
         self.assertNotIn("booktitle", entry)
         self.assertNotIn("publisher", entry)
-
-    def test_openalex_book_chapter(self) -> None:
-        item = {"title": "Chapter T", "type": "book-chapter", "publication_year": 2019,
-                "primary_location": {"source": {"display_name": "Book B", "host_organization_name": "Pub P"}}}
-        meta = openalex_meta(item)
-        self.assertEqual((meta.entry_type, meta.journal, meta.publisher), ("incollection", "Book B", "Pub P"))
 
     def test_article_entry_ignores_publisher(self) -> None:
         item = {"type": "journal-article", "title": ["T"], "container-title": ["J"], "publisher": "Elsevier"}

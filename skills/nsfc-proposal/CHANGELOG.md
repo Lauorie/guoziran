@@ -44,4 +44,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - `bib_resolve` 先解 HTML 实体（最多两层）再做 LaTeX 转义，标题比对同样先解实体；此前 CrossRef 期刊名中的 `&amp;` 会写成 `\&amp;`，排版显示「&amp;」（来源：fresh-1 验证运行）。
 - 引用句数字核对把摘要中的 percent、per cent 读作 %（含「10–20 percent」「12 to 15 percent」这类区间），英文数字词先转成数字（「ten percent」读作 10%）；percentage points 是另一个量，不读作 %；此前这类写法会被报为数字不见于摘要（来源：fresh-1 验证运行）。
 - 第 3 步第 6 项：再次补全摘要时用 `enrich-abstracts --reuse` 沿用前次结果，不手工合并（来源：fresh-1 验证运行）。
+- `bib_resolve` 只查 CrossRef：删去 OpenAlex 兜底。CrossRef 查不到的记录写入线索清单，正文不引用。
 - 本分支未写 BAC 记录，经负责人同意。

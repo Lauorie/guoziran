@@ -2,7 +2,7 @@
 """把选作证据的文献记录补全成 .bib 条目（设计文档 6.4 节）。
 
 输入：rls.paper.v1 记录（JSONL）。有 DOI 时查 CrossRef 并核对标题；没有 DOI 或核对失败时，
-按标题查 CrossRef，再查 OpenAlex。核对成功的条目追加到 main.tex 指向的第一个 .bib
+按标题查 CrossRef。不查其他服务。核对成功的条目追加到 main.tex 指向的第一个 .bib
 （写前备份，按 DOI 去重）；其余写入 proposal/literature_leads.md，标 [unverified]，正文不得引用。
 已写入的条目要按来源更新时，用 bib_refresh.py。
 退出码：0 完成（含未核实条目）；2 输入或路径错误。
@@ -34,7 +34,6 @@ from proposal_common import ProposalError, append_under_heading, load_config, pr
 
 USER_AGENT = "nsfc-proposal-bib-resolve/0.1"
 CROSSREF_WORKS = "https://api.crossref.org/works"
-OPENALEX_WORKS = "https://api.openalex.org/works"
 ELLIPSIS_RE = re.compile(r"…|\.\.\.")
 MIN_FRAGMENT_CHARS = 20
 STOPWORDS = frozenset({"a", "an", "the", "of", "on", "in", "for", "and", "to", "with", "by", "from", "at", "via", "is", "are"})
@@ -83,7 +82,6 @@ class Settings:
 CROSSREF_TYPES = {"journal-article": "article", "proceedings-article": "inproceedings", "book-chapter": "incollection",
                   "book-part": "incollection", "book-section": "incollection", "book": "book", "monograph": "book",
                   "edited-book": "book", "reference-book": "book"}
-OPENALEX_TYPES = {"article": "article", "book-chapter": "incollection", "book": "book"}
 
 
 @dataclass(frozen=True)
@@ -150,28 +148,6 @@ def crossref_meta(item: Mapping[str, Any]) -> WorkMeta | None:
                     volume=_str(item.get("volume")), issue=_str(item.get("issue")), pages=_str(item.get("page")),
                     doi=normalize_doi(item.get("DOI")), entry_type=entry_type,
                     publisher=_str(item.get("publisher")))
-
-
-def openalex_meta(item: Mapping[str, Any]) -> WorkMeta | None:
-    title = str(item.get("title") or item.get("display_name") or "").strip()
-    if not title:
-        return None
-    authors = []
-    for authorship in item.get("authorships") or []:
-        name = str(((authorship or {}).get("author") or {}).get("display_name") or "").strip()
-        if name:
-            parts = name.split()
-            authors.append((parts[-1], " ".join(parts[:-1])))
-    source = ((item.get("primary_location") or {}).get("source") or {})
-    biblio = item.get("biblio") or {}
-    first, last = _str(biblio.get("first_page")), _str(biblio.get("last_page"))
-    pages = f"{first}--{last}" if first and last and first != last else first
-    year = item.get("publication_year") if isinstance(item.get("publication_year"), int) else None
-    return WorkMeta(title=title, authors=tuple(authors), journal=_str(source.get("display_name")), year=year,
-                    volume=_str(biblio.get("volume")), issue=_str(biblio.get("issue")), pages=pages,
-                    doi=normalize_doi(item.get("doi")),
-                    entry_type=OPENALEX_TYPES.get(item.get("type"), "article"),
-                    publisher=_str(source.get("host_organization_name")))
 
 
 def _unescape_html(text: str) -> str:
@@ -271,11 +247,6 @@ def crossref_by_doi(doi: str, title: str, *, session: HttpSession, settings: Set
     return meta, None
 
 
-def _authoritative_by_doi(doi: str, title: str, *, session: HttpSession, settings: Settings) -> WorkMeta | None:
-    """用 DOI 回 CrossRef 取元数据；查询失败、无此 DOI 或标题不符时返回 None。"""
-    return crossref_by_doi(doi, title, session=session, settings=settings)[0]
-
-
 def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Settings) -> tuple[WorkMeta | None, str | None, str | None]:
     """返回 (元数据, 来源, 失败原因)；元数据为 None 时原因非空。"""
     doi, title, year = _record_fields(record)
@@ -288,27 +259,16 @@ def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Setting
     if not title:
         return None, None, "；".join(failures + ["记录没有标题"])
     query = re.sub(r"\s+", " ", ELLIPSIS_RE.sub(" ", title)).strip()
-    searches: tuple[tuple[str, str, dict[str, Any], Callable[[Any], list], Callable[[Mapping[str, Any]], WorkMeta | None]], ...] = (
-        ("CrossRef", CROSSREF_WORKS, {"query.bibliographic": query, "rows": 5},
-         lambda d: ((d or {}).get("message") or {}).get("items") or [], crossref_meta),
-        ("OpenAlex", OPENALEX_WORKS, {"search": query, "per-page": 5},
-         lambda d: (d or {}).get("results") or [], openalex_meta),
-    )
-    for label, url, params, items_of, to_meta in searches:
-        try:
-            data = _get_json(session, url, params, settings)
-        except (requests.RequestException, ValueError) as exc:
-            failures.append(f"{label} 标题检索失败（{failure_label(exc)}）")
-            continue
-        for item in items_of(data):
-            meta = to_meta(item) if isinstance(item, Mapping) else None
-            if meta and title_matches(title, meta.title, settings.title_similarity) and year_ok(year, meta.year, settings.year_window):
-                if label == "OpenAlex" and meta.doi:
-                    authoritative = _authoritative_by_doi(meta.doi, title, session=session, settings=settings)
-                    if authoritative:
-                        return authoritative, "crossref", None
-                return meta, label.lower(), None
-        failures.append(f"{label} 无标题匹配的条目")
+    try:
+        data = _get_json(session, CROSSREF_WORKS, {"query.bibliographic": query, "rows": 5}, settings)
+    except (requests.RequestException, ValueError) as exc:
+        failures.append(f"CrossRef 标题检索失败（{failure_label(exc)}）")
+        return None, None, "；".join(failures)
+    for item in ((data or {}).get("message") or {}).get("items") or []:
+        meta = crossref_meta(item) if isinstance(item, Mapping) else None
+        if meta and title_matches(title, meta.title, settings.title_similarity) and year_ok(year, meta.year, settings.year_window):
+            return meta, "crossref", None
+    failures.append("CrossRef 无标题匹配的条目")
     return None, None, "；".join(failures)
 
 

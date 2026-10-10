@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """引用台账：proposal/citation_ledger.jsonl，只追加的 JSONL 事件日志。
 
-每条进入 .bib 的文献留一条记录：来自哪条检索记录、元数据出自 CrossRef 还是 OpenAlex、
+每条进入 .bib 的文献留一条记录：来自哪条检索记录、元数据出自哪个服务（现只用 CrossRef；旧台账中 source 为 openalex 的记录照常读取）、
 写入 .bib 的条目文本哈希、可用的摘要原文。一致性检查据此拒绝手写或手改的条目。
 事件：add（bib_resolve 写入；bib_refresh 按台账中的 DOI 重新取元数据、原 key 重写条目后再记一条，reason 为 refresh）、
 register_user（申请人确认由其提供、用 register-user --key 登记的条目）、drop（作废）。case.py init 只建空台账，不登记任何条目。
