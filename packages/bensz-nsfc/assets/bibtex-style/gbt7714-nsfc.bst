@@ -1536,6 +1536,10 @@ FUNCTION {masterthesis} {                         % void Entry::masterthesis() {
   thesis.impl                                     %   thesis_impl();
 }                                                 % }
                                                   %
+FUNCTION {mastersthesis} {                        % void Entry::mastersthesis() {
+  masterthesis                                    %   masterthesis();
+}                                                 % }
+                                                  %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
                                                   %
 FUNCTION {bachelorthesis} {                       % void Entry::bachelorthesis() {

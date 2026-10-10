@@ -49,5 +49,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 研究内容的小标题按每项研究的类型选，一章中两类研究都有时各用各的；设计图中的实物与刺激材料画成线描图标，自检时照片或写实渲染判为不合格。
 - 引用台账的说明不再提 OpenAlex；文档测试检查所有 nsfc-* skill 不含 OpenAlex。
 - 第 3 步补上 wispaper 失败时的去向：bundle 全空、补摘要批次退出码 1、`use_wispaper` 为 false；README 写明 Crossref 无法核对的 DOI。
-- `bib_resolve` 认 CrossRef 条目类型：标题检索跳过试验注册、数据集等非出版物，DOI 指向这类条目时记为未核实；学位论文写成 `@phdthesis`/`@mastersthesis`（`school`，年份缺失时取 `approved`）；带书名与页码的 `other` 写成书章。
+- `bib_resolve` 认 CrossRef 条目类型：标题检索跳过试验注册、数据集等非出版物，DOI 指向这类条目时记为未核实；学位论文写成 `@phdthesis`/`@mastersthesis`（CrossRef 多数学位论文不标学位，按博士论文写）（`school`，年份缺失时取 `approved`）；带书名与页码的 `other` 写成书章。
 - 本分支未写 BAC 记录，经负责人同意。
