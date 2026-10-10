@@ -47,6 +47,7 @@
 - `nsfc-proposal` 0.1.0：`bib_resolve` 不再把试验注册、数据集当作文献；学位论文与书章条目类型更正。
 - `packages/bensz-nsfc`：`gbt7714-nsfc.bst` 补上标准的 `mastersthesis` 条目类型（原只有拼错的 `masterthesis`），硕士学位论文条目可正常排版。
 - `nsfc-justification-writer` 1.4.0：`wordcount` 可读信息表，默认字数目标与立项依据预算一致。
+- `nsfc-research-foundation-writer` 0.2.0：占位写法统一为【待补充：……】。
 - 本分支未写 BAC 记录，经负责人同意。
 - 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。

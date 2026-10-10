@@ -113,8 +113,11 @@ def main() -> int:
         _warn(f"{conditions_path} does not mention '尚缺/缺少/不足' explicitly; please confirm it covers missing conditions + plan")
 
     # Placeholders are allowed in preview / when info is missing; warn for apply-mode outputs.
-    if "[请补充：" in foundation_text or "[需补充：" in foundation_text or "[请补充：" in conditions_text or "[需补充：" in conditions_text:
-        _warn("found placeholder markers like '[请补充：...]' in outputs; confirm this is intentional and consistent with provided info")
+    both_text = f"{foundation_text}\n{conditions_text}"
+    if "【待补充：" in both_text:
+        _warn("found placeholder markers like '【待补充：...】' in outputs; confirm this is intentional and consistent with provided info")
+    if "[请补充：" in both_text or "[需补充：" in both_text:
+        _warn("use 【待补充：...】 instead of '[请补充：...]' / '[需补充：...]'")
 
     if not args.no_risk_scan:
         hits: list[tuple[str, str]] = []
