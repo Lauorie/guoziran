@@ -47,6 +47,7 @@ class Settings:
     min_coverage: float = 0.9
     poll_timeout_s: float = 520.0
     poll_interval_s: float = 5.0
+    total_timeout_s: float = 560.0
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any]) -> "Settings":
@@ -55,6 +56,7 @@ class Settings:
             min_coverage=float(materials.get("min_wisdoc_coverage", 0.9)),
             poll_timeout_s=float(materials.get("wisdoc_poll_timeout_s", 520)),
             poll_interval_s=float(materials.get("wisdoc_poll_interval_s", 5)),
+            total_timeout_s=float(materials.get("wisdoc_total_timeout_s", 560)),
         )
 
 
@@ -69,12 +71,14 @@ class Options:
 
 def wisdoc_parse(pdf: Path, out_dir: Path, *, env_dirs: Sequence[Path], cwd: Path | None, no_cache: bool,
                  settings: Settings) -> Path:
-    """交 WisDoc 解析：Markdown 写成 out_dir/wisdoc.md，图片写进 out_dir/assets/。测试中替换本函数。"""
-    base_url = wisdoc_client.resolve_base_url(env_dirs, cwd)
+    """交 WisDoc 解析：Markdown 写成 out_dir/wisdoc.md，图片写进 out_dir/assets/。测试中替换本函数。
+
+    base URL、WISDOC_CANARY_HEADER、WISDOC_ALLOWED_HOSTS 都按环境变量 → cwd 及上级 → env_dirs 及上级 → skill 目录查找。
+    """
     payload = wisdoc_client.parse_pdf_to_markdown(
-        pdf_path=str(pdf), output_dir=out_dir, no_cache=no_cache, base_url=base_url,
+        pdf_path=str(pdf), output_dir=out_dir, no_cache=no_cache, env_dirs=env_dirs, cwd=cwd,
         poll_timeout_s=settings.poll_timeout_s, poll_interval_s=settings.poll_interval_s,
-        markdown_name="wisdoc.md", assets_dirname="assets",
+        total_timeout_s=settings.total_timeout_s, markdown_name="wisdoc.md", assets_dirname="assets",
     )
     return Path(payload["markdown_path"])
 
@@ -82,7 +86,9 @@ def wisdoc_parse(pdf: Path, out_dir: Path, *, env_dirs: Sequence[Path], cwd: Pat
 def failure_category(exc: BaseException) -> str:
     """WisDoc 失败的类别；不含 URL 和服务端返回的文字。"""
     if isinstance(exc, wisdoc_client.WisDocNotConfigured):
-        return "未配置 WISDOCRS_BASE_URL"
+        return "WISDOCRS_BASE_URL 未配置或写法不对"
+    if isinstance(exc, wisdoc_client.WisDocURLRejected):
+        return "服务器返回的地址不在允许范围内"
     if isinstance(exc, wisdoc_client.WisDocHTTPError):
         return f"HTTP 错误 {exc.status}"
     if isinstance(exc, wisdoc_client.WisDocJobFailed):
@@ -154,12 +160,16 @@ def _cache_usable(entry: dict, base: Path, local_only: bool) -> bool:
         rel = entry.get(key)
         if rel and not (isinstance(rel, str) and (target := _inside(base, rel)) is not None and target.is_file()):
             return False
+    images = entry.get("assets")
+    if isinstance(images, int) and images > 0:
+        assets_dir = base / entry["dir"] / "assets"
+        return assets_dir.is_dir() and sum(1 for p in assets_dir.iterdir() if p.is_file()) >= images
     return True
 
 
 def _entry(src: Path, sha: str, kind: str, rel: str | None, **fields: Any) -> dict:
     entry = {"source": src.name, "sha256": sha, "kind": kind, "dir": rel, "primary": None, "wisdoc_md": None,
-             "local_txt": None, "parser": None, "chars": 0, "coverage": None, "warnings": []}
+             "local_txt": None, "parser": None, "chars": 0, "coverage": None, "assets": 0, "warnings": []}
     entry.update(fields)
     return entry
 
@@ -194,8 +204,11 @@ def _process_pdf(src: Path, sha: str, base: Path, rel: str, opts: Options) -> di
             (item / "wisdoc.md").unlink(missing_ok=True)
             shutil.rmtree(item / "assets", ignore_errors=True)
     cov = None
+    images = 0
     if wis_text is not None:
         parser, wis_rel, primary = "wisdoc", f"{rel}/wisdoc.md", f"{rel}/wisdoc.md"
+        if (item / "assets").is_dir():
+            images = sum(1 for p in (item / "assets").iterdir() if p.is_file())
         if local_rel:
             cov = coverage(local.text or "", wis_text)
             if cov is not None and cov < opts.settings.min_coverage:
@@ -214,7 +227,7 @@ def _process_pdf(src: Path, sha: str, base: Path, rel: str, opts: Options) -> di
             warnings.append("未取得文字")
     return _entry(src, sha, "pdf", rel, primary=primary, wisdoc_md=wis_rel, local_txt=local_rel, parser=parser,
                   chars=_primary_chars(base, primary), coverage=round(cov, 3) if cov is not None else None,
-                  warnings=warnings)
+                  assets=images, warnings=warnings)
 
 
 def _process_converted(src: Path, sha: str, kind: str, base: Path, rel: str) -> dict:
@@ -254,7 +267,8 @@ def _check_task_root(task_root: Path | str) -> Path:
     return task
 
 
-def _check_files(files: Sequence[Path | str]) -> list[Path]:
+def _check_files(files: Sequence[Path | str]) -> list[tuple[Path, str]]:
+    """校验输入文件并计算 sha256；不存在、不是普通文件或读不了时抛出 ProposalError（退出码 2）。"""
     if not files:
         raise ProposalError("没有给出要解析的文件")
     sources = []
@@ -262,7 +276,10 @@ def _check_files(files: Sequence[Path | str]) -> list[Path]:
         path = Path(raw).expanduser().resolve()
         if not path.is_file():
             raise ProposalError(f"文件不存在或不是普通文件：{raw}")
-        sources.append(path)
+        try:
+            sources.append((path, _sha256(path)))
+        except OSError as exc:
+            raise ProposalError(f"文件读不了（{type(exc).__name__}）：{raw}") from exc
     return sources
 
 
@@ -281,8 +298,7 @@ def run(project_root: Path | str, task_root: Path | str, files: Sequence[Path | 
     base.mkdir(parents=True, exist_ok=True)
     entries = _load_index(base / "index.json")
     results: list[tuple[dict, bool]] = []
-    for src in sources:
-        sha = _sha256(src)
+    for src, sha in sources:
         kind = KINDS.get(src.suffix.lower())
         old = next((e for e in entries if e.get("sha256") == sha and e.get("dir")), None)
         if kind and old and not no_cache and _cache_usable(old, base, local_only):

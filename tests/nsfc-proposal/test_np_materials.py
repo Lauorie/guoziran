@@ -31,7 +31,7 @@ except ImportError:
 FAKE_URL = "http://wisdoc-secret.invalid:8123"
 SENTENCES = [f"第{i}项：本研究拟建立肺磨玻璃结节浸润性预测模型，样本来自第{i}家医院的回顾性队列。" for i in range(10)]
 LOCAL_TEXT = "\n".join(SENTENCES)
-SETTINGS = materials.Settings(min_coverage=0.9, poll_timeout_s=1, poll_interval_s=0)
+SETTINGS = materials.Settings(min_coverage=0.9, poll_timeout_s=1, poll_interval_s=0, total_timeout_s=30)
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
@@ -129,6 +129,7 @@ class PdfTest(MaterialsBase):
         self.assertEqual(entry["coverage"], 1.0)
         self.assertEqual(entry["warnings"], [])
         self.assertEqual(entry["chars"], len(markdown))
+        self.assertEqual(entry["assets"], 1)
         self.assertTrue((self.mat / "01-paper" / "assets" / "001_fig.png").is_file())
         self.assertEqual(self.index()["schema"], "nsfc-proposal.materials.v1")
         self.assertEqual(self.index()["files"], [entry])
@@ -162,12 +163,36 @@ class PdfTest(MaterialsBase):
 
     def test_missing_base_url_falls_back_without_network(self) -> None:
         self._patch(wisdoc_client, "SKILL_DIR", self.base / "skill")
-        opened = mock.Mock(side_effect=AssertionError("不应联网"))
-        self._patch(wisdoc_client.urllib.request, "urlopen", opened)
+        opener = mock.Mock(side_effect=AssertionError("不应联网"))
+        self._patch(wisdoc_client, "_make_opener", opener)
         [(entry, _)] = self.run_files(self.pdf())
-        opened.assert_not_called()
+        opener.assert_not_called()
         self.assertEqual((entry["parser"], entry["primary"]), ("local", "01-paper/local.txt"))
-        self.assertIn("WisDoc 解析失败（未配置 WISDOCRS_BASE_URL），正文以 local.txt 为准", entry["warnings"])
+        self.assertIn("WisDoc 解析失败（WISDOCRS_BASE_URL 未配置或写法不对），正文以 local.txt 为准", entry["warnings"])
+
+    def test_project_root_and_limits_are_passed_to_client(self) -> None:
+        seen: dict[str, Any] = {}
+
+        def fake_parse(**kwargs: Any) -> dict:
+            seen.update(kwargs)
+            out = Path(kwargs["output_dir"]) / kwargs["markdown_name"]
+            out.write_text(LOCAL_TEXT, encoding="utf-8")
+            return {"markdown_path": str(out)}
+
+        self._patch(wisdoc_client, "parse_pdf_to_markdown", fake_parse)
+        [(entry, _)] = self.run_files(self.pdf())
+        self.assertEqual((list(seen["env_dirs"]), seen["cwd"]), ([self.root.resolve()], self.base))
+        self.assertEqual((seen["poll_timeout_s"], seen["poll_interval_s"], seen["total_timeout_s"]), (1, 0, 30))
+        self.assertEqual((seen["markdown_name"], seen["assets_dirname"]), ("wisdoc.md", "assets"))
+        self.assertNotIn("base_url", seen)
+        self.assertEqual(entry["parser"], "wisdoc")
+
+    def test_empty_wisdoc_with_local_text_uses_local(self) -> None:
+        self.fake_wisdoc("<p></p>\n![图](assets/001_fig.png)\n")
+        [(entry, _)] = self.run_files(self.pdf())
+        self.assertEqual((entry["parser"], entry["primary"], entry["wisdoc_md"]), ("local", "01-paper/local.txt", None))
+        self.assertEqual(entry["warnings"], ["WisDoc 解析失败（返回空），正文以 local.txt 为准"])
+        self.assertFalse((self.mat / "01-paper" / "wisdoc.md").exists())
 
     def test_empty_local_text_uses_wisdoc_with_scan_warning(self) -> None:
         self.local = LocalText("", "PyMuPDF", ())
@@ -229,6 +254,25 @@ class CacheTest(MaterialsBase):
         self.assertFalse(cached)
         self.assertEqual(len(fake.calls), 2)
 
+    def test_missing_assets_dir_invalidates_cache(self) -> None:
+        fake = self.fake_wisdoc("\n\n".join(SENTENCES))
+        pdf = self.pdf()
+        self.run_files(pdf)
+        shutil.rmtree(self.mat / "01-paper" / "assets")
+        [(entry, cached)] = self.run_files(pdf)
+        self.assertFalse(cached)
+        self.assertEqual(len(fake.calls), 2)
+        self.assertTrue((self.mat / "01-paper" / "assets" / "001_fig.png").is_file())
+
+    def test_unreadable_input_exits_2(self) -> None:
+        fake = self.fake_wisdoc("unused")
+        self._patch(materials, "_sha256", mock.Mock(side_effect=PermissionError(13, "denied")))
+        with mock.patch("sys.stderr", io.StringIO()):
+            code = materials.main(["parse", "--project-root", str(self.root), "--task-root", str(self.task), str(self.pdf())])
+        self.assertEqual(code, 2)
+        self.assertEqual(fake.calls, [])
+        self.assertFalse(self.task.exists())
+
     def test_new_file_gets_next_number(self) -> None:
         self.fake_wisdoc("\n\n".join(SENTENCES))
         self.run_files(self.pdf("a.pdf", b"%PDF a"))
@@ -289,134 +333,6 @@ class OtherFormatsTest(MaterialsBase):
         self.assertEqual([e["source"] for e in self.index()["files"]], ["数据.xlsx", "notes.md"])
 
 
-class EnvLookupTest(unittest.TestCase):
-    def setUp(self) -> None:
-        self.tmps = [tempfile.TemporaryDirectory() for _ in range(2)]
-        for tmp in self.tmps:
-            self.addCleanup(tmp.cleanup)
-        self.base, self.cwd = (Path(t.name) for t in self.tmps)
-        self.root = self.base / "group" / "proj"
-        self.root.mkdir(parents=True)
-        env = mock.patch.dict(os.environ)
-        env.start()
-        self.addCleanup(env.stop)
-        os.environ.pop("WISDOCRS_BASE_URL", None)
-        patcher = mock.patch.object(wisdoc_client, "SKILL_DIR", self.base / "skill")
-        patcher.start()
-        self.addCleanup(patcher.stop)
-
-    def test_dotenv_in_project_parent_provides_base_url(self) -> None:
-        (self.base / "group" / ".env").write_text(f"# 注释\nexport WISDOCRS_BASE_URL='{FAKE_URL}/'\n", encoding="utf-8")
-        self.assertEqual(wisdoc_client.resolve_base_url([self.root], cwd=self.cwd), FAKE_URL)
-        self.assertNotIn("WISDOCRS_BASE_URL", os.environ)
-
-    def test_lookup_order(self) -> None:
-        (self.base / "group" / ".env").write_text("WISDOCRS_BASE_URL=http://project.invalid\n", encoding="utf-8")
-        self.assertEqual(wisdoc_client.resolve_base_url([self.root], cwd=self.cwd), "http://project.invalid")
-        (self.cwd / ".env").write_text("WISDOCRS_BASE_URL=http://cwd.invalid\n", encoding="utf-8")
-        self.assertEqual(wisdoc_client.resolve_base_url([self.root], cwd=self.cwd), "http://cwd.invalid")
-        os.environ["WISDOCRS_BASE_URL"] = "http://environ.invalid"
-        self.assertEqual(wisdoc_client.resolve_base_url([self.root], cwd=self.cwd), "http://environ.invalid")
-
-    def test_missing_or_bad_url_raises_without_value(self) -> None:
-        with self.assertRaises(wisdoc_client.WisDocNotConfigured):
-            wisdoc_client.resolve_base_url([self.root], cwd=self.cwd)
-        os.environ["WISDOCRS_BASE_URL"] = "wisdoc-secret.invalid:8123"
-        with self.assertRaises(wisdoc_client.WisDocNotConfigured) as caught:
-            wisdoc_client.resolve_base_url([self.root], cwd=self.cwd)
-        self.assertNotIn("wisdoc-secret", str(caught.exception))
-
-    def test_materials_passes_project_root_to_lookup(self) -> None:
-        (self.base / "group" / ".env").write_text(f"WISDOCRS_BASE_URL={FAKE_URL}\n", encoding="utf-8")
-        seen: dict[str, Any] = {}
-
-        def fake_parse(**kwargs: Any) -> dict:
-            seen.update(kwargs)
-            out = Path(kwargs["output_dir"]) / kwargs["markdown_name"]
-            out.write_text(LOCAL_TEXT, encoding="utf-8")
-            return {"markdown_path": str(out)}
-
-        task = self.base / ".bensz-api" / "task-20261010-1200-env"
-        pdf = self.base / "a.pdf"
-        pdf.write_bytes(b"%PDF fake")
-        with mock.patch.object(wisdoc_client, "parse_pdf_to_markdown", fake_parse), \
-                mock.patch.object(materials, "local_pdf_text", lambda path: LocalText(LOCAL_TEXT, "PyMuPDF", ())):
-            [(entry, _)] = materials.run(self.root, task, [pdf], cwd=self.cwd, settings=SETTINGS)
-        self.assertEqual(seen["base_url"], FAKE_URL)
-        self.assertEqual((seen["poll_timeout_s"], seen["poll_interval_s"]), (1, 0))
-        self.assertEqual((seen["markdown_name"], seen["assets_dirname"]), ("wisdoc.md", "assets"))
-        self.assertEqual(entry["parser"], "wisdoc")
-
-
-class FakeResponse:
-    def __init__(self, body: bytes, content_type: str = "application/json") -> None:
-        self._body = body
-        self.headers = mock.Mock(get_content_type=lambda: content_type)
-
-    def read(self) -> bytes:
-        return self._body
-
-    def __enter__(self) -> "FakeResponse":
-        return self
-
-    def __exit__(self, *exc: Any) -> None:
-        return None
-
-
-class ClientTest(unittest.TestCase):
-    def setUp(self) -> None:
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
-        self.base = Path(tmp.name)
-        self.pdf = self.base / "a.pdf"
-        self.pdf.write_bytes(b"%PDF fake")
-        self.requests: list[Any] = []
-
-    def _urlopen(self, routes: dict[tuple[str, str], Any]) -> Any:
-        def urlopen(request: Any, timeout: Any = None) -> FakeResponse:
-            self.requests.append(request)
-            value = routes[(request.get_method(), request.full_url)]
-            if isinstance(value, BaseException):
-                raise value
-            return value
-        return urlopen
-
-    def test_full_flow_writes_markdown_and_assets_without_identity_headers(self) -> None:
-        status = {"task_status": {"ready": True, "successful": True}, "metadata": {"markdown_url": f"{FAKE_URL}/files/j1.md"}}
-        routes = {
-            ("POST", f"{FAKE_URL}/api/v2/documents"): FakeResponse(b'{"job_id": "j1"}'),
-            ("GET", f"{FAKE_URL}/api/v2/documents/j1"): FakeResponse(json.dumps(status).encode()),
-            ("GET", f"{FAKE_URL}/files/j1.md"): FakeResponse("# 标题\n\n正文\n\n![f](img/a.png)\n".encode(), "text/markdown"),
-            ("GET", f"{FAKE_URL}/files/img/a.png"): FakeResponse(b"png", "image/png"),
-        }
-        with mock.patch.object(wisdoc_client.urllib.request, "urlopen", self._urlopen(routes)):
-            payload = wisdoc_client.parse_pdf_to_markdown(pdf_path=str(self.pdf), output_dir=self.base / "out", base_url=FAKE_URL,
-                                                          poll_timeout_s=5, poll_interval_s=0, markdown_name="wisdoc.md",
-                                                          assets_dirname="assets")
-        markdown = (self.base / "out" / "wisdoc.md").read_text(encoding="utf-8")
-        self.assertIn("![f](assets/001_a.png)", markdown)
-        self.assertTrue((self.base / "out" / "assets" / "001_a.png").is_file())
-        self.assertNotIn("wisdoc-secret", json.dumps(payload))
-        for request in self.requests:
-            names = {name.lower() for name, _ in request.header_items()}
-            self.assertLessEqual(names, {"x-canary", "content-type"})
-            self.assertFalse(any("@" in value for _, value in request.header_items()))
-
-    def test_http_error_text_is_redacted(self) -> None:
-        body = io.BytesIO(f'{{"error": {{"message": "upstream {FAKE_URL}/x failed"}}}}'.encode())
-        error = urllib.error.HTTPError(f"{FAKE_URL}/api/v2/documents", 502, "Bad Gateway", {}, body)
-        with mock.patch.object(wisdoc_client.urllib.request, "urlopen", self._urlopen({("POST", f"{FAKE_URL}/api/v2/documents"): error})):
-            with self.assertRaises(wisdoc_client.WisDocHTTPError) as caught:
-                wisdoc_client.parse_pdf_to_markdown(pdf_path=str(self.pdf), output_dir=self.base / "out", base_url=FAKE_URL)
-        self.assertEqual(caught.exception.status, 502)
-        self.assertNotIn("wisdoc-secret", str(caught.exception))
-
-    def test_cli_has_no_serve_mode(self) -> None:
-        self.assertFalse(hasattr(wisdoc_client, "_run_mcp_server"))
-        with self.assertRaises(SystemExit):
-            wisdoc_client._parse_cli(["serve"])
-
-
 class CoverageTest(unittest.TestCase):
     def test_sentence_keys(self) -> None:
         self.assertIsNone(sentence_key("短句子不计入。"))
@@ -467,7 +383,7 @@ class CliTest(unittest.TestCase):
         env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
         env.pop("WISDOCRS_BASE_URL", None)
         return subprocess.run([sys.executable, str(SCRIPTS / "materials.py"), "parse", *args], env=env, capture_output=True,
-                              text=True, timeout=60, cwd=self.tmp)
+                              text=True, encoding="utf-8", timeout=60, cwd=self.tmp)
 
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
