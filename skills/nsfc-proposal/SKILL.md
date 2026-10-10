@@ -247,6 +247,7 @@ python3 S/scripts/consistency_check.py --project-root P
 | 台账与 `.bib` 不一致 | 找出手写或手改的条目，按规则 8 处理 |
 | 材料解析警告「WisDoc 解析失败（WISDOCRS_BASE_URL 未配置或写法不对）」 | 已自动用本机文字；配置好 `WISDOCRS_BASE_URL`（环境变量或 `.env`，值不带行尾注释）后，只对该 PDF 加 `--no-cache` 重跑 `materials.py parse` |
 | `materials.py` 超时、被打断，或警告 WisDoc 超时、连接失败 | 重跑同一命令：已完成的文件命中缓存，不再上传；仍失败的 PDF 稍后只对该文件加 `--no-cache` 重跑，期间按本机文字（`local.txt`）继续 |
+| 材料解析警告「WisDoc 解析失败（服务器返回的地址不在允许范围内）」 | 已自动用本机文字。WisDoc 返回的结果地址或图片地址不是网关主机、其子域名或同一上级域名下的主机时会被拒绝；确认该主机可信后，把它写进 `WISDOC_ALLOWED_HOSTS`（环境变量或 `.env`，逗号分隔），再只对该 PDF 加 `--no-cache` 重跑 |
 | 材料解析警告「WisDoc 漏字（覆盖率 xx%）」 | 不必重跑：正文以 `local.txt` 为准，表格与图看 `wisdoc.md`；怀疑是 WisDoc 偶发问题时，只对该文件加 `--no-cache` 重跑一次 |
 | 文献服务限流 | `bib_resolve` 与 `enrich-abstracts` 自动退避重试；仍未解析的记录稍后只对未解析的子集重跑 `bib_resolve`（未解析记录见 `T/nsfc-proposal/output/bib_resolve.json` 中 status 为 unresolved 的 outcomes；按 record_id 从 `bib_records.jsonl` 取出，另存为 JSONL 作 `--records`），不重跑已写入的记录 |
 

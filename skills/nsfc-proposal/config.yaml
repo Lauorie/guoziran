@@ -30,7 +30,7 @@ materials:
   min_wisdoc_coverage: 0.9     # 本机文字长句在 WisDoc 结果中找到的比例低于此值时，正文以 local.txt 为准
   wisdoc_poll_timeout_s: 520   # WisDoc 解析任务的轮询超时（秒）；留出余量，使单个 PDF 在 600 秒的 Bash 超时内完成
   wisdoc_poll_interval_s: 5    # WisDoc 解析任务的轮询间隔（秒）
-  wisdoc_total_timeout_s: 560  # 单个 PDF 交 WisDoc 的总时限（秒，从提交算起）；超过后停止下载图片，其余图片记为「（图片未下载）」
+  wisdoc_total_timeout_s: 560  # 单个 PDF 交 WisDoc 的总时限（秒，从提交算起）；轮询或取结果时超过则本次 WisDoc 记为超时、改用本机文字；只在下载图片时超过则停止下载，其余图片记为「（图片未下载）」
 
 consistency:
   max_fix_rounds: 2
