@@ -25,7 +25,9 @@ for _index, _arg in enumerate(sys.argv[:-1]):
 
 SEARCH_ROOT = Path(os.environ.get("RESEARCH_LITERATURE_SEARCH_ROOT", str(Path(__file__).resolve().parents[2] / "research-literature-search"))).expanduser().resolve() / "scripts"
 sys.path.insert(0, str(SEARCH_ROOT))
-from providers import search_crossref, search_openalex, search_semantic_scholar  # noqa: E402
+sys.path.append(str(Path(__file__).resolve().parent))  # after SEARCH_ROOT: both dirs hold dedupe_papers.py
+from openalex_provider import search as search_openalex  # noqa: E402
+from providers import search_crossref, search_semantic_scholar  # noqa: E402
 from query_contract import QueryInputError, QueryPlan, load_query_plan, normalize_query_payload  # noqa: E402
 from search_runner import run_search  # noqa: E402
 
@@ -137,7 +139,7 @@ def main() -> int:
         return 1
     if args.bundle_dir:
         provider_order = [item.strip() for item in args.provider_order.split(",") if item.strip()] if args.provider_order else None
-        manifest = run_search(topic=args.topic, query_file=args.queries or Path("queries.json"), output_dir=args.bundle_dir, filters={"min_year": args.min_year, "max_year": args.max_year}, provider_order=provider_order, max_results_per_query=args.max_results_per_query, max_total=args.max_total, fallback_enabled=not args.no_fallback, scope_root=args.scope_root, query_source=args.query_source, provider_options={"min_queries": args.min_queries, "max_queries": args.max_queries})
+        manifest = run_search(topic=args.topic, query_file=args.queries or Path("queries.json"), output_dir=args.bundle_dir, filters={"min_year": args.min_year, "max_year": args.max_year}, provider_order=provider_order, provider_functions={"openalex": search_openalex}, max_results_per_query=args.max_results_per_query, max_total=args.max_total, fallback_enabled=not args.no_fallback, scope_root=args.scope_root, query_source=args.query_source, provider_options={"min_queries": args.min_queries, "max_queries": args.max_queries})
         bundle = args.bundle_dir.resolve()
         normalized = bundle / "candidates_normalized.jsonl"
         log = bundle / "search_log.json"

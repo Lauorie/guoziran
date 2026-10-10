@@ -148,6 +148,27 @@ class HostResultsRunTest(unittest.TestCase):
             mcp = [a for a in manifest["attempts"] if a["provider"] == "mcp"]
             self.assertTrue(mcp and all(a["status"] == "skipped" and a["reason"] == "host tool required" for a in mcp))
 
+    def test_injected_provider_outside_supported_set_is_called(self) -> None:
+        calls: list[str] = []
+
+        def fake(query: str, **_: object) -> list[dict]:
+            calls.append(query)
+            return [{"title": f"custom paper for {query}", "year": 2021}]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            manifest = run_search(
+                topic="GGN", query_file=self._queries(base), output_dir=base / "bundle",
+                provider_order=["custom_source"],
+                provider_functions={"custom_source": fake},
+                max_results_per_query=5,
+            )
+            self.assertTrue(calls)
+            attempts = [a for a in manifest["attempts"] if a["provider"] == "custom_source"]
+            self.assertTrue(attempts and all(a["status"] == "success" for a in attempts))
+            lines = (base / "bundle" / "candidates_normalized.jsonl").read_text(encoding="utf-8").splitlines()
+            self.assertTrue(any("custom paper for" in line for line in lines))
+
 
 if __name__ == "__main__":
     unittest.main()

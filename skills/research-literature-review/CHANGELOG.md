@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- OpenAlex 适配器移入本 skill（`scripts/openalex_provider.py`），由本 skill 注入 research-literature-search；检索行为不变。
+
 ### Changed（相关性驱动选文与轻量查新 - 2026-09-15）
 
 - 由于 `min_refs` 从硬下限改为只读兼容的软目标提示，选文结果语义发生不兼容变化，版本提升至 `2.0.0`；`target_refs` 改为软预算、`max_refs` 保持硬上限，默认不再用低分或无摘要文献填满旧 `min_refs`，不足时在 `selection_rationale.yaml` 记录迁移提示、停止原因和证据缺口。

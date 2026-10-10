@@ -271,7 +271,7 @@ def run_search(
                 if len(hits) >= max(5, int(max_results_per_query * TOPUP_THRESHOLD)):
                     break
                 continue
-            if provider not in SUPPORTED_PROVIDERS:
+            if provider not in SUPPORTED_PROVIDERS and provider not in registry:
                 item = {"provider": provider, "status": "skipped", "results": 0, "reason": "host tool required"}
                 query_attempts.append(item)
                 attempts.append({"query_id": query_id, **item})
