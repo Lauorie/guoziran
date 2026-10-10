@@ -136,6 +136,14 @@ class RoundFiveWritingDocsTest(unittest.TestCase):
         self.assertIn("没有照片或写实渲染的图像", guide)
 
 
+class RoundSixFigureDocsTest(unittest.TestCase):
+    def test_figure_guide_checks_icon_counts(self) -> None:
+        guide = (SKILL / "references" / "figure_guide.md").read_text(encoding="utf-8")
+        self.assertIn("数量：", guide)
+        self.assertIn("在提示词中写明个数", guide)
+        self.assertIn("重复图标的个数与 Brief 一致", guide)
+
+
 class NsfcSkillsHaveNoOpenAlexTest(unittest.TestCase):
     def test_no_nsfc_skill_mentions_openalex(self) -> None:
         suffixes = {".py", ".md", ".yaml", ".yml", ".json", ".txt", ".tex", ".sh"}
