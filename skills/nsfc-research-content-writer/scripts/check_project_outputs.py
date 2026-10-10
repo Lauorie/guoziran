@@ -8,8 +8,13 @@ from pathlib import Path
 from typing import Sequence
 
 from _yaml_utils import extract_yaml_list_under_block, extract_yaml_value_under_block
+from plan_years import CN_NUMERALS, duration_years, load_yearly_plan, year_label
 
-DEFAULT_RISK_PHRASES = ["首次", "领先", "填补空白", "突破性", "国际领先", "世界领先"]
+# 只按短语匹配；单独的「首次」（如「首次测试前」）是叙述先后，不报
+DEFAULT_RISK_PHRASES = [
+    "首次提出", "首次发现", "首次实现", "首次揭示", "首次构建", "首次建立", "国内首次", "国际首次", "世界首次",
+    "领先", "填补空白", "突破性", "国际领先", "世界领先",
+]
 # 含 S+数字、但不是内部编号的专业写法；config.yaml 的 checks.allowed_s_tokens 缺失时使用
 DEFAULT_ALLOWED_S_TOKENS = ["L5-S1", "L5–S1", "S100", "S100β", "S1P", "S1 受体", "S1受体"]
 
@@ -17,6 +22,8 @@ DEFAULT_ALLOWED_S_TOKENS = ["L5-S1", "L5–S1", "S100", "S100β", "S1P", "S1 受
 # 紧跟在字母、数字或连字符后的 S+数字（如 L5–S1、T12-S2 中的 S1、S2）是解剖节段等写法，不算编号。
 INTERNAL_SUBGOAL_ID_RE = re.compile(r"(?<![A-Za-z0-9\-‐‑–—−])S\d+(?![A-Za-z0-9])")
 LATEX_COMMENT_RE = re.compile(r"(?<!\\)%.*$")
+# 年度标题：「第1年」「第 1 年」「第一年」……「第十年」
+YEAR_HEADER_RE = re.compile(rf"第\s*(\d{{1,2}}|[{CN_NUMERALS}]{{1,3}})\s*年")
 
 
 def _err(message: str) -> int:
@@ -55,6 +62,25 @@ def find_leaked_ids(text: str, allowed_tokens: Sequence[str]) -> list[str]:
     return sorted(set(INTERNAL_SUBGOAL_ID_RE.findall(text)))
 
 
+def _year_number(token: str) -> int | None:
+    """「4」「四」「十一」等转成整数；认不出时返回 None。"""
+    if token.isdigit():
+        return int(token)
+    digits = {ch: i for i, ch in enumerate(CN_NUMERALS[:9], start=1)}
+    if "十" not in token:
+        return digits.get(token) if len(token) == 1 else None
+    tens, _, ones = token.partition("十")
+    if (tens and tens not in digits) or (ones and ones not in digits):
+        return None
+    return digits.get(tens, 1) * 10 + digits.get(ones, 0)
+
+
+def years_mentioned(text: str) -> set[int]:
+    """正文中出现的年度序号（第N年）。"""
+    found = (_year_number(m.group(1)) for m in YEAR_HEADER_RE.finditer(text))
+    return {n for n in found if n}
+
+
 def _check_file_exists(project_root: Path, relpath: str) -> str | None:
     path = project_root / relpath
     if not path.exists():
@@ -68,7 +94,9 @@ def _strip_latex_comments(text: str) -> str:
     return "\n".join(LATEX_COMMENT_RE.sub("", line) for line in text.splitlines())
 
 
-def _check_minimal_content(path: Path, *, kind: str, allowed_s_tokens: Sequence[str] = ()) -> list[str]:
+def _check_minimal_content(
+    path: Path, *, kind: str, allowed_s_tokens: Sequence[str] = (), years: int = 3
+) -> list[str]:
     text = _strip_latex_comments(path.read_text(encoding="utf-8", errors="replace"))
     problems: list[str] = []
 
@@ -86,14 +114,13 @@ def _check_minimal_content(path: Path, *, kind: str, allowed_s_tokens: Sequence[
         if not text.strip():
             problems.append(f"{path}: innovation content is empty")
     elif kind == "yearly":
-        year_patterns = {
-            "第1年/第一年": [r"第\s*1\s*年", r"第一年"],
-            "第2年/第二年": [r"第\s*2\s*年", r"第二年"],
-            "第3年/第三年": [r"第\s*3\s*年", r"第三年"],
-        }
-        for label, patterns in year_patterns.items():
-            if not any(re.search(p, text) for p in patterns):
-                problems.append(f"{path}: missing yearly header ({label})")
+        present = years_mentioned(text)
+        for year in range(1, years + 1):
+            if year not in present:
+                problems.append(f"{path}: missing yearly header ({year_label(year)}) for a {years}-year duration")
+        # 只看第 N+1 年：计划写多了年份必然先出现它；更远的「第十年」多是随访等叙述，不报
+        if years + 1 in present:
+            problems.append(f"{path}: yearly header beyond the {years}-year duration ({year_label(years + 1)})")
     else:
         problems.append(f"{path}: unknown kind {kind}")
 
@@ -117,12 +144,23 @@ def main() -> int:
     parser.add_argument(
         "--no-risk-scan",
         action="store_true",
-        help="Skip scanning for risk phrases like '首次/领先' (default: scan and warn).",
+        help="Skip scanning for risk phrases like '首次提出/领先' (default: scan and warn).",
     )
     parser.add_argument(
         "--fail-on-risk-phrases",
         action="store_true",
         help="Treat risk phrases as errors (default: warnings).",
+    )
+    duration = parser.add_mutually_exclusive_group()
+    duration.add_argument(
+        "--years",
+        type=int,
+        help="Research duration in years; the yearly plan must cover year 1..N and nothing beyond "
+        "(default without --years/--project-type: yearly_plan.default_years).",
+    )
+    duration.add_argument(
+        "--project-type",
+        help="Project type, e.g. 面上项目; years come from yearly_plan.duration_by_keyword in config.yaml.",
     )
     args = parser.parse_args()
 
@@ -141,6 +179,26 @@ def main() -> int:
         targets = _read_targets_from_config(config_yaml)
     except ValueError as exc:
         return _err(str(exc))
+
+    try:
+        plan = load_yearly_plan(config_yaml)
+    except ValueError as exc:
+        return _err(str(exc))
+    if args.years is not None:
+        if not 1 <= args.years <= plan.max_years:
+            parser.error(f"--years must be in 1..{plan.max_years}")
+        years = args.years
+    elif args.project_type is not None:
+        years, matched = duration_years(args.project_type, config_yaml)
+        if not matched:
+            # 立即输出：年份检查报错时也要让人看到年数从哪来
+            print(
+                f"WARN: project type {args.project_type!r} matches no keyword in yearly_plan.duration_by_keyword; "
+                f"using {years} years (record this in assumptions.md as an AI-proposed item)",
+                file=sys.stderr,
+            )
+    else:
+        years = plan.default_years
 
     risk_phrases = _read_checks_from_config(config_yaml)
     allowed_s_tokens = _read_allowed_s_tokens(config_yaml)
@@ -168,7 +226,9 @@ def main() -> int:
         ]
         for relpath, kind in checks:
             errors.extend(
-                _check_minimal_content(project_root / relpath, kind=kind, allowed_s_tokens=allowed_s_tokens)
+                _check_minimal_content(
+                    project_root / relpath, kind=kind, allowed_s_tokens=allowed_s_tokens, years=years
+                )
             )
 
     warnings: list[str] = []
@@ -198,6 +258,7 @@ def main() -> int:
 
     print("OK: project outputs check passed")
     print(f"- project_root: {project_root}")
+    print(f"- research duration: {years} years")
     print("- targets:")
     print(f"  - {targets['research_content_tex']}")
     print(f"  - {targets['innovation_tex']}")
