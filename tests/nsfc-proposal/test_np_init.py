@@ -47,6 +47,8 @@ class InitTest(unittest.TestCase):
         self.assertEqual(case["version"], 1)
         self.assertEqual(case["status"], "draft")
         self.assertIn("研究基础", case["project"]["sections"])
+        leads = paths.leads.read_text(encoding="utf-8").splitlines()
+        self.assertEqual([line for line in leads if line.startswith("## ")], ["## 检索式", "## 官方文件", "## 未核实线索"])
 
     def test_plan_uses_length_budgets_and_writers(self) -> None:
         init_proposal(self.root, title="T", project_type="青年科学基金")

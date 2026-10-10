@@ -17,7 +17,7 @@
 - `nsfc-proposal` 0.1.0：content-writer 信息表第 10 项按项目类型写研究期限（年数取自 content-writer 的 `yearly_plan`），不再写死三年，类型不在年数表中时写明该类型；第 6.2 步的检查加 `--project-type`。
 - `nsfc-proposal` 0.1.0：新增 `figures.py`，用团队的生图服务 WisImage 生成研究框架图与各研究的设计图，第 6.2 步先出图再写研究内容；一致性检查新增 `missing_figure_file`；评审后按返回格式存 `.png` 或 `.jpg`，单张图设总时限，拒绝文字先脱敏后截取。
 - `nsfc-proposal` 0.1.0：`bib_resolve.py --dry-run` 的汇总写入 `bib_resolve.dryrun.json`，不覆盖 `bib_resolve.json`。
-- `nsfc-proposal` 0.1.0：补政策文件、摘要补全失败时的检索、检验力、对照与基线、否证条件的写法。
+- `nsfc-proposal` 0.1.0：补政策文件、摘要补全失败时的检索、检验力、对照与基线、否证条件的写法；`literature_leads.md` 模板新增「## 官方文件」。
 - `nsfc-research-foundation-writer` 0.2.0、`nsfc-abstract` 2.1.3：接入 nsfc-proposal。
 - `research-literature-search` 1.1.0：`run` 新增 `--host-results`，接收 wispaper 结果。
 - `research-literature-search` 1.1.0：`enrich-abstracts` 遇到重试后仍报 429 的服务，本次运行的后续记录跳过它，汇总写 `exhausted_providers`，`attempts` 计数不含跳过的服务。

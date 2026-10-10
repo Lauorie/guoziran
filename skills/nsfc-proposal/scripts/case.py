@@ -30,7 +30,7 @@ from case_render import WRITERS, info_form, render_case_md
 from case_validate import validate_all
 
 ASSUMPTIONS_TEMPLATE = "# 假设与待核实清单\n\n## 确认点状态\n\n## AI 拟定项\n\n## 待核实项\n\n## 占位清单\n"
-LEADS_TEMPLATE = "# 文献线索\n\n## 检索式\n\n## 未核实线索\n"
+LEADS_TEMPLATE = "# 文献线索\n\n## 检索式\n\n## 官方文件\n\n## 未核实线索\n"
 
 
 @dataclass
