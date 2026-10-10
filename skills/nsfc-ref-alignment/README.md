@@ -29,10 +29,11 @@
 
 ### 用法 2：开启 DOI 在线核验（更严格，但更慢）
 
+在线核验只查 Crossref。DOI 不在 Crossref 登记的文献（如 arXiv 的 10.48550、Zenodo 等 DataCite DOI）无法核对，会报失败。
+
 ```
 请使用 nsfc-ref-alignment 检查 projects/NSFC_General 的引用真实性；
 对 DOI 做在线核验，标注疑似伪造/不一致条目；
-元数据只经 Crossref 核对；DOI 不在 Crossref 登记的文献（如 arXiv 的 10.48550、Zenodo 等 DataCite DOI）无法核对，在线核验会报失败；
 仍然只输出报告，不修改任何文件。
 ```
 

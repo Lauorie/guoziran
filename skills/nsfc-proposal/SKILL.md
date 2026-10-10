@@ -110,7 +110,7 @@ python3 SK/research-literature-search/scripts/search_runner.py run --topic "<题
 python3 SK/research-literature-search/scripts/search_runner.py validate --bundle <每个 bundle 目录>
 ```
 
-   `--provider-order` 取 `mcp`，让 bundle 只用 wispaper 的结果，不向其他检索服务发请求。wispaper 不可用时不建 bundle，见「失败与恢复」。某个 bundle 的 manifest 为 `failed`（wispaper 对其中检索式全都没有返回结果）时，它不提供候选：论断问句换个写法写入新的 `claim_queries_<n>.json`，按第 4、5 项再检索一次；仍没有结果的，在 `stages.md` 记下，相关论断保持 `unsupported`。
+   `--provider-order` 取 `mcp`，让 bundle 只用 wispaper 的结果，不向其他检索服务发请求。wispaper 不可用时不建 bundle，见「失败与恢复」。某个 bundle 的 manifest 为 `failed`（wispaper 对其中检索式全都没有返回结果）时，它不提供候选：论断问句换个写法写入新的 `claim_queries_<n>.json`（关键词 bundle 则换写法写入新的关键词检索式文件），按第 4、5 项再检索一次，建 bundle 时加 `--min-queries 1`、输出到新的 bundle 目录；仍没有结果的，在 `stages.md` 记下，相关论断保持 `unsupported`。
 6. 逐条论断从各 bundle 的 `candidates_deduped.jsonl` 中挑候选证据，原样写入 `T/nsfc-proposal/output/selected.jsonl`，再用 wispaper 补全摘要。关键词检索只返回摘要片段，片段不算完整摘要；按标题检索通常能拿到完整摘要。先列出缺完整摘要的记录标题，按标题检索，再把摘要填回记录：
 
 ```bash
@@ -274,7 +274,7 @@ python3 S/scripts/consistency_check.py --project-root P
 |---|---|
 | `case.py validate` 在第 4 步后仍有问题 | 不进入写作；按提示修改后重试 |
 | wispaper 不可用（`wispaper_search.py` 退出码 3） | 停在第 3 步，不改用其他检索源。告诉申请人检查 `WIS_MCP_URL`、`WIS_MCP_TOKEN`（未配置，或凭据被拒）；全自动运行也停下，在报告中写明。配置好后重跑被打断的那条命令，已存档的检索式不重查 |
-| 部分检索式重跑后仍失败（退出码 1） | 把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。bundle 用已取得的结果建，不改用其他检索源；建 bundle 时加 `--min-queries 1`，输出到新的 bundle 目录（如 `keyword-bundle-2`、`claims-bundle-<n>`） |
+| 部分检索式重跑后仍失败（退出码 1） | 补摘要的标题检索按第 3 步第 6 项处理，不改写标题。其余检索式：把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。bundle 用已取得的结果建，不改用其他检索源；建 bundle 时加 `--min-queries 1`，输出到新的 bundle 目录（如 `keyword-bundle-2`、`claims-bundle-<n>`） |
 | CrossRef 不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
 | 某个写作 skill 失败 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续 |
 | 写完后科学论证又被修改 | `case.py bump` 后，一致性检查会列出依据旧版的章节，逐章重写 |
