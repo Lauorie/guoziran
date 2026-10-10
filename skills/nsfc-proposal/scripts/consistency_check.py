@@ -34,6 +34,7 @@ DECIMAL_RE = re.compile(r"(?<![\d.])\d+\.\d+(?!\d)")
 YEAR_RE = re.compile(r"(?:19|20)\d\d")
 PROCESS_DESCRIBING_WRITER = "nsfc-proposal"  # 生成式人工智能使用说明本就描述过程，不查过程说明
 DEFAULT_PLACEHOLDER = "【待补充：[^】]*】"
+FORMAT_REFERENCE_RE = re.compile(r"【待补充：[\s.…·]*】")  # 内文只有省略号、点或空白：是在说明占位格式，不是占位
 LABELS = {
     "hidden_placeholder": "注释中的隐藏占位",
     "placeholder_unlisted": "占位未列入 assumptions.md",
@@ -245,6 +246,8 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                 for match in id_re.finditer(body):
                     report.needs_review.append(Finding("internal_id", rel, number, match.group(0)))
             for match in placeholder_re.finditer(body):
+                if FORMAT_REFERENCE_RE.fullmatch(match.group(0)):
+                    continue
                 report.placeholders.append(Finding("placeholder", rel, number, match.group(0)))
                 if match.group(0) not in assumptions:
                     report.errors.append(Finding("placeholder_unlisted", rel, number, match.group(0)))

@@ -52,7 +52,7 @@ consistency:
   extra_internal_id_patterns: ['S\d+']
   placeholder_pattern: '【待补充：[^】]*】'
   # 正文中不应出现的写作过程说明（占位 【待补充：……】 内的文字不计）
-  process_text_patterns: ["经核实", "已核实", "未经核实", "核实的文献", "检索核实", "未检索", "文献支持", "本次未", "台账", "assumptions.md", "evidence_map", "scientific_case", "proposal/", "由申请人", "建议申请人", "提交前删去", "保留占位", "申请人提出的", "原始口径"]
+  process_text_patterns: ["经核实", "已核实", "未经核实", "核实的文献", "检索核实", "未检索", "文献支持", "本次未", "台账", "assumptions.md", "evidence_map", "scientific_case", "proposal/", "由申请人", "建议申请人", "提交前删去", "保留占位", "申请人提出的", "原始口径", "正式申请书", "正式稿", "请申请人"]
   # 非标准写法的占位（正则）；应改成 【待补充：……】 并列入占位清单
   nonstandard_placeholder_patterns: ["\\[to be (?:supplied|added|confirmed)", "\\[TBD", "\\[待补充", "\\[请补充", "【请补充", "［待补充", "(?<![A-Za-z])XXX(?![A-Za-z])"]
 

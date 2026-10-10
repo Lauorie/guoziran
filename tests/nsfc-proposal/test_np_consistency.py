@@ -536,6 +536,10 @@ class ProcessTextTest(unittest.TestCase):
                          "申请人提出的原始口径是三年。"):
             self.assertGreaterEqual(len(self._hits(f"多模态。\n{sentence}\n")), 1, sentence)
 
+    def test_wording_meant_for_the_applicant_is_flagged(self) -> None:
+        for sentence in ("这些论文将在正式申请书中按三类列出。", "正式稿中补全设备型号。", "请申请人补充合作单位名称。"):
+            self.assertGreaterEqual(len(self._hits(f"多模态。\n{sentence}\n")), 1, sentence)
+
 
 class NonstandardPlaceholderTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -588,6 +592,18 @@ class NonstandardPlaceholderTest(unittest.TestCase):
             self.assertEqual(len(self._errors(self._root(text + "\n"))), 1, text)
         self.assertEqual(self._errors(self._root("尺码 XXXL 的口罩。\n")), [])
         self.assertIn("XXX", "".join(load_config()["consistency"]["nonstandard_placeholder_patterns"]))
+
+    def test_placeholder_format_reference_is_not_a_placeholder(self) -> None:
+        for text in ("未提供的内容以【待补充：……】标出。\n", "格式为【待补充：...】。\n", "格式为【待补充：  】。\n"):
+            root = self._root(text)
+            report = check_project(root)
+            self.assertEqual([f for f in report.errors if f.kind == "placeholder_unlisted"], [], text)
+            self.assertEqual([f for f in report.placeholders if f.file == "NSFC-ABSTRACTS.md"], [], text)
+
+    def test_real_unlisted_placeholder_still_errors(self) -> None:
+        root = self._root("前期结果【待补充：未列入的条目】。\n")
+        self.assertEqual([f.detail for f in check_project(root).errors if f.kind == "placeholder_unlisted"],
+                         ["【待补充：未列入的条目】"])
 
 
 class CitationCountTest(unittest.TestCase):
