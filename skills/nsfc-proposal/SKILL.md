@@ -81,10 +81,19 @@ python3 S/scripts/case.py validate --project-root P
    - 每篇（或每组）申请人论文，在 `evidence_map.yaml` 中对应一条 `type: applicant_result`、`support: applicant_material` 的论断，`sections` 含立项依据；`evidence` 列该论文的 bibkey，`role: supporting`，`basis` 按实际读到的内容写（`fulltext` 或 `full_abstract`）。材料中有该论文的 PDF 并已由 `materials.py` 解析时，`basis` 写 `fulltext`，数字从解析结果（`primary` 指向的文件）中取。这样 6.1 引用它时满足规则 5 的 (b)。
    - 这些论文的台账摘要可能为空。引用句含数字时会报 `no_abstract_for_numbers`：按第 7 步的处理办法改写，或只写申请人材料写明的数字。
 3. 对每条 `gap`、`mechanism` 类论断和每条方法类论断写一个英文问句，写入 `T/nsfc-proposal/input/claim_queries_1.json`；超过 `literature.bundle_max_queries` 条时拆成 `claim_queries_2.json` 等，每个文件不超过这个条数。
-4. `config.yaml` 中 `literature.use_wispaper` 为 true，且宿主有 `mcp__wis-scholar-search__quick_search` 工具时：
-   - 每条关键词检索式调用 `quick_search`，`top_n` 取 `literature.quick_search_top_n`；
-   - 每个论断问句调用 `deep_search`，`top_n` 取 `literature.deep_search_top_n`；
-   - 把原始返回逐字存成 `rls.host_results.v1` 文件：`T/nsfc-proposal/output/wispaper/keyword_host.json`、`claims_host_1.json` 等。格式见 `SK/research-literature-search/SKILL.md`。不得改写论文字段。
+4. `config.yaml` 中 `literature.use_wispaper` 为 true 时，用 `scripts/wispaper_search.py` 检索。凭据 `WIS_MCP_URL`、`WIS_MCP_TOKEN` 由脚本从环境变量或上级目录的 `.env` 读取，不要打开 `.env`。
+
+   ```bash
+   python3 S/scripts/wispaper_search.py run --task-root T --name keyword --tool quick_search \
+     --query-file T/nsfc-proposal/input/keyword_queries.json
+   python3 S/scripts/wispaper_search.py run --task-root T --name claims_1 --tool deep_search \
+     --query-file T/nsfc-proposal/input/claim_queries_1.json
+   ```
+
+   - `top_n` 默认取 `literature.quick_search_top_n` 与 `literature.deep_search_top_n`。
+   - 每条检索式的原始返回逐字存进 `T/nsfc-proposal/output/wispaper/raw/<名称>/`，再汇成 `T/nsfc-proposal/output/wispaper/<名称>_host.json`（`rls.host_results.v1`），汇总在 `<名称>_host.summary.json`。不要改写这些文件。
+   - 退出码 0：完成。4：到了单次时限，原样再跑同一条命令，已存档的不重查。1：有检索式失败，原样再跑一次；仍失败的检索式在 `stages.md` 记下，按「失败与恢复」处理。3：未配置或凭据被拒，按「wispaper 不可用」处理。
+   - 不要用 MCP 工具（`mcp__wis-scholar-search__*`）做检索：返回只进对话，不落文件，台账无从追溯。它只可用于一次性探测，例如检查服务是否可用。
 5. 建检索 bundle 并校验：
 
 ```bash
@@ -95,7 +104,7 @@ python3 SK/research-literature-search/scripts/search_runner.py run --topic "<题
 python3 SK/research-literature-search/scripts/search_runner.py run --topic "<题目>" \
   --query-file T/nsfc-proposal/input/claim_queries_1.json --min-queries 1 \
   --output-dir T/research-literature-search/output/claims-bundle-1 \
-  --max-results-per-query 10 --no-fallback --host-results T/nsfc-proposal/output/wispaper/claims_host_1.json
+  --max-results-per-query 10 --no-fallback --host-results T/nsfc-proposal/output/wispaper/claims_1_host.json
 python3 SK/research-literature-search/scripts/search_runner.py validate --bundle <每个 bundle 目录>
 ```
 
@@ -253,7 +262,8 @@ python3 S/scripts/consistency_check.py --project-root P
 | 情况 | 处理 |
 |---|---|
 | `case.py validate` 在第 4 步后仍有问题 | 不进入写作；按提示修改后重试 |
-| wispaper 不可用 | 不传 `--host-results`，改用 research-literature-search 的现有检索源 |
+| wispaper 不可用（`wispaper_search.py` 退出码 3） | 不传 `--host-results`，改用 research-literature-search 的现有检索源；论断 bundle 同时去掉 `--no-fallback` |
+| 部分检索式重跑后仍失败（退出码 1） | 关键词 bundle 照常传 `--host-results`，失败的检索式由其他检索源补。论断 bundle：OpenAlex 不接受带问号的问句，把失败的问句改写成关键词式检索式，写入新的 `claim_queries_<n>.json`，不带 `--no-fallback` 检索；在 `stages.md` 记录 |
 | CrossRef 与 OpenAlex 都不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
 | 某个写作 skill 失败 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续 |
 | 写完后科学论证又被修改 | `case.py bump` 后，一致性检查会列出依据旧版的章节，逐章重写 |

@@ -16,6 +16,9 @@ literature:
   use_wispaper: true
   quick_search_top_n: 20
   deep_search_top_n: 10
+  wispaper_workers: 4          # wispaper_search.py 的并发检索数
+  wispaper_timeout_s: 300      # 单次检索的读超时（deep_search 一次 40 秒起，top_n 大时更久）
+  wispaper_batch_budget_s: 240 # 到时不再发起新检索，未查的留到下一次运行（退出码 4）；加上单次读超时，一次运行不超过 10 分钟
   keyword_queries: {min: 5, max: 25}   # 供执行说明引用，脚本不读取：关键词检索式的条数范围
   bundle_max_queries: 25               # 供执行说明引用，脚本不读取：每个论断检索式文件的条数上限
   title_similarity: 0.92
