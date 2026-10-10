@@ -14,7 +14,7 @@
 - `enrich-abstracts` 读取 OpenAlex 的 `abstract_inverted_index` 并拼回摘要（与 `candidate_schema` 共用 `abstract_from_inverted_index`）；采用 CrossRef 摘要前去掉 JATS 标签。
 - `enrich-abstracts` 遇 fetcher 报 429 或 5xx 时按退避重试（默认 2 次、2 秒，翻倍；CLI 选项 `--retries`、`--backoff-s`），其他异常照旧记录后换下一个来源。
 - manifest 与 Search Log 的 `search_skill_version` 改为读取 `config.yaml:skill_info.version`（原为写死的 1.0.4），读不到时报错；README 删去版本号。
-- `enrich-abstracts`：某个服务重试用尽后仍报 429 时，记为额度用尽，本次运行的后续记录不再请求它，`attempts` 记 `skipped_exhausted`，汇总新增 `exhausted_providers`；5xx 不计入。
+- `enrich-abstracts`：某个服务重试用尽后仍报 429 时，记为额度用尽，本次运行的后续记录不再请求它，`attempts` 记 `skipped_exhausted`，汇总新增 `exhausted_providers`；5xx 不计入，只有文字信息的错误只看第一个状态码；补全成功的记录，`abstract_provenance.attempts` 只计实际发出的请求。
 - 本分支未写 BAC 记录，经负责人同意。
 
 ## [1.0.4] - 2026-09-15

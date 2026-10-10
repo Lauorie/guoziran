@@ -429,11 +429,12 @@ def _is_retryable(exc: BaseException) -> bool:
 
 
 def _is_rate_limited(exc: BaseException) -> bool:
-    """Whether a fetcher error is HTTP 429 (status attribute, response, or message)."""
+    """Whether a fetcher error is HTTP 429 (status attribute, response, or the first status in the message)."""
     status = _error_status(exc)
     if status is not None:
         return status == 429
-    return any(match.group(1) == "429" for match in _RETRYABLE_STATUS.finditer(str(exc)))
+    match = _RETRYABLE_STATUS.search(str(exc))
+    return bool(match and match.group(1) == "429")
 
 
 def _fetch_with_retry(fetch: ProviderFn, query: str, *, timeout: float, retries: int, backoff_s: float, sleep: Callable[[float], None]) -> list[Any]:
@@ -487,7 +488,7 @@ def enrich_abstracts(input_path: Path, output_path: Path, *, max_papers: int = 2
                 if found:
                     row["abstract"] = found.strip()
                     row["abstract_status"] = "present"
-                    row["abstract_provenance"] = {"source": source, "method": "post_selection", "attempts": len(provenance["attempts"]), "rejected_mismatch": provenance["rejected_mismatch"]}
+                    row["abstract_provenance"] = {"source": source, "method": "post_selection", "attempts": sum(1 for a in provenance["attempts"] if a["status"] != "skipped_exhausted"), "rejected_mismatch": provenance["rejected_mismatch"]}
                     filled += 1
                     break
             except Exception as exc:  # noqa: BLE001

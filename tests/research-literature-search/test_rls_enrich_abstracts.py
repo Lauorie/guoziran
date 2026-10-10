@@ -196,6 +196,24 @@ class EnrichExhaustedProviderTests(unittest.TestCase):
         summary, _ = _run_many(self.RECORDS[:1], {})
         self.assertEqual(summary["exhausted_providers"], [])
 
+    def test_filled_attempt_count_excludes_skipped_providers(self) -> None:
+        def semantic(q, **k):
+            raise RuntimeError("HTTP 429 Too Many Requests")
+        openalex = lambda q, **k: [{"title": q, "abstract": LONG}]  # noqa: E731
+        summary, rows = _run_many(self.RECORDS[:2], {"semantic_scholar": semantic, "openalex": openalex}, sleep=lambda s: None)
+        self.assertEqual(summary["exhausted_providers"], ["semantic_scholar"])
+        self.assertEqual([row["abstract_provenance"]["attempts"] for row in rows], [2, 1])
+
+    def test_only_first_status_in_message_counts(self) -> None:
+        calls: list[str] = []
+
+        def openalex(q, **k):
+            calls.append(q)
+            raise RuntimeError("HTTP 503 Service Unavailable after HTTP 429")
+        summary, _ = _run_many(self.RECORDS[:2], {"openalex": openalex}, retries=2, sleep=lambda s: None)
+        self.assertEqual(len(calls), 6)
+        self.assertEqual(summary["exhausted_providers"], [])
+
 
 class InvertedIndexTests(unittest.TestCase):
     def test_rebuilds_in_position_order(self) -> None:
