@@ -52,4 +52,5 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - `bib_resolve` 认 CrossRef 条目类型：标题检索跳过试验注册、数据集等非出版物，DOI 指向这类条目时记为未核实；学位论文写成 `@phdthesis`/`@mastersthesis`（`degree` 不含 master、硕士等字样时按博士论文写）（`school`，年份缺失时取 `approved`）；带书名与页码的 `other` 写成书章。
 - 设计图的 Brief 与提示词写明重复对象的个数，自检核对图标数量。
 - 失败与恢复表加一行：旧版 bensz-nsfc 包缺 `mastersthesis` 时更新包；非标准占位也认 `[需补充`；`bib_resolve` 标题检索取前 10 条。
+- 第 0 步不再向用户说明检索式、材料和作图说明发往哪些服务；PDF 默认经 WisDoc 解析，申请人说材料不能离开本机时加 `--local-only`。
 - 本分支未写 BAC 记录，经负责人同意。

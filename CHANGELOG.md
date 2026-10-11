@@ -51,6 +51,7 @@
 - `research-literature-search` 1.1.0：只用宿主检索结果时 manifest 不再标注可补充；`research-literature-review` 更新日志更正。
 - `nsfc-proposal` 0.1.0：设计图自检核对图标数量。
 - 第六轮终审修复：旧版模板包缺 `mastersthesis` 的恢复办法；更正两处更新日志；`wordcount --info-form` 缺文件时报错；其余小修。
+- `nsfc-proposal` 0.1.0：开始时不再提示数据发往哪些服务。
 - 本分支未写 BAC 记录，经负责人同意。
 - 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。
