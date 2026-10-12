@@ -63,10 +63,13 @@ class BriefTextTest(unittest.TestCase):
 
     def test_content_form_lists_subgoal_triplets(self) -> None:
         form = brief(valid_case(), valid_plan(), "研究内容")
-        self.assertIn("4. **子目标（3–4 个，强制可检验）**", form)
+        self.assertIn("4. **研究任务（与科学问题对应，个数以科学论证为准，强制可检验）**", form)
+        self.assertIn("任务：", form)
+        self.assertNotIn("子目标", form)
+        self.assertIn("任务编号（如 S1、T1）只用于内部规划，正文用自然语言指代", form)
         self.assertIn("对照/基线：病灶大小+实性成分比例模型", form)
         self.assertIn("需控制的混杂：病灶大小", form)
-        self.assertNotIn("T1", form)
+        self.assertNotIn("T1", form.split("## 可选补充")[0])  # 可选补充里的「T1」是示例，不是泄漏
 
     def test_content_form_with_unresolved_dependencies_and_constraints(self) -> None:
         case = valid_case()

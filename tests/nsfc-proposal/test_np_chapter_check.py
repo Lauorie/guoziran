@@ -17,6 +17,7 @@ SCRIPTS = ROOT / "skills/nsfc-proposal/scripts"
 SCRIPT = SCRIPTS / "chapter_check.py"
 sys.path.insert(0, str(SCRIPTS))
 
+from chapter_check import count_risks  # noqa: E402
 from proposal_common import load_config  # noqa: E402
 
 CLEAN_RESEARCH = "\\justifying\n针对第一个研究目标，本项目比较瘤内模型与临床基线（实验占比 50\\%）。\n"
@@ -266,7 +267,32 @@ class FoundationRulesTest(unittest.TestCase):
     def test_single_risk_heading_still_fails(self) -> None:
         proc = self.run_foundation("\\subsubsection{风险与应对}\n数据可能不足，应对是扩大来源。\n")
         self.assertEqual(proc.returncode, 1)
-        self.assertIn("风险条目 1 条", out(proc))
+        self.assertIn("风险条目 0 条", out(proc))  # 「风险与应对」是章节标题，不是一条风险
+
+    def test_two_ordinal_headings_under_section_title_count_two(self) -> None:
+        head = "\\subsubsection{研究风险的应对措施}\n"
+        two = head + "\\subsubsubsection{风险一：数据不足}\n应对：扩大来源。\n\\subsubsubsection{风险二：进度延迟}\n应对：预留缓冲。\n"
+        self.assertEqual(count_risks(two), 2)
+        proc = self.run_foundation(two)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("风险条目 2 条", out(proc))
+        three = two + "\\subsubsubsection{风险三：设备故障}\n应对：备用设备。\n"
+        self.assertEqual(count_risks(three), 3)
+        self.assertEqual(self.run_foundation(three).returncode, 0)
+
+    def test_labelled_risk_lines_count(self) -> None:
+        plain = "技术风险：甲；应对：乙。\n进度风险：丙；应对：丁。\n资源风险：戊；应对：己。\n"
+        self.assertEqual(count_risks(plain), 3)
+        items = "".join(f"\\item \\textbf{{{k}风险}}：甲；应对：乙。\n" for k in ("技术", "进度", "资源"))
+        self.assertEqual(count_risks(items), 3)
+        self.assertEqual(self.run_foundation(plain).returncode, 0)
+
+    def test_same_ordinal_in_heading_and_body_is_one_item(self) -> None:
+        text = "\\subsubsubsection{风险一：数据不足}\n如上所述，风险1 的应对是扩大来源。\n风险二：甲；应对：乙。\n风险三：丙；应对：丁。\n"
+        self.assertEqual(count_risks(text), 3)
+
+    def test_section_title_alone_counts_zero(self) -> None:
+        self.assertEqual(count_risks("\\subsubsection{研究风险的应对措施}\n本项目总体可控。\n"), 0)
 
     def test_missing_risk_word_fails(self) -> None:
         proc = self.run_foundation("预实验结果良好。\n")

@@ -205,7 +205,7 @@ def _content_form(case: Mapping[str, Any], plan: Mapping[str, Any] | None, confi
     subgoals, breakdown, validations = [], [], []
     for task in tasks:
         subgoals.append(
-            f"子目标：{_t(task.get('aim')) or NONE}；对应科学问题：{questions.get(_t(task.get('question')), NONE)}；"
+            f"任务：{_t(task.get('aim')) or NONE}；对应科学问题：{questions.get(_t(task.get('question')), NONE)}；"
             f"指标：{_t(task.get('indicator')) or NONE}；对照/基线：{'、'.join(_strs(task.get('baselines'))) or NONE}；"
             f"需控制的混杂：{'、'.join(_strs(task.get('confounders'))) or NONE}；数据来源与验证：{_t(task.get('validation')) or NONE}")
         resolved_deps = [aims.get(d) for d in _strs(task.get("depends_on")) if d in aims]
@@ -222,7 +222,7 @@ def _content_form(case: Mapping[str, Any], plan: Mapping[str, Any] | None, confi
         f"1. **研究对象/应用场景**：{_object_line(case)}",
         f"2. **核心科学问题与假说**：假说：{_t(hypothesis.get('statement')) or NONE}；科学问题：{'；'.join(questions.values()) or NONE}",
         f"3. **总体目标**：{_t(case.get('aim')) or NONE}",
-        "4. **子目标（3–4 个，强制可检验）**：", _bullets(subgoals, "   "),
+        "4. **研究任务（与科学问题对应，个数以科学论证为准，强制可检验）**：", _bullets(subgoals, "   "),
         f"5. **技术路线概览**：{' → '.join(a for a in aims.values() if a) or NONE}",
         "6. **关键方法与验证**：", _bullets(validations, "   "),
         "7. **年度资源约束**：", _bullets(constraints, "   "),
@@ -230,7 +230,7 @@ def _content_form(case: Mapping[str, Any], plan: Mapping[str, Any] | None, confi
         "9. **创新对照坐标系**：", _bullets(routes, "   "),
         f"10. **研究期限与分年硬约束**：{_duration_line(case)}", _bullets(constraints, "   "),
         "11. **关键风险与备选路线**：", _bullets(risks, "   "),
-        "", "## 可选补充", _bullets(_section_notes(plan, "研究内容", config) + ["子目标编号只用于内部规划，正文用自然语言指代"]),
+        "", "## 可选补充", _bullets(_section_notes(plan, "研究内容", config) + ["任务编号（如 S1、T1）只用于内部规划，正文用自然语言指代"]),
     ]
     return "\n".join(lines) + "\n"
 
