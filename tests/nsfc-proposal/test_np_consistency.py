@@ -51,9 +51,9 @@ def build(base: Path, *, body_11: str = BODY_11, terms: list | None = None, ledg
     write_yaml(root / "proposal" / "scientific_case.yaml", case)
     write_yaml(root / "proposal" / "evidence_map.yaml", valid_evidence())
     write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
-        {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 1},
-        {"file": "extraTex/2.1.研究内容.tex", "writer": "nsfc-research-content-writer", "written_with_case_version": 2},
-        {"file": "NSFC-ABSTRACTS.md", "writer": "nsfc-abstract", "written_with_case_version": None},
+        {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 1},
+        {"file": "extraTex/2.1.研究内容.tex", "section": "研究内容", "written_with_case_version": 2},
+        {"file": "NSFC-ABSTRACTS.md", "section": "摘要", "written_with_case_version": None},
     ]})
     (root / "proposal" / "assumptions.md").write_text("# 假设与待核实清单\n\n## 占位清单\n\n- extraTex/1.1.立项依据.tex：【待补充：预实验结果】\n", encoding="utf-8")
     if ledger:
@@ -108,7 +108,7 @@ class ConsistencyTest(unittest.TestCase):
         self.assertEqual(len(json.loads(proc.stdout)["placeholders"]), 2)
         clean = build(self.base / "clean", body_11="多模态影像信息\\cite{wu2021value}。\n【待补充：预实验结果】\n")
         write_yaml(clean / "proposal" / "section_plan.yaml", {"version": 1, "files": [
-            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2}]})
+            {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 2}]})
         ok = subprocess.run([sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(clean)],
                             env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
@@ -186,7 +186,7 @@ class LedgerConsistencyTest(unittest.TestCase):
         env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
         root = build(self.base, body_11="多模态影像信息\\cite{wu2021value}。\n【待补充：预实验结果】\n", ledger=False)
         write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
-            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2}]})
+            {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 2}]})
         cmd = [sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(root)]
         proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60)
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
@@ -403,7 +403,7 @@ class LedgerConsistencyTest(unittest.TestCase):
         env = dict(os.environ, PYTHONPYCACHEPREFIX=str(ROOT / ".bensz-api" / "pycache"))
         root = self._ledgered("多模态\\cite{wu2021value}。\n")
         write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
-            {"file": "extraTex/1.1.立项依据.tex", "writer": "w", "written_with_case_version": 2}]})
+            {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 2}]})
         cmd = [sys.executable, str(SCRIPTS / "consistency_check.py"), "--project-root", str(root)]
         self.assertEqual(subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=60).returncode, 0)
         bib = root / "references" / "refs.bib"
@@ -545,10 +545,20 @@ class ProcessTextTest(unittest.TestCase):
         root = build(self.base, body_11="多模态。\n" + wording)
         (root / "proposal" / "ai_declaration.md").write_text(wording, encoding="utf-8")
         write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
-            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
-            {"file": "proposal/ai_declaration.md", "writer": "nsfc-proposal", "written_with_case_version": None}]})
+            {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 2},
+            {"file": "proposal/ai_declaration.md", "section": "生成式人工智能使用说明", "written_with_case_version": None}]})
         hits = [f for f in check_project(root).needs_review if f.kind == "process_text_in_body"]
         self.assertEqual([f.file for f in hits], ["extraTex/1.1.立项依据.tex"])
+
+    def test_old_writer_nsfc_proposal_entry_is_exempt_too(self) -> None:
+        wording = "本稿经核实的文献均已入台账。\n"
+        root = build(self.base, body_11="多模态。\n")
+        (root / "proposal" / "ai_declaration.md").write_text(wording + "格式为【待补充：……】。\n", encoding="utf-8")
+        write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
+            {"file": "proposal/ai_declaration.md", "writer": "nsfc-proposal", "written_with_case_version": None}]})
+        report = check_project(root)
+        self.assertEqual([f for f in report.needs_review if f.kind in {"process_text_in_body", "empty_placeholder"}], [])
 
     def test_process_wording_from_e2e_is_flagged(self) -> None:
         for sentence in ("建议申请人在补充时优先给出论文。", "以下各处保留占位，由申请人按实际情况补充；不补充的条目应在提交前删去。",
@@ -573,8 +583,8 @@ class NonstandardPlaceholderTest(unittest.TestCase):
         root = build(self.base / f"n{self.count}", body_11=body_11)
         (root / "NSFC-ABSTRACTS.md").write_text(abstracts, encoding="utf-8")
         write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
-            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
-            {"file": "NSFC-ABSTRACTS.md", "writer": "nsfc-abstract", "written_with_case_version": None}]})
+            {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 2},
+            {"file": "NSFC-ABSTRACTS.md", "section": "摘要", "written_with_case_version": None}]})
         return root
 
     def _errors(self, root: Path) -> list:
@@ -616,8 +626,8 @@ class NonstandardPlaceholderTest(unittest.TestCase):
         root = self._root("摘要。\n")
         (root / "proposal" / "ai_declaration.md").write_text(text, encoding="utf-8")
         write_yaml(root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
-            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
-            {"file": "proposal/ai_declaration.md", "writer": "nsfc-proposal", "written_with_case_version": None}]})
+            {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 2},
+            {"file": "proposal/ai_declaration.md", "section": "生成式人工智能使用说明", "written_with_case_version": None}]})
         return root
 
     def test_placeholder_format_reference_is_exempt_in_ai_declaration(self) -> None:
@@ -685,7 +695,19 @@ class CitationCountTest(unittest.TestCase):
         self.assertEqual([f.kind for f in report.needs_review if f.kind == "few_citations"], ["few_citations"])
         self.assertIn("30", [f for f in report.needs_review if f.kind == "few_citations"][0].detail)
 
-    def test_other_writers_never_flagged(self) -> None:
+    def test_old_writer_only_entry_is_flagged_too(self) -> None:
+        write_yaml(self.root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2}]})
+        flagged = [f.file for f in self._report(3).needs_review if f.kind == "few_citations"]
+        self.assertEqual(flagged, ["extraTex/1.1.立项依据.tex"])
+
+    def test_new_section_entry_is_flagged(self) -> None:
+        write_yaml(self.root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
+            {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 2}]})
+        flagged = [f.file for f in self._report(3).needs_review if f.kind == "few_citations"]
+        self.assertEqual(flagged, ["extraTex/1.1.立项依据.tex"])
+
+    def test_other_sections_never_flagged(self) -> None:
         report = self._report(99)
         flagged = [f.file for f in report.needs_review if f.kind == "few_citations"]
         self.assertEqual(flagged, ["extraTex/1.1.立项依据.tex"])
@@ -703,8 +725,8 @@ class MissingFigureFileTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = build(Path(self.tmp.name), body_11="多模态影像信息\\cite{wu2021value}。\n【待补充：预实验结果】\n")
         write_yaml(self.root / "proposal" / "section_plan.yaml", {"version": 1, "files": [
-            {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "written_with_case_version": 2},
-            {"file": "extraTex/2.1.研究内容.tex", "writer": "nsfc-research-content-writer", "written_with_case_version": 2}]})
+            {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "written_with_case_version": 2},
+            {"file": "extraTex/2.1.研究内容.tex", "section": "研究内容", "written_with_case_version": 2}]})
         (self.root / "figures" / "nsfc-proposal").mkdir(parents=True)
 
     def body(self, text: str) -> None:

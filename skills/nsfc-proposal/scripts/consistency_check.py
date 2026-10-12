@@ -20,7 +20,16 @@ from case_validate import case_ids, claim_ids
 from citation_ledger import entry_sha256, load_ledger
 from figure_check import missing_figures, strip_includegraphics
 from latex_files import bib_entry_texts, read_bib_index, relpath, scan_latex_tree
-from proposal_common import ProposalError, load_config, project_path, proposal_paths, read_yaml, resolve_project_root, split_latex_comment
+from proposal_common import (
+    ProposalError,
+    load_config,
+    project_path,
+    proposal_paths,
+    read_yaml,
+    resolve_project_root,
+    section_for,
+    split_latex_comment,
+)
 
 CITE_RE = re.compile(r"\\[A-Za-z]*cite[A-Za-z]*\*?(?:\[[^\]]*\]){0,2}\{([^}]*)\}")
 NUMBER_RE = re.compile(
@@ -32,7 +41,7 @@ SENTENCE_SPLIT_RE = re.compile(f"[{SENTENCE_END}]")
 REF_RE = re.compile(r"\\(?:ref|eqref|autoref|cref|label|pageref)\{[^}]*\}")
 DECIMAL_RE = re.compile(r"(?<![\d.])\d+\.\d+(?!\d)")
 YEAR_RE = re.compile(r"(?:19|20)\d\d")
-PROCESS_DESCRIBING_WRITER = "nsfc-proposal"  # 生成式人工智能使用说明本就描述过程，不查过程说明
+PROCESS_DESCRIBING_SECTION = "生成式人工智能使用说明"  # 本就描述过程，不查过程说明与空占位
 DEFAULT_PLACEHOLDER = "【待补充：[^】]*】"
 FORMAT_REFERENCE_RE = re.compile(r"【待补充：[\s.…·]*】")  # 内文只有省略号、点或空白：AI 使用说明里是在说明占位格式；其他文件里是没写明内容的空占位
 LABELS = {
@@ -54,7 +63,7 @@ LABELS = {
     "missing_figure_file": "图片文件不存在",
     "empty_placeholder": "占位没有写明要补什么",
 }
-JUSTIFICATION_WRITER = "nsfc-justification-writer"
+JUSTIFICATION_SECTION = "立项依据"
 DEFAULT_MIN_REFS_JUSTIFICATION = 30
 
 
@@ -205,7 +214,9 @@ def _any_of(patterns: Iterable[Any] | None) -> re.Pattern[str] | None:
 
 
 def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -> Report:
-    settings = (config or load_config()).get("consistency") or {}
+    full_config = config or load_config()
+    sections_config = full_config if full_config.get("sections") else load_config()
+    settings = full_config.get("consistency") or {}
     hidden_words = [str(w) for w in settings.get("hidden_placeholder_words") or []]
     placeholder_re = re.compile(str(settings.get("placeholder_pattern") or DEFAULT_PLACEHOLDER))
     root = resolve_project_root(project_root)
@@ -232,6 +243,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
     bodies: list[str] = []
     for entry in entries:
         rel = entry["file"]
+        section_name = (section_for(sections_config, entry) or {}).get("name")
         path = project_path(root, rel)
         if not path.is_file():
             continue
@@ -253,7 +265,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                     report.needs_review.append(Finding("internal_id", rel, number, match.group(0)))
             for match in placeholder_re.finditer(body):
                 if FORMAT_REFERENCE_RE.fullmatch(match.group(0)):
-                    if entry.get("writer") != PROCESS_DESCRIBING_WRITER:
+                    if section_name != PROCESS_DESCRIBING_SECTION:
                         report.needs_review.append(Finding("empty_placeholder", rel, number, f"{match.group(0)}：占位没有写明要补什么"))
                     continue
                 report.placeholders.append(Finding("placeholder", rel, number, match.group(0)))
@@ -264,7 +276,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
                 for match in nonstandard_re.finditer(scanned):
                     detail = f"{_excerpt(scanned[match.start():], 40)}；请改成「【待补充：……】」并列入占位清单"
                     report.errors.append(Finding("placeholder_nonstandard", rel, number, detail))
-            if process_patterns and entry.get("writer") != PROCESS_DESCRIBING_WRITER:
+            if process_patterns and section_name != PROCESS_DESCRIBING_SECTION:
                 _check_process_text(report, rel, number, placeholder_re.sub("", figure_free[number - 1]), process_patterns)
         bodies.extend(file_bodies)
         if is_tex:
@@ -284,7 +296,7 @@ def check_project(project_root: Path, config: Mapping[str, Any] | None = None) -
             for pos, detail in missing_figures(root, joined.text):
                 report.errors.append(Finding("missing_figure_file", rel, joined.line_of(pos), detail))
             report.citations[rel] = len(cited)
-            if entry.get("writer") == JUSTIFICATION_WRITER and len(cited) < min_refs:
+            if section_name == JUSTIFICATION_SECTION and len(cited) < min_refs:
                 report.needs_review.append(Finding("few_citations", rel, None, f"引用 {len(cited)} 篇不同文献，下限 {min_refs} 篇"))
 
     text = "\n".join(bodies)

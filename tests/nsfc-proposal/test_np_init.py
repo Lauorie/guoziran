@@ -50,15 +50,19 @@ class InitTest(unittest.TestCase):
         leads = paths.leads.read_text(encoding="utf-8").splitlines()
         self.assertEqual([line for line in leads if line.startswith("## ")], ["## 检索式", "## 官方文件", "## 未核实线索"])
 
-    def test_plan_uses_length_budgets_and_writers(self) -> None:
+    def test_plan_uses_length_budgets_and_sections(self) -> None:
         init_proposal(self.root, title="T", project_type="青年科学基金")
         files = {f["file"]: f for f in read_yaml(proposal_paths(self.root).plan)["files"]}
         self.assertEqual(files["extraTex/1.1.立项依据.tex"]["length"], {"min": 4500, "max": 10000, "unit": "cjk_chars"})
         self.assertEqual(files["extraTex/2.1.研究内容.tex"]["length"], {"min": 7000, "max": 15000, "unit": "cjk_chars"})
-        self.assertEqual(files["extraTex/1.1.立项依据.tex"]["writer"], "nsfc-justification-writer")
+        self.assertEqual(files["extraTex/1.1.立项依据.tex"]["section"], "立项依据")
+        self.assertEqual(files["extraTex/2.2.特色与创新.tex"]["section"], "特色与创新")
+        for entry in files.values():
+            self.assertNotIn("writer", entry)
+            self.assertTrue(entry["section"])
         self.assertIn("技术路线", files["extraTex/1.1.立项依据.tex"]["must_exclude"])
         self.assertIsNone(files["extraTex/3.2.工作条件.tex"]["length"])
-        self.assertEqual(files["NSFC-ABSTRACTS.md"]["writer"], "nsfc-abstract")
+        self.assertEqual(files["NSFC-ABSTRACTS.md"]["section"], "摘要")
         self.assertIsNone(files["extraTex/1.1.立项依据.tex"]["written_with_case_version"])
 
     def test_uncompiled_ai_declaration_falls_back_to_proposal_dir(self) -> None:

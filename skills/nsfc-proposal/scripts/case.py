@@ -26,7 +26,7 @@ from proposal_common import (
     resolve_project_root,
     write_yaml,
 )
-from case_render import WRITERS, info_form, render_case_md
+from case_render import brief_text, render_case_md
 from case_validate import validate_all
 
 ASSUMPTIONS_TEMPLATE = "# 假设与待核实清单\n\n## 确认点状态\n\n## AI 拟定项\n\n## 待核实项\n\n## 占位清单\n"
@@ -40,14 +40,10 @@ class InitResult:
 
 
 def load_length_budgets(config: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """读取 nsfc-length-aligner 的篇幅预算；文件缺失时返回空列表。"""
-    source = config.get("length_budget_source")
-    if not source:
+    """读取 config 的 length_standard 篇幅预算；缺段时返回空列表。"""
+    standard = config.get("length_standard")
+    if not isinstance(standard, Mapping):
         return []
-    path = (SKILL_ROOT / str(source)).resolve()
-    if not path.is_file():
-        return []
-    standard = read_yaml(path).get("length_standard") or {}
     unit = standard.get("unit") or "cjk_chars"
     budgets = []
     for item in standard.get("files") or []:
@@ -115,7 +111,7 @@ def init_proposal(
                 result.warnings.append(f"main.tex 未引用 {file}；该章写入后不会出现在 PDF 中。")
         plan_files.append({
             "file": file,
-            "writer": section["writer"],
+            "section": section["name"],
             "must_include": [],
             "must_exclude": list(section.get("must_exclude") or []),
             "length": budget_for(str(section["file"]), budgets),
@@ -200,12 +196,12 @@ def cmd_render(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_to_info_form(args: argparse.Namespace) -> int:
+def cmd_brief(args: argparse.Namespace) -> int:
     root = resolve_project_root(args.project_root)
     case, _, plan = _load_shared(root)
     out = Path(args.out).expanduser().resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(info_form(case, plan, args.writer), encoding="utf-8")
+    out.write_text(brief_text(case, plan, args.section, load_config()), encoding="utf-8")
     print(f"已生成：{out}")
     return 0
 
@@ -253,6 +249,16 @@ def cmd_mark_written(args: argparse.Namespace) -> int:
     raise ProposalError(f"section_plan.yaml 中没有文件 {args.file}")
 
 
+def brief_names(config: Mapping[str, Any]) -> list[str]:
+    """config sections 中 brief 的去重值，顺序同配置。"""
+    names: list[str] = []
+    for section in config.get("sections") or []:
+        brief = section.get("brief") if isinstance(section, Mapping) else None
+        if isinstance(brief, str) and brief and brief not in names:
+            names.append(brief)
+    return names
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="case.py", description="nsfc-proposal 共享文件工具")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -272,11 +278,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_render.add_argument("--project-root", required=True)
     p_render.set_defaults(func=cmd_render)
 
-    p_form = sub.add_parser("to-info-form", help="为某个写作 skill 生成信息表")
-    p_form.add_argument("--project-root", required=True)
-    p_form.add_argument("--writer", required=True, choices=list(WRITERS))
-    p_form.add_argument("--out", required=True)
-    p_form.set_defaults(func=cmd_to_info_form)
+    p_brief = sub.add_parser("brief", help="为某一章的写作生成要点（科学论证、篇幅、不写的内容、占位）")
+    p_brief.add_argument("--project-root", required=True)
+    p_brief.add_argument("--section", required=True, choices=brief_names(load_config()))
+    p_brief.add_argument("--out", required=True)
+    p_brief.set_defaults(func=cmd_brief)
 
     p_bump = sub.add_parser("bump", help="修改科学论证后：版本加一、状态置为 draft")
     p_bump.add_argument("--project-root", required=True)

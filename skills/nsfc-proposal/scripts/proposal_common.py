@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 
 import yaml
 
@@ -50,6 +50,24 @@ def write_yaml(path: Path, data: Dict[str, Any]) -> None:
 
 def load_config() -> Dict[str, Any]:
     return read_yaml(SKILL_ROOT / "config.yaml")
+
+
+def section_for(config: Mapping[str, Any], entry_or_file: Mapping[str, Any] | str) -> Mapping[str, Any] | None:
+    """返回 section_plan.yaml 的条目（或文件相对路径）对应的 config sections 项；找不到返回 None。
+
+    条目有 section 时按章节名找；否则按 file 与各章的 file、fallback_file 匹配（旧项目只有 writer、没有 section）。
+    """
+    sections = [s for s in config.get("sections") or [] if isinstance(s, Mapping)]
+    if isinstance(entry_or_file, Mapping):
+        name = entry_or_file.get("section")
+        file = entry_or_file.get("file")
+    else:
+        name, file = None, entry_or_file
+    if isinstance(name, str) and name.strip():
+        return next((s for s in sections if s.get("name") == name.strip()), None)
+    if isinstance(file, str) and file:
+        return next((s for s in sections if file in (s.get("file"), s.get("fallback_file"))), None)
+    return None
 
 
 def resolve_project_root(path: Path | str) -> Path:

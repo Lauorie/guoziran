@@ -56,9 +56,9 @@ def valid_evidence() -> dict:
 
 def valid_plan() -> dict:
     return {"version": 1, "files": [
-        {"file": "extraTex/1.1.立项依据.tex", "writer": "nsfc-justification-writer", "must_include": ["G1", "Q1", "hypothesis", "entry_point"],
+        {"file": "extraTex/1.1.立项依据.tex", "section": "立项依据", "must_include": ["G1", "Q1", "hypothesis", "entry_point"],
          "must_exclude": ["技术路线"], "length": {"min": 4500, "max": 10000, "unit": "cjk_chars"}, "placeholders": [], "written_with_case_version": None},
-        {"file": "extraTex/3.1.研究基础.tex", "writer": "nsfc-research-foundation-writer", "must_include": ["feasibility", "risks"],
+        {"file": "extraTex/3.1.研究基础.tex", "section": "研究基础", "must_include": ["feasibility", "risks"],
          "must_exclude": [], "length": None, "placeholders": ["【待补充：预实验结果】"], "written_with_case_version": None},
     ]}
 
@@ -269,6 +269,31 @@ class PlanRuleTest(unittest.TestCase):
         plan = valid_plan()
         plan["files"][0]["length"] = {"min": 9000, "max": 8000}
         self.assertTrue(any("length" in e for e in validate_plan(plan, valid_case())))
+
+
+    def test_old_entry_with_writer_and_no_section_passes(self) -> None:
+        plan = valid_plan()
+        for entry, writer in zip(plan["files"], ("nsfc-justification-writer", "nsfc-research-foundation-writer")):
+            del entry["section"]
+            entry["writer"] = writer
+        self.assertEqual(validate_plan(plan, valid_case()), [])
+
+    def test_entry_without_section_or_writer_passes(self) -> None:
+        plan = valid_plan()
+        del plan["files"][0]["section"]
+        self.assertEqual(validate_plan(plan, valid_case()), [])
+
+    def test_unknown_section_name(self) -> None:
+        plan = valid_plan()
+        plan["files"][0]["section"] = "不存在的章"
+        errors = validate_plan(plan, valid_case())
+        self.assertTrue(any("未知章节" in e or "不是已知章节" in e for e in errors), errors)
+        self.assertTrue(any("不存在的章" in e for e in errors), errors)
+
+    def test_missing_writer_no_longer_reported(self) -> None:
+        plan = valid_plan()
+        del plan["files"][0]["section"]
+        self.assertFalse(any("writer" in e for e in validate_plan(plan, valid_case())))
 
 
 class ValidateCliTest(unittest.TestCase):

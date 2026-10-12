@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from proposal_common import load_config
+
 CASE_STATUSES = {"draft", "confirmed", "bypassed"}
 SOURCES = {"user", "ai_proposed"}
 FEASIBILITY_KINDS = {"paper", "patent", "data", "platform", "preliminary", "team", "collaborator", "condition"}
@@ -240,8 +242,9 @@ def validate_evidence(evidence: Mapping[str, Any], bib_keys: set[str] | None,
     return errors
 
 
-def validate_plan(plan: Mapping[str, Any], case: Mapping[str, Any]) -> list[str]:
+def validate_plan(plan: Mapping[str, Any], case: Mapping[str, Any], config: Mapping[str, Any] | None = None) -> list[str]:
     errors: list[str] = []
+    section_names = {str(s.get("name")) for s in (config if config is not None else load_config()).get("sections") or [] if isinstance(s, Mapping)}
     files = _items(plan, "files", errors)
     if not files:
         errors.append("section_plan.files 至少一条")
@@ -253,8 +256,9 @@ def validate_plan(plan: Mapping[str, Any], case: Mapping[str, Any]) -> list[str]
         if name in seen:
             errors.append(f"文件 {name} 重复出现")
         seen.add(name)
-        if not _text(entry.get("writer")):
-            errors.append(f"{name} 缺少 writer")
+        section = _text(entry.get("section"))
+        if section and section not in section_names:
+            errors.append(f"{name} 的 section 不是已知章节：{section}")
         for key in ("must_include", "must_exclude", "placeholders"):
             if not isinstance(entry.get(key, []), list):
                 errors.append(f"{name} 的 {key} 必须是列表")
