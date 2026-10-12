@@ -27,6 +27,8 @@ concurrency:
 
 jobs:
   sync-template-list:
+    # 只在上游仓库运行；在 fork 中跳过，不再每小时失败并发送通知邮件
+    if: github.repository == 'huangwb8/ChineseResearchLaTeX'
     runs-on: ubuntu-latest
     env:
       TZ: Asia/Shanghai
