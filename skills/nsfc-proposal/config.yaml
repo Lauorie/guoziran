@@ -9,7 +9,7 @@ workspace:
   task_root: .bensz-api/task-{yyyymmdd-hhmm}-{简短描述}
 
 confirm:
-  # ask：在确认点停下等申请人回答；auto：不停，按「先继续」处理并记录
+  # ask：在确认点停下等申请人回答；auto：确认点不停，按「先继续」处理并记录；会改变内容的设计参数与口径取舍仍按 SKILL.md「提问」问
   mode: ask
 
 literature:
