@@ -15,10 +15,9 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "skills/nsfc-proposal/scripts"
 sys.path.insert(0, str(SCRIPTS))
-sys.path.insert(0, str(ROOT / "skills/research-literature-search/scripts"))
 
 import wispaper_search as ws  # noqa: E402
-from providers.host_results import load_host_results  # noqa: E402
+from literature_records import load_host_results  # noqa: E402
 
 PAPER = {"paper_id": None, "title": "Peritumoral radiomics adds value", "authors": ["A Author"],
          "abstract": "We tested peritumoral features.", "url": "https://doi.org/10.1000/xyz1", "pdf_url": None,
