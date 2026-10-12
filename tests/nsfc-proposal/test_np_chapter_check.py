@@ -264,7 +264,7 @@ class FoundationRulesTest(unittest.TestCase):
         proc = self.run_foundation("风险 1：甲；应对：乙。\n风险 2：丙；预案：丁。\n风险 3：戊；替代：己。\n")
         self.assertEqual(proc.returncode, 0, out(proc))
 
-    def test_single_risk_heading_still_fails(self) -> None:
+    def test_section_title_alone_fails_with_zero_risks(self) -> None:
         proc = self.run_foundation("\\subsubsection{风险与应对}\n数据可能不足，应对是扩大来源。\n")
         self.assertEqual(proc.returncode, 1)
         self.assertIn("风险条目 0 条", out(proc))  # 「风险与应对」是章节标题，不是一条风险
@@ -290,6 +290,19 @@ class FoundationRulesTest(unittest.TestCase):
     def test_same_ordinal_in_heading_and_body_is_one_item(self) -> None:
         text = "\\subsubsubsection{风险一：数据不足}\n如上所述，风险1 的应对是扩大来源。\n风险二：甲；应对：乙。\n风险三：丙；应对：丁。\n"
         self.assertEqual(count_risks(text), 3)
+
+    def test_category_prefixed_ordinals_are_distinct(self) -> None:
+        bold = "".join(f"\\textbf{{{k}：甲}}；应对：乙。\n" for k in ("技术风险一", "技术风险二", "资源风险一"))
+        self.assertEqual(count_risks(bold), 3)
+        mixed = "\\subsubsubsection{技术风险一：甲}\n如上，技术风险1 的应对是乙。\n进度风险一：丙；应对：丁。\n"
+        self.assertEqual(count_risks(mixed), 2)
+        six = "".join(f"{k}：甲；应对：乙。\n" for k in ("技术风险一", "技术风险二", "技术风险三", "进度风险", "资源风险一", "资源风险二"))
+        self.assertEqual(count_risks(six), 6)
+
+    def test_single_ordinal_heading_reports_one(self) -> None:
+        proc = self.run_foundation("\\subsubsubsection{风险一：甲}\n应对：乙。\n")
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("风险条目 1 条", out(proc))
 
     def test_section_title_alone_counts_zero(self) -> None:
         self.assertEqual(count_risks("\\subsubsection{研究风险的应对措施}\n本项目总体可控。\n"), 0)

@@ -79,20 +79,28 @@ def years_mentioned(text: str) -> set[int]:
     return {n for n in found if n}
 
 
-_NUMERALS = {c: i for i, c in enumerate("一二三四五六七八九十", 1)}
+_NUMERALS = {c: str(i) for i, c in enumerate("一二三四五六七八九十", 1)}
+_ORDINAL = r"(?:\d+|[一二三四五六七八九十])"
+
+
+def _norm(ordinal: str) -> str:
+    """序号归一：一 == 1。"""
+    return _NUMERALS.get(ordinal, str(int(ordinal)) if ordinal.isdigit() else ordinal)
 
 
 def count_risks(text: str) -> int:
     """研究风险条数：按条目计数，取三种写法中最大的一个，不相加（它们描述的是同一批风险）。
 
-    - 序号：「风险」后接一…十或阿拉伯数字，「风险一」与「风险1」算同一条，按序号去重。
+    - 序号：「风险」后接一…十或阿拉伯数字；按（紧邻「风险」之前的 0-8 个汉字类别前缀，序号）去重，
+      「风险一」与「风险1」同一条，「技术风险一」与「资源风险一」是两条。
     - 标题：\\subsubsubsection、\\subsubsection 与 # 标题中含「风险」的，
       同时含「应对/措施」的（如「研究风险的应对措施」）是章节标题，不计。
-    - 标签：行首（可带 \\item、\\textbf{}）的「<1-8 个汉字>风险：」，按标签去重，含「应对/措施」的不计。
+    - 标签：行首（可带 \\item、\\textbf{}）的「<1-8 个汉字>风险[序号]：」，
+      按整个标签（序号归一）去重，含「应对/措施」的不计。
     """
     ordinals = {
-        _NUMERALS[v] if v in _NUMERALS else int(v)
-        for v in re.findall(r"风险\s*(\d+|[一二三四五六七八九十])", text)
+        (prefix, _norm(num))
+        for prefix, num in re.findall(rf"([\u4e00-\u9fff]{{0,8}})风险\s*({_ORDINAL})", text)
     }
     headings = [
         h for h in (
@@ -103,9 +111,10 @@ def count_risks(text: str) -> int:
         if "风险" in h and "应对" not in h and "措施" not in h
     ]
     labels = {
-        m for m in re.findall(
-            r"(?m)^[ \t]*(?:\\item\s*)?(?:\\textbf\{)?([\u4e00-\u9fff]{1,8}风险)\}?[：:]", text)
-        if "应对" not in m and "措施" not in m
+        (prefix, _norm(num) if num else "")
+        for prefix, num in re.findall(
+            rf"(?m)^[ \t]*(?:\\item\s*)?(?:\\textbf\{{)?([\u4e00-\u9fff]{{1,8}})风险(?:[ \t]*({_ORDINAL}))?\}}?[：:]", text)
+        if "应对" not in prefix and "措施" not in prefix
     }
     return max(len(ordinals), len(headings), len(labels))
 

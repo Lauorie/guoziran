@@ -70,6 +70,8 @@ class BriefTextTest(unittest.TestCase):
         self.assertIn("对照/基线：病灶大小+实性成分比例模型", form)
         self.assertIn("需控制的混杂：病灶大小", form)
         self.assertNotIn("T1", form.split("## 可选补充")[0])  # 可选补充里的「T1」是示例，不是泄漏
+        self.assertEqual([l for l in form.split("## 可选补充")[1].splitlines() if "T1" in l],
+                         ["- 任务编号（如 S1、T1）只用于内部规划，正文用自然语言指代"])
 
     def test_content_form_with_unresolved_dependencies_and_constraints(self) -> None:
         case = valid_case()
