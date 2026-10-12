@@ -114,16 +114,14 @@
 
 | 任务 | 推荐技能 | 触发示例 |
 |------|----------|----------|
-| 写/改立项依据 | `nsfc-justification-writer` | "帮我写立项依据" |
-| 写/改研究内容 + 创新 + 年度计划 | `nsfc-research-content-writer` | "帮我写研究内容" |
-| 写/改研究基础 + 工作条件 | `nsfc-research-foundation-writer` | "帮我写研究基础" |
-| 生成中英文摘要 | `nsfc-abstract` | "帮我生成摘要" |
+| 写整份正文，或写/改其中一章（立项依据、研究内容、特色与创新、年度计划、研究基础、工作条件） | `nsfc-proposal` | "用 nsfc-proposal 写正文" / "帮我改立项依据" |
+| 生成中英文摘要与题目 | `nsfc-proposal` | "帮我写摘要" |
 | 去 AI 机器味润色 | `nsfc-humanization` | "润色这段文字" |
 | 全文质量控制 | `nsfc-qc` | "帮我做质量控制" |
 | 模拟专家评审 | `nsfc-reviewers` | "帮我模拟专家评审" |
-| 新增/核验参考文献 | `nsfc-bib-manager` | "帮我加引用" |
+| 新增/核验参考文献 | `nsfc-proposal` | "帮我检索并核实文献" |
 | 引用与文献一致性 | `nsfc-ref-alignment` | "检查引用是否对齐" |
-| 篇幅调整（扩/缩） | `nsfc-length-aligner` | "把这节压缩到 X 页" |
+| 篇幅调整（扩/缩） | `nsfc-proposal` | "把研究内容压到预算以内" |
 | 申请代码推荐 | `nsfc-code` | "推荐申请代码" |
 
 ---
@@ -153,6 +151,6 @@ xelatex main.tex
 
 - **只改内容文件**：仅修改 `extraTex/*.tex`、`references/myexample.bib`、`figures/`；不改 `@config.tex` 版式（除非用户明确要求）
 - **先读后写**：修改前先读取目标文件，了解现有内容和占位符再动笔
-- **不造假引用**：添加参考文献必须经 `nsfc-bib-manager` 核实，不虚构 BibTeX 条目
-- **篇幅意识**：完成后检查全文是否超过 30 页；超出时优先用 `nsfc-length-aligner` 压缩
+- **不造假引用**：添加参考文献必须经 `nsfc-proposal` 检索并按 CrossRef 核实，不虚构 BibTeX 条目
+- **篇幅意识**：完成后检查全文是否超过 30 页；超出时用 `nsfc-proposal` 的篇幅对齐压缩
 - **语言**：始终用简体中文与用户交流，撰写中文标书内容

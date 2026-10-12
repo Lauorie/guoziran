@@ -25,6 +25,10 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 第 6 步每章走同一个循环：写作要点 → 读写法 → 写前副本 → 写入 → `chapter_check.py` → 自查 → `mark-written`。规则 7 改为各章写法没有提问环节。
 - 科学问题与假设的写法并入 `references/scientific_case_guide.md`；`section_boundaries.md` 只留各章分工表，各章细节移入写法文件。
 
+### Fixed（修复）
+
+- `bib_resolve` 写 `.bib` 时把标题、作者、期刊与出版者中的 U+2010、U+2011 连字符换成普通连字符，删去软连字符：Times New Roman 没有这两个字形，编译后缺字（来源：fresh-3 运行）。旧条目用 `bib_refresh.py` 刷新。
+
 ### Removed（移除）
 
 - 对兄弟 skill 的全部依赖：`length_budget_source`、按路径加载的 `plan_years.py`、执行说明中的 `SK/` 路径。

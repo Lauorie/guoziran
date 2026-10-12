@@ -370,6 +370,16 @@ class HelperTest(unittest.TestCase):
         self.assertEqual(bib_resolve._escape("&lt;i&gt;In vivo&lt;/i&gt; tests of &#39;x&#39;"), "In vivo tests of 'x'")
         self.assertEqual(bib_resolve._escape("Rate &lt; 5 &amp; 10%"), r"Rate < 5 \& 10\%")
 
+    def test_unicode_hyphens_become_ascii(self) -> None:
+        # Times New Roman 没有 U+2010、U+2011 的字形，PDF 中会缺字；软连字符不可见，直接删去
+        self.assertEqual(bib_resolve._escape("Habit‐formation in self‑regulation"), "Habit-formation in self-regulation")
+        self.assertEqual(bib_resolve._escape("re­cycling"), "recycling")
+        meta = WorkMeta(title="Context‐dependent repetition", authors=(("Gardner", "B."),), journal="Health‐Psychology", year=2012, volume=None, issue=None, pages=None, doi=None)
+        entry = to_bibtex(meta, "k")
+        self.assertNotIn("‐", entry)
+        self.assertIn("title = {{Context-dependent repetition}}", entry)
+        self.assertIn("journal = {Health-Psychology}", entry)
+
     def test_crossref_journal_with_entity_renders_plain_ampersand(self) -> None:
         item = {"type": "journal-article", "title": ["T"], "container-title": ["Accident Analysis &amp; Prevention"]}
         entry = to_bibtex(crossref_meta(item), "a")

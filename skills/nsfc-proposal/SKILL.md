@@ -339,6 +339,7 @@ python3 S/scripts/consistency_check.py --project-root P
 | `.bib` 写入出错 | 用 `T/nsfc-proposal/output/bib_backup/` 中的备份恢复 |
 | 台账与 `.bib` 不一致 | 找出手写或手改的条目，按规则 8 处理 |
 | `.bib` 条目显示 `&amp;` 等 HTML 实体（旧版 `bib_resolve` 写入） | 不手改。在 `.bib` 中搜 `amp;`、`lt;`、`gt;`、`quot;`、`\&\#` 找出这些条目，按规则 8 用 `bib_refresh.py` 刷新 |
+| 编译日志报 `Missing character: There is no ‐ (U+2010)`，参考文献中有字显示不出（旧版 `bib_resolve` 写入的条目） | 不手改。在 `.bib` 中搜 U+2010、U+2011 找出这些条目，按规则 8 用 `bib_refresh.py` 刷新 |
 | 材料解析警告「WisDoc 解析失败（WISDOCRS_BASE_URL 未配置或写法不对）」 | 已自动用本机文字；配置好 `WISDOCRS_BASE_URL`（环境变量或 `.env`，值不带行尾注释）后，只对该 PDF 加 `--no-cache` 重跑 `materials.py parse` |
 | `materials.py` 超时、被打断，或警告 WisDoc 超时、连接失败 | 重跑同一命令：已完成的文件命中缓存，不再上传；仍失败的 PDF 稍后只对该文件加 `--no-cache` 重跑，期间按本机文字（`local.txt`）继续 |
 | 材料解析警告「WisDoc 解析失败（服务器返回的地址不在允许范围内）」 | 已自动用本机文字。WisDoc 返回的结果地址或图片地址不是网关主机、其子域名或同一上级域名下的主机时会被拒绝；确认该主机可信后，把它写进 `WISDOC_ALLOWED_HOSTS`（环境变量或 `.env`，逗号分隔），再只对该 PDF 加 `--no-cache` 重跑 |
