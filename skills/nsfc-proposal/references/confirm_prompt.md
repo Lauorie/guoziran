@@ -1,6 +1,6 @@
 # 确认点
 
-这是科学论证的确认点；写作中其他要问的事见 SKILL.md「提问」。展示完要点后用 AskUserQuestion 提问。展示内容取自 `proposal/scientific_case.md` 和 `proposal/assumptions.md` 的「## AI 拟定项」，用申请人能直接判断的语言。不出现内部编号、YAML 字段名和 skill 名。
+这是科学论证的确认点；写作中其他要问的事见 SKILL.md「提问」。展示完要点后按 SKILL.md「提问」的情形提问：有 AskUserQuestion 时用它；没有、但对话中有人时，把选项写在回复里，停下等回答。展示内容取自 `proposal/scientific_case.md` 和 `proposal/assumptions.md` 的「## AI 拟定项」，用申请人能直接判断的语言。不出现内部编号、YAML 字段名和 skill 名。
 
 长度控制在申请人一屏读完：科学问题、假设（含否定条件）、术语、研究对象差异各用一两句；各章分工只写每章写什么，不写技术细节。「我替你拟定」清单一屏放不下时，单独占第二屏，第一屏末尾写「我替你拟定的内容见下一屏」。
 
@@ -45,4 +45,4 @@
 - 先继续：`case.py status --set bypassed`，进入写作；收尾报告中再次列出未确认的内容。
 - 原有文献：申请人指出由其提供的，逐条 `citation_ledger.py register-user --key K`；没指出的不登记、不引用，留在 `assumptions.md` 的「## 待核实项」。
 - 申请人只答「同意」、没有逐条回应时：AI 拟定项照样在收尾报告中再列一次，标「申请人未逐条回应」。
-- 无人值守（`confirm.mode: auto`，或用户要求全自动）：不展示、不停，按「先继续」处理。
+- `confirm.mode` 为 `auto`、用户要求「全自动」，或没有人会回答（SKILL.md「提问」情形三）：确认点不展示、不停，按「先继续」处理（`--set bypassed`）。「AI 拟定项」中会改变内容的设计参数与口径取舍仍按 SKILL.md「提问」第 2 条问；情形三不问，逐条记为「（未能提问）」。

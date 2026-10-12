@@ -35,6 +35,8 @@
 
 - 把每条论断选中的文献写成 `{论断编号: [引用, ...]}`，存为 `T/nsfc-proposal/input/claim_map.json`。引用写 `record_id`，或题名开头（不区分大小写，开头能唯一确定一篇即可）。
 - `select` 全部唯一匹配时，写 `T/nsfc-proposal/output/selected.jsonl` 与 `selected_claim_map.json`，退出码 0。有引用没匹配或匹配到多篇时，什么都不写，列出问题和最接近的题名，退出码 1：改 `claim_map.json` 后重跑。
+- 同一篇出现在几个池里（同一 `record_id`，或没有 DOI、题名相同），算一篇，取有完整摘要的那份。
+- 重新选定（如补检之后）时，`claim_map.json` 要列出全部论断及其文献，不只列新加的：`select` 每次整份重写 `selected.jsonl` 与 `selected_claim_map.json`。
 
 ## 补摘要
 
@@ -46,7 +48,7 @@
 
 ### 补检与复用
 
-- 汇总写在 `T/nsfc-proposal/output/selected_enriched.jsonl.summary.json`。`filled / attempted` 低于一半（`attempted` 为 0 时不算）时，背景类论断也可以写成论断问句检索，以拿到带完整摘要的记录：问句写入新的 `claim_queries_<n>.json`（n 接在已有文件之后），按第 4、5 项检索并建池，再回到选定与补摘要。在 `stages.md` 记录这一偏离及原因。
+- 汇总写在 `T/nsfc-proposal/output/selected_enriched.jsonl.summary.json`。`filled / attempted` 低于一半（`attempted` 为 0 时不算）时，背景类论断也可以写成论断问句检索，以拿到带完整摘要的记录：问句写入新的 `claim_queries_<n>.json`（n 接在已有文件之后），按 SKILL.md 第 3 步第 4、5 项检索并建池，再回到选定（`claim_map.json` 列全部论断）与补摘要。在 `stages.md` 记录这一偏离及原因。
 - 补检后重新选定、再次补全摘要时，编号递增（`abstract_queries_2.json`、`--name abstracts_2`），`abstract-queries` 与 `enrich-abstracts` 都加 `--reuse T/nsfc-proposal/output/selected_enriched.jsonl`（与 `--output` 相同即可，脚本先读旧文件再覆盖）：同一 `record_id` 上一次已补到的摘要直接沿用，不再检索。汇总的 `reused` 是沿用条数，不计入 `attempted`；判断「低于一半」时也不计入。不手工合并两次运行的结果。在 `stages.md` 记下每次的检索式条数、`filled`、`reused`。
 
 ## 核对元数据

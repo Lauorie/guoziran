@@ -225,6 +225,67 @@ class RoundSevenDocsTest(unittest.TestCase):
         self.assertLess(len(TEXT), 27000)
 
 
+class RoundSevenFixDocsTest(unittest.TestCase):
+    def read(self, rel: str) -> str:
+        return (SKILL / rel).read_text(encoding="utf-8")
+
+    def test_three_asking_situations(self) -> None:
+        for phrase in ("情形一，有 AskUserQuestion 工具", "情形二，没有 AskUserQuestion，但对话中有人",
+                       "不确定有没有人回答时，按情形二", "情形三，没有人会回答", "下文「不能提问」都指情形三"):
+            self.assertIn(phrase, TEXT)
+        self.assertNotIn("「全自动」「无人值守」时，确认点不停", TEXT)
+        self.assertIn("或属于「提问」情形三时，确认点不停", TEXT)
+        confirm = self.read("references/confirm_prompt.md")
+        self.assertIn("情形三", confirm)
+        self.assertIn("第 2 条问", confirm)
+        self.assertNotIn("- 无人值守（", confirm)
+        readme = self.read("README.md")
+        self.assertNotIn("全程不被打断", readme)
+        self.assertIn("会改变内容的决定仍会问你", readme)
+        self.assertIn("「无人值守」", readme)
+
+    def test_batches_and_mechanical_fixes(self) -> None:
+        self.assertIn("超过 4 个时分几次连续问", TEXT)
+        self.assertIn("按检查脚本结果做的机械修改", TEXT)
+        self.assertIn("要在内容之间取舍的修改", TEXT)
+
+    def test_single_chapter_reads_moved_rules(self) -> None:
+        for heading in ("**只改一章**", "**篇幅对齐**"):
+            block = TEXT.split(heading, 1)[1].split("\n**", 1)[0]
+            self.assertIn("需要新文献时另读 `references/literature.md`", block, heading)
+            self.assertIn("报出问题时另读 `references/consistency_fixes.md`", block, heading)
+            self.assertIn("`references/evidence_wording.md`", block, heading)
+
+    def test_page_cap_without_compiling(self) -> None:
+        self.assertEqual(TEXT.count("`length_standard.overall.max` 字"), 2)
+        self.assertGreaterEqual(TEXT.count("「页数未核」"), 4)
+        guide = self.read("references/length.md")
+        self.assertIn("`python3 P/scripts/nsfc_build.py`", guide)
+        self.assertNotIn("nsfc_build.py build --project-dir", guide)
+        self.assertIn("`length_standard.overall.max`", guide)
+        self.assertIn("页数未核", guide)
+        self.assertIn("扩写后再编译一次", guide)
+
+    def test_literature_pointers_and_reselect(self) -> None:
+        self.assertNotIn("按第 3 步第 6 项处理", TEXT)
+        self.assertIn("`references/literature.md` 的「补摘要」", TEXT)
+        guide = self.read("references/literature.md")
+        self.assertIn("按 SKILL.md 第 3 步第 4、5 项检索并建池", guide)
+        self.assertIn("要列出全部论断", guide)
+
+    def test_abstract_overlimit_recorded_and_type_corrected(self) -> None:
+        abstract = self.read("references/abstract.md")
+        line = [ln for ln in abstract.splitlines() if ln.startswith("3 轮后仍超限")][0]
+        self.assertIn("（未能提问）", line)
+        self.assertIn("`project.type`", TEXT)
+
+    def test_power_designs_listed(self) -> None:
+        guide = self.read("references/scientific_case_guide.md")
+        for text in ("`props-mde --n N`", "`--lower`", "`means-mde --n1 N1 --n2 N2 --cluster-size M --icc ICC`",
+                     "层级回归的 f² 检验力 `power.py` 不算"):
+            self.assertIn(text, guide)
+
+
 class NsfcSkillsHaveNoOpenAlexTest(unittest.TestCase):
     def test_no_nsfc_skill_mentions_openalex(self) -> None:
         suffixes = {".py", ".md", ".yaml", ".yml", ".json", ".txt", ".tex", ".sh"}

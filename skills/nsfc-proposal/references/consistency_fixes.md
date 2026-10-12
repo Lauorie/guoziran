@@ -6,7 +6,7 @@
 
 回到对应的章节，按该章写法修改，重跑该章的 `chapter_check.py`，再查；最多 `consistency.max_fix_rounds` 轮。仍不通过的写进收尾报告。
 
-- `cite_not_in_ledger`（引用的文献不在引用台账中）、`bib_entry_modified`（.bib 条目与引用台账哈希不一致）：删去该引用，或按规则 8 的流程重新解析后再引用。常见原因：`init` 之前就在 `.bib` 中、未经申请人确认的条目（如模板示例），或 `init` 之后被手写进 `.bib` 的条目。确由申请人提供的，用 AskUserQuestion 请申请人确认后运行 `register-user --key K`（见规则 8）。不能提问时：不登记，不引用，把这些条目列入 `assumptions.md` 的「## 待核实项」和收尾报告。
+- `cite_not_in_ledger`（引用的文献不在引用台账中）、`bib_entry_modified`（.bib 条目与引用台账哈希不一致）：删去该引用，或按规则 8 的流程重新解析后再引用。常见原因：`init` 之前就在 `.bib` 中、未经申请人确认的条目（如模板示例），或 `init` 之后被手写进 `.bib` 的条目。确由申请人提供的，按 SKILL.md「提问」请申请人确认后运行 `register-user --key K`（见规则 8）。不能提问时：不登记，不引用，把这些条目列入 `assumptions.md` 的「## 待核实项」和收尾报告。
 - `no_citation_ledger`（没有引用台账）：台账类检查无法进行。补建：用原来的 `--title`、`--type` 重跑 `case.py init`；它不覆盖已有文件，只建一个空台账，并把 `.bib` 中已有的条目列入「待核实项」。然后对申请人确认由其提供的条目逐条 `register-user --key K`；其余条目要引用的，先从 `.bib` 删去，再用原来的检索记录重跑 `bib_resolve` 入账；不引用的列入「待核实项」。
 - `placeholder_nonstandard`（占位写法不规范）：把占位改写为 `【待补充：……】`，并列入占位清单。英文摘要用同样的中文占位写法。
 - `missing_figure_file`（图片文件不存在）：`\includegraphics` 指向的文件不在 `P` 中。对照 `T/nsfc-proposal/output/figures/index.json` 中 `status` 为 `ok` 的条目，把正文中的路径改成实际的文件名；不改文件名去迁就正文。图确实没有生成时，删去该 figure 环境，按 SKILL.md 6.2 放占位。
