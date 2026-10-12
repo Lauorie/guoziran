@@ -4,9 +4,12 @@
 用法：
   literature.py pool --task-root T --name <名称> [--name ...] [--max-per-query N] [--out <池名>]
   literature.py abstract-queries --input <记录.jsonl> --output <检索式.json> [--reuse <上次输出>]
+  literature.py digest --task-root T --name <池名> [--name ...]
+  literature.py select --task-root T --map <MAP.json>
+  literature.py evidence --task-root T --project-root P
   literature.py enrich-abstracts --input <记录.jsonl> --output <输出.jsonl> [--host-results <host.json>] [--reuse <上次输出>]
 
-退出码：0 完成（pool 为 success 或 partial_success）；1 pool 全部检索式都没有结果；2 参数或输入错误。
+退出码：0 完成（pool 为 success 或 partial_success）；1 pool 全部检索式都没有结果，或 select 有论断没匹配到唯一一篇；2 参数或输入错误。
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from literature_records import (
     ELLIPSES, dedupe_records, load_host_results, normalize_doi, normalize_record, read_jsonl, validate_candidate,
     write_json, write_jsonl,
 )
+from literature_views import build_digest, build_evidence, select_for_claims
 from proposal_common import ProposalError, resolve_project_root
 
 POOL_SCHEMA = "nsfc-proposal.literature_pool.v1"
@@ -341,6 +345,28 @@ def _cmd_enrich(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_digest(args: argparse.Namespace) -> int:
+    for name in dict.fromkeys(args.name):
+        print(build_digest(args.task_root, name))
+    return EXIT_OK
+
+
+def _cmd_select(args: argparse.Namespace) -> int:
+    problems, count = select_for_claims(args.task_root, args.map)
+    if problems:
+        print(f"✗ {len(problems)} 条引用没有唯一匹配，未写任何文件：", file=sys.stderr)
+        for line in problems:
+            print(f"  - {line}", file=sys.stderr)
+        return EXIT_FAILED
+    print(f"已选 {count} 篇，写入 selected.jsonl 与 selected_claim_map.json")
+    return EXIT_OK
+
+
+def _cmd_evidence(args: argparse.Namespace) -> int:
+    print(build_evidence(args.task_root, args.project_root))
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="文献池：wispaper 结果汇总、去重、补摘要（不联网）")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -349,6 +375,15 @@ def build_parser() -> argparse.ArgumentParser:
     pool.add_argument("--name", action="append", required=True, help="检索结果名称，可重复")
     pool.add_argument("--max-per-query", type=int, default=DEFAULT_MAX_PER_QUERY)
     pool.add_argument("--out", help="池名（单个路径段）；缺省取第一个 --name")
+    digest = sub.add_parser("digest", help="按检索式分组写阅读表 digest.md")
+    digest.add_argument("--task-root", required=True, type=Path)
+    digest.add_argument("--name", action="append", required=True, help="池名，可重复")
+    select = sub.add_parser("select", help="按论断选文：题名开头或 record_id 唯一匹配才写 selected.jsonl")
+    select.add_argument("--task-root", required=True, type=Path)
+    select.add_argument("--map", required=True, type=Path, help='{"论断编号": ["record_id 或题名开头", ...]}')
+    evidence = sub.add_parser("evidence", help="按论断列出已入库文献的台账摘要")
+    evidence.add_argument("--task-root", required=True, type=Path)
+    evidence.add_argument("--project-root", required=True, type=Path)
     queries = sub.add_parser("abstract-queries", help="列出缺完整摘要的记录标题，供 wispaper 按标题检索")
     queries.add_argument("--input", required=True, type=Path)
     queries.add_argument("--output", required=True, type=Path)
@@ -370,6 +405,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.command == "pool":
             return _cmd_pool(args)
+        if args.command == "digest":
+            return _cmd_digest(args)
+        if args.command == "select":
+            return _cmd_select(args)
+        if args.command == "evidence":
+            return _cmd_evidence(args)
         if args.command == "abstract-queries":
             return _cmd_queries(args)
         return _cmd_enrich(args)
