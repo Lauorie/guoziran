@@ -1,8 +1,7 @@
 """文献记录：wispaper 宿主结果适配、rls.paper.v1 规范化、去重。
 
-移植自 research-literature-search 的 providers/host_results.py、candidate_schema.py、normalize_papers.py、
-dedupe_papers.py，只保留 wispaper 一条路径；记录字段（identifiers.doi、title、year、record_id、abstract 等）
-的产出方式与原来一致。本模块不联网。
+只处理 wispaper 的检索结果；记录字段（identifiers.doi、title、year、record_id、abstract 等）
+按 rls.paper.v1 产出，供 bib_resolve.py 与 citation_ledger.py 读取。本模块不联网。
 """
 
 from __future__ import annotations

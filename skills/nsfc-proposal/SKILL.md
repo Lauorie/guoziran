@@ -1,11 +1,11 @@
 ---
 name: nsfc-proposal
-description: 当用户要写、重写或续写国家自然科学基金申请书正文的多个章节（立项依据、研究内容、研究基础等），或要求各章围绕同一套科学问题与假设、引用可核验时使用。先与申请人确定科学论证，再调用 nsfc-* 写作 skill 分章成稿并做跨章检查。⚠️ 不适用：只改某一章的措辞（用对应的 nsfc-*-writer）、只做评审或质检（用 nsfc-reviewers 或 nsfc-qc）、只写预算或选申请代码（用 nsfc-budget 或 nsfc-code）、尚未确定研究方向而要系统探索选题（先用 research-idea）。
+description: 当用户要写、重写、续写或润色国家自然科学基金申请书正文时使用，包括立项依据、研究内容、特色与创新、年度研究计划、研究基础、工作条件与风险应对中的一章或多章；也用于写中英文摘要与题目、检查或调整正文篇幅、为申请书检索并核实参考文献，以及要求各章围绕同一套科学问题与假设、引用可核验的情形。⚠️ 不适用：预算、申请代码、模拟评审、质检、去 AI 腔、尚未确定研究方向而要系统探索选题、与申请书无关的翻译或文献综述。
 metadata:
   author: Lauorie
 ---
 
-# 国自然申请书正文总控
+# 国自然申请书正文
 
 ## 目标
 
@@ -16,30 +16,44 @@ metadata:
 - 建立并维护 `{project_root}/proposal/` 下的科学论证、证据图谱和章节分工；
 - 检索文献，核对元数据后写入 `.bib`；
 - 设一个确认点，请申请人确认科学问题与假设；
-- 按固定顺序调用写作 skill，并做跨章一致性检查；
+- 按各章写法成稿，逐章检查，最后做跨章一致性检查；
+- 写摘要与题目，检查并调整篇幅；
 - 起草生成式人工智能使用说明。
 
-本 skill 不负责：预算（nsfc-budget）、申请代码（nsfc-code）、模拟评审（nsfc-reviewers）、质检（nsfc-qc）、篇幅压缩（nsfc-length-aligner）、去 AI 腔（nsfc-humanization）、选题探索（research-idea）、PDF 排版。
+所需的一切都在本 skill 目录中：`scripts/` 做确定性的工作（校验、检索、核对、出图、各章与篇幅检查），`references/` 写需要判断的部分（科学论证、证据措辞、章节分工、各章写法、出图、篇幅对齐）。
+
+### 任务类型
+
+| 用户要的 | 怎么做 |
+|---|---|
+| 写整份正文或其中几章（默认） | 第 0–8 步 |
+| 修改或润色已写好的某一章 | 「只改一章」 |
+| 只写摘要与题目，或把中文摘要译成英文 | 「只写摘要」 |
+| 检查篇幅，或把正文扩写、压缩到预算之内 | 「篇幅对齐」 |
+
+各章写法：立项依据 `references/justification.md`；研究内容、特色与创新、年度研究计划 `references/research_content.md`；研究基础、工作条件 `references/foundation.md`；摘要与题目 `references/abstract.md`；篇幅 `references/length.md`。`config.yaml` 中各章的 `guide` 给出同样的对应。
+
+本 skill 不负责：预算（nsfc-budget）、申请代码（nsfc-code）、模拟评审（nsfc-reviewers）、质检（nsfc-qc）、去 AI 腔（nsfc-humanization）、选题探索（research-idea）、PDF 排版。
 
 ## 流程
 
 ### 输入
 
 - 必需：
-  - `project_root`：含 `main.tex` 和 `extraTex/` 的 NSFC 正文项目，例如 `projects/NSFC_Young` 的副本。
+  - `project_root`：含 `main.tex` 和 `extraTex/` 的 NSFC 正文项目，例如 `projects/NSFC_Young` 的副本。只写摘要时可以没有。
   - 申请人的研究信息：题目或方向、研究对象、痛点、科学问题与假设的初步想法、已有材料。
-  - wispaper 检索凭据：`WIS_MCP_URL`、`WIS_MCP_TOKEN`（环境变量或 `.env`）。缺失或被拒时停在第 3 步，见「失败与恢复」。
+  - wispaper 检索凭据：`WIS_MCP_URL`、`WIS_MCP_TOKEN`（环境变量或 `.env`）。缺失或被拒时停在第 3 步，见「失败与恢复」。只改一章、只写摘要、篇幅对齐不需要。
 - 可选：项目类型；要写的章节（默认全部）；协作方式；论文、数据、预实验结果等材料（PDF、DOCX、Markdown、TXT）；参考文献；生图服务凭据（`WISMODEL_IMAGE_URL`、`WISMODEL_API_KEY`、`DEPLOY_REGION`，环境变量或 `.env`）；没有生图凭据时不出图，保留占位。
 - 缺 `project_root` 时停下，请用户指定；无人值守时报错退出。
 - 申请人没提供的信息不追问（确认点除外），按保守假设处理，并记入 `assumptions.md`。
 
 ### 执行步骤
 
-下文 `S` 指本 skill 目录，`SK` 指 skills 根目录（本 skill 的上一级），`P` 指 project_root，`T` 指本任务目录。
+下文 `S` 指本 skill 目录，`P` 指 project_root，`T` 指本任务目录。
 
 **0. 说明与建目录**
 
-1. 向用户逐项说明将调用的 skill 及其工作，按调用顺序：research-literature-search（检索文献）→ nsfc-justification-writer（立项依据）→ nsfc-research-content-writer（研究内容、特色与创新、年度研究计划）→ nsfc-research-foundation-writer（研究基础、工作条件）→ nsfc-abstract（摘要）。用户只要部分章节时，只列相关的 skill。不向用户说明检索式、材料和作图说明发往哪些服务。说明后不停下等回答。
+1. 向用户逐项说明本次要做的事，按顺序：检索并核实文献 → 建立科学论证并请申请人确认一次 → 逐章写作（列出要写的章节）→ 出图 → 跨章检查与收尾。用户只要部分章节时，只列相关的事。不向用户说明检索式、材料和作图说明发往哪些服务。说明后不停下等回答。
 2. 宣布唯一任务目录 `T = ./.bensz-api/task-{yyyymmdd-hhmm}-{简短描述}/`，之后不更换。建立 `T/README.md`、`T/shared/` 和 `T/nsfc-proposal/{input,output,log}/`。
 3. 此后每完成一步，在 `T/nsfc-proposal/log/stages.md` 追加一行：时间、步骤、AI 做了什么、产出文件、申请人是否确认。第 8 步据此起草 AI 使用说明。
 
@@ -96,37 +110,34 @@ python3 S/scripts/case.py validate --project-root P
    - 在前台运行，Bash 超时设 600000 ms；不得放到后台后结束本轮。运行被超时打断（没有退出码）时，原样重跑同一条命令；已存档的检索式不重查。
    - 退出码 0：完成。4：到了单次时限，原样再跑同一条命令，已存档的不重查。1：有检索式失败，原样再跑一次；仍失败的检索式在 `stages.md` 记下，按「失败与恢复」处理。3：未配置或凭据被拒，按「wispaper 不可用」处理。
    - 不要用 MCP 工具（`mcp__wis-scholar-search__*`）做检索：返回只进对话，不落文件，台账无从追溯。它只可用于一次性探测，例如检查服务是否可用。
-5. 建检索 bundle 并校验：
+5. 把每次检索的结果建成文献池（规范化、去重）：
 
 ```bash
-python3 SK/research-literature-search/scripts/search_runner.py run --topic "<题目>" \
-  --query-file T/nsfc-proposal/input/keyword_queries.json \
-  --output-dir T/research-literature-search/output/keyword-bundle \
-  --max-results-per-query 20 --provider-order mcp --host-results T/nsfc-proposal/output/wispaper/keyword_host.json
-python3 SK/research-literature-search/scripts/search_runner.py run --topic "<题目>" \
-  --query-file T/nsfc-proposal/input/claim_queries_1.json --min-queries 1 \
-  --output-dir T/research-literature-search/output/claims-bundle-1 \
-  --max-results-per-query 10 --provider-order mcp --host-results T/nsfc-proposal/output/wispaper/claims_1_host.json
-python3 SK/research-literature-search/scripts/search_runner.py validate --bundle <每个 bundle 目录>
+python3 S/scripts/literature.py pool --task-root T --name keyword --max-per-query 20
+python3 S/scripts/literature.py pool --task-root T --name claims_1 --max-per-query 10
 ```
 
-   `--provider-order` 取 `mcp`，让 bundle 只用 wispaper 的结果，不向其他检索服务发请求。wispaper 不可用时不建 bundle，见「失败与恢复」。某个 bundle 的 manifest 为 `failed`（wispaper 对其中检索式全都没有返回结果）时，它不提供候选：论断问句换个写法写入新的 `claim_queries_<n>.json`（关键词 bundle 则换写法写入新的关键词检索式文件），按第 4、5 项再检索一次，建 bundle 时加 `--min-queries 1`、输出到新的 bundle 目录；仍没有结果的，在 `stages.md` 记下，相关论断保持 `unsupported`。
-6. 逐条论断从各 bundle 的 `candidates_deduped.jsonl` 中挑候选证据，原样写入 `T/nsfc-proposal/output/selected.jsonl`，再用 wispaper 补全摘要。关键词检索只返回摘要片段，片段不算完整摘要；按标题检索通常能拿到完整摘要。先列出缺完整摘要的记录标题，按标题检索，再把摘要填回记录：
+   每个论断检索式文件各建一个池（`--name claims_<n>`）。池写在 `T/nsfc-proposal/output/literature/<名称>/`：`candidates.jsonl` 是去重后的候选，`manifest.json` 记录各检索式的命中篇数。池只读 wispaper 的结果，不向任何检索服务发请求；wispaper 不可用时不建池，见「失败与恢复」。
+
+   - 退出码 0：池已建成；`manifest.json` 的 `status` 为 `partial_success` 时，其中列出没有结果的检索式。
+   - 退出码 1（`failed`）：这次检索的检索式全都没有结果，池不提供候选。论断问句换个写法写入新的 `claim_queries_<n>.json`（关键词池则换写法写入新的关键词检索式文件），按第 4、5 项再检索一次，用新的名称建池；仍没有结果的，在 `stages.md` 记下，相关论断保持 `unsupported`。
+   - 退出码 2：参数或输入错误（host 文件不存在、格式不对），按提示修正。
+6. 逐条论断从各池的 `candidates.jsonl` 中挑候选证据，原样写入 `T/nsfc-proposal/output/selected.jsonl`，再用 wispaper 补全摘要。关键词检索只返回摘要片段，片段不算完整摘要；按标题检索通常能拿到完整摘要。先列出缺完整摘要的记录标题，按标题检索，再把摘要填回记录：
 
 ```bash
-python3 SK/research-literature-search/scripts/search_runner.py abstract-queries \
+python3 S/scripts/literature.py abstract-queries \
   --input T/nsfc-proposal/output/selected.jsonl --output T/nsfc-proposal/input/abstract_queries_1.json
 python3 S/scripts/wispaper_search.py run --task-root T --name abstracts_1 --tool quick_search \
   --query-file T/nsfc-proposal/input/abstract_queries_1.json
-python3 SK/research-literature-search/scripts/search_runner.py enrich-abstracts --offline \
+python3 S/scripts/literature.py enrich-abstracts \
   --input T/nsfc-proposal/output/selected.jsonl --output T/nsfc-proposal/output/selected_enriched.jsonl \
   --host-results T/nsfc-proposal/output/wispaper/abstracts_1_host.json
 ```
 
    - `wispaper_search.py` 的退出码：0 继续；4 原样重跑同一条命令；1 原样重跑一次，仍失败的标题不改写、不另建检索式文件，照常用已写出的 host 文件运行 `enrich-abstracts`，失败的标题保持缺摘要，在 `stages.md` 列出；3 按「wispaper 不可用」处理。
-   - `abstract-queries` 输出的 `queries` 为 0 时，不运行 `wispaper_search.py`，`enrich-abstracts` 去掉 `--host-results`，保留 `--offline`。
-   - `--offline` 保证补摘要不向 wispaper 以外的服务发请求，不得去掉。
-   - 汇总写在 `T/nsfc-proposal/output/selected_enriched.jsonl.summary.json`。`filled / attempted` 低于一半（`attempted` 为 0 时不算）时，背景类论断也可以写成论断问句检索，以拿到带完整摘要的记录：问句写入新的 `claim_queries_<n>.json`（n 接在已有文件之后），按本步第 4、5 项检索，再回到本项挑选并补全摘要。在 `stages.md` 记录这一偏离及原因。
+   - `abstract-queries` 输出的 `queries` 为 0 时，不运行 `wispaper_search.py`，`enrich-abstracts` 去掉 `--host-results`。
+   - `enrich-abstracts` 只从 host 文件和 `--reuse` 取摘要，按 DOI 或标题核对是同一篇，不发网络请求。
+   - 汇总写在 `T/nsfc-proposal/output/selected_enriched.jsonl.summary.json`。`filled / attempted` 低于一半（`attempted` 为 0 时不算）时，背景类论断也可以写成论断问句检索，以拿到带完整摘要的记录：问句写入新的 `claim_queries_<n>.json`（n 接在已有文件之后），按本步第 4、5 项检索并建池，再回到本项挑选并补全摘要。在 `stages.md` 记录这一偏离及原因。
    - 补检后重新挑选、再次补全摘要时，编号递增（`abstract_queries_2.json`、`--name abstracts_2`），`abstract-queries` 与 `enrich-abstracts` 都加 `--reuse T/nsfc-proposal/output/selected_enriched.jsonl`（与 `--output` 相同即可，脚本先读旧文件再覆盖）：同一 `record_id` 上一次已补到的摘要直接沿用，不再检索。汇总的 `reused` 是沿用条数，不计入 `attempted`；判断「低于一半」时也不计入。不手工合并两次运行的结果。在 `stages.md` 记下每次的检索式条数、`filled`、`reused`。
 
 7. 核对元数据并写入 `.bib`。申请人论文与检索记录先合并成一个文件，`bib_resolve` 只对它运行一次（每次运行都会覆盖 `T/nsfc-proposal/output/bib_resolve.json`；加 `--dry-run` 时只查询，不写 `.bib`、引用台账和线索文件，汇总写入同目录的 `bib_resolve.dryrun.json`，不覆盖前者）：
@@ -165,7 +176,7 @@ python3 S/scripts/case.py render --project-root P
 
 `confirm.mode` 为 `auto`，或用户要求「全自动」「无人值守」时，不停下，直接执行 `--set bypassed`。
 
-**6. 分章写作**（顺序固定）
+**6. 分章写作**（顺序固定：立项依据 → 研究内容、特色与创新、年度研究计划 → 研究基础、工作条件 → 摘要）
 
 每一章都遵守九条规则：
 
@@ -175,17 +186,34 @@ python3 S/scripts/case.py render --project-root P
 - 规则 4：正文不出现内部编号。
 - 规则 5：凡是叙述研究现状、他人方法或结论、流行病学数据的句子，必须 `\cite`，且只能引用同时满足三条的 bibkey：(a) 是 `bib_resolve.py` 的 `added`，或 `exists` 且该 key 在台账中有有效记录；(b) 列在这句话所表达的那条论断的 `evidence` 中，`role` 为 supporting；(c) 措辞不超过该论断的 `support`。内容没有对应论断时，先按第 3 步把论断补进 `evidence_map.yaml`，或按 `unsupported` 的两类处理、删去。`unsupported` 论断分两类。缺口类，即本项目要回答的认知缺口：写「尚不清楚」「尚未检验」，每个缺口写一次，不在相邻句子重复推测词。背景类，即背景与现状论断（领域事实，申请人在材料中写明的现有不足）：不逐句改成「可能」。集中写成一段，作为本项目对现状的判断，段末放一处可见占位，逐条列出要补的文献，例如 `【待补充：支持上述判断的文献——(1) 现有模型多基于单中心数据；(2) 外部验证中性能下降；(3) 已有瘤周研究所用的环带宽度】`。占位列入占位清单。这一段不写凭记忆的研究名称、作者、年份，也不写任何凭记忆的具体数字。每条背景类判断都要在 `evidence_map.yaml` 中有对应论断，`support` 为 `unsupported`，以便追溯。「已有研究做到哪一步」（创新点的参照）按背景类处理：在线时引用；离线时列进同一处占位。不把某项具体研究的结果改写成「可能」来回避引用：转述某项研究发现了什么的句子，必须引用该研究。一个段落讲几项研究，就逐项引用，不在段末堆一个引用。申请人自己的结果按申请人材料写或写占位，不需 `\cite`（材料本身是已入 `.bib` 的已发表论文时才引用）；本项目自己的设计、目标和假设不是现状，不需引用；教科书级定义不需引用，除非引用具体标准或指南（此时引用，或按下句写明名称）。国家或部门的政策文件、诊疗规范、行业指南，联网到发文机关的官方网站核对文件名、发文机关与年份后，可在正文写明，如「《“健康中国2030”规划纲要》（中共中央、国务院，2016）」，不进 `.bib`，网址与核对日期写入 `P/proposal/literature_leads.md` 的「## 官方文件」一节（`init` 已建好）。核对不到的不写，按背景类论断处理。正文只写文件明文规定的内容。示例见 `references/evidence_wording.md` 的「哪些句子必须引用」与「政策文件」。
 - 规则 6：证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标。不用推测或泛泛的背景凑字数；字数不足的原因写进收尾报告。
-- 规则 7：被调用的写作 skill 若在自己的说明里要向用户提问（确认 project_root 或 output_mode、确认后创建 `extraTex`、nsfc-abstract 多次超长裁剪后让用户选方案等），一律不问，取保守默认（保留已有文件、按配置先预览再应用、停止裁剪并保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md`，并列入最终报告。整个流程只有第 5 步向用户提问。
+- 规则 7：各章写法中没有提问环节。缺信息时按规则 3 写占位；要在几种写法之间取舍时，取保守的一种（保留已有文件的内容、少写不多写、超限时保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md`，并列入最终报告。整个流程只有第 5 步向用户提问。
 - 规则 8：`citation_ledger.py register-user` 只用于申请人逐条确认过、由申请人提供的文献：`python3 S/scripts/citation_ledger.py register-user --project-root P --key K`，每条一个 `--key`（可重复）。本流程只用 `--key`，不用一次登记全部未入账条目的 `--all`。AI 不得用它登记自己写的或改过的条目。`register-user` 登记的条目只能支持 `applicant_material` 论断，不计入 `single_verified`、`multi_verified` 的篇数。不得手写或手改 `.bib`（例外：只删不改。删去已 `drop` 的条目，或删去不属于申请人的未入账条目，如模板示例）。要修正某条文献：仍是同一篇、只是条目文本有误（如期刊名显示 `&amp;`、类型或字段缺失）时，运行 `python3 S/scripts/bib_refresh.py --project-root P --task-root T --key K`（可重复 `--key`），按台账中的 DOI 重新取 CrossRef 元数据，原 key 不变，台账追加一条记录；退出码 1 表示有条目没有刷新，原样保留，原因见 `T/nsfc-proposal/output/bib_refresh.json`。同一条目重跑仍失败（如 CrossRef 没有这个 DOI、标题不符）时，按下一句的 drop 流程处理。要换成另一篇，或条目是申请人登记的、台账中没有 DOI，先 `python3 S/scripts/citation_ledger.py drop --project-root P --key K --reason "…"`，从 `.bib` 删去该条，再用 `bib_resolve` 重新解析（仍留在 `.bib` 的作废条目会被报为 `exists`）。不在台账中的文献不得引用。
 - 规则 9：正文中，「核实」「检索」「文献支持」「本次未」等描述写作过程的话，以及 `proposal/` 下的文件名，只写进 `assumptions.md`、`stages.md` 或收尾报告，不进正文；可见占位不受此限；第 8 步由本 skill 写的 AI 使用说明也不受此限。写给申请人的嘱咐（如「建议申请人优先补充……」「不补充的条目应在提交前删去」）放进对应占位的括号内或 `assumptions.md`。对申请人原有口径的改动，只在 `assumptions.md` 的「AI 拟定项」中说明；正文直接写采用的口径和理由，不写「申请人提出的原始口径是……」。
 
-6.1 立项依据：
+每一章按同一个循环写：
+
+1. 生成写作要点（立项依据、研究内容、研究基础三组；摘要不需要）：
 
    ```bash
-   python3 S/scripts/case.py to-info-form --project-root P --writer nsfc-justification-writer --out T/nsfc-proposal/output/info_form_justification.md
+   python3 S/scripts/case.py brief --project-root P --section 立项依据 --out T/nsfc-proposal/output/brief_立项依据.md
    ```
 
-   按 `SK/nsfc-justification-writer/SKILL.md` 执行。立项依据的结构要求，作为额外几行追加到信息表 `T/nsfc-proposal/output/info_form_justification.md` 末尾：国内外现状按主题分条，小节标题写判断，每条先写已知再写局限；用 `\subsubsection` 单列「科学技术价值」一节，从科学问题推出理论、方法、应用三方面的价值，每条落到本项目的具体产出（nsfc-justification-writer 的 `allowed_new_heading_commands` 已允许 `subsubsection`）。`section_plan.yaml` 的 `must_include` 只接受编号和字段名，不能写这些要求，所以不写进去。申请人提供的已发表论文，在相关处引用，说明团队已有积累；措辞按 `applicant_material` 的规则写，只写论文报告了什么，不夸大。写法见 `references/section_boundaries.md`。`--task-root T` 是顶层选项，放在子命令之前，例如 `python3 SK/nsfc-justification-writer/scripts/run.py --task-root T coach --project-root P --info-form T/nsfc-proposal/output/info_form_justification.md`；每条 CLI 命令都这样加。`coach` 加 `--info-form T/nsfc-proposal/output/info_form_justification.md`。写入后运行 `python3 S/scripts/case.py mark-written --project-root P --file extraTex/1.1.立项依据.tex`。
+   写作要点汇集该章要用的科学论证条目、研究期限、篇幅、不写的内容和要照抄的占位。
+2. 读该章写法（`config.yaml` 中该章的 `guide`）和写作要点。
+3. 写前把该章原有的文件复制到 `T/nsfc-proposal/output/before/`（文件不存在时跳过）。要撤回某次写入时从这里恢复。
+4. 写入。只写该章自己的文件；不改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`。模板中已有的标题怎么处理，见该章写法：研究基础、工作条件保留模板标题，只换正文；立项依据、研究内容的模板标题是示例提纲，按写法换成本项目的结构。
+5. 检查：
+
+   ```bash
+   python3 S/scripts/chapter_check.py --project-root P --section <章节名> [--section <章节名> ...]
+   ```
+
+   ERROR 改到 0。例外：内部编号检查把正确的专业写法（如基因名、解剖节段名）当成 S 编号时，不改写术语，在 `stages.md` 记下这一误报与理由，视为已处理。WARN 逐条判断，属于误报的同样记下理由。退出码 0 无 ERROR，1 有 ERROR，2 参数错误。
+6. 按该章写法的「写完自查」逐项核对，结论与改动记入 `stages.md`。
+7. 该章每个文件运行一次 `python3 S/scripts/case.py mark-written --project-root P --file <文件>`。
+
+6.1 立项依据：按 `references/justification.md` 写 `extraTex/1.1.立项依据.tex`。
+
 6.2 研究内容、特色与创新、年度研究计划：
 
    出图（`figures.enabled` 为 true 时，写研究内容之前）：按 `references/figure_guide.md` 为研究框架图和每项研究内容的设计图各写一份提示词，存为 `T/nsfc-proposal/output/figures/<名称>.prompt.txt`（名称如 `fig1-framework`、`fig2-study1`），逐张运行：
@@ -197,9 +225,11 @@ python3 S/scripts/case.py render --project-root P
 
    在前台运行，Bash 超时设 600000 ms；单张图的总时限 `figures.total_timeout_s`（含重试与等待）小于这个超时。框架图的画幅取 `figures.framework_aspect_ratio`，设计图取 `figures.design_aspect_ratio`；不加 `--aspect-ratio` 时，名称含 `framework` 取前者，否则取后者。退出码 0 表示已生成图片：PNG 存为 `P/figures/nsfc-proposal/<名称>.png`，JPEG 存为 `<名称>.jpg`，以脚本输出的「已生成 ……」一行为准；每次运行都记入 `T/nsfc-proposal/output/figures/index.json`。生成后用 Read 读脚本输出的图片文件，按 figure_guide 第 6 节自检；不合格时改写提示词，用新名称（`-v2`、`-v3`）重画，最多 `figures.max_rerenders` 次。退出码不为 0 时按「失败与恢复」处理。
 
-   写作：用 `--writer nsfc-research-content-writer` 生成信息表，按 `SK/nsfc-research-content-writer/SKILL.md` 执行。先按每项研究的类型选定小标题（实验研究：设计、对象与样本量、流程、指标与分析、预期结果与判定；数据驱动研究：数据、方法、验证、判定标准），逐项写明「研究一：实验研究，用……」，作为额外几行追加到信息表 `T/nsfc-proposal/output/info_form_research_content.md` 末尾（生成信息表时用 `--out` 指到这个路径），要求同类研究用同一组；一章中两类都有时各用各的一组，不为统一改用另一组；不用加粗的（1）至（10）罗列。对照、基线与样本量的写法（`references/section_boundaries.md` 的「研究内容的对照、基线与样本量」）也追加到信息表末尾。通过自检的图，把路径、图注、`\label`、位置，以及图中的可见标签与数字也追加到信息表末尾，作为给 nsfc-research-content-writer 的约束，让正文与图用同样的名称和数值：`\includegraphics` 用脚本输出的路径；框架图放在研究内容开头，设计图放在对应研究内容的「设计」小标题下（数据驱动研究为「方法」），写法见 figure_guide 第 7 节。出图失败或未配置时，才放占位：未配置（退出码 3）或 `figures.enabled` 为 false 时，只在研究内容开头放一处可见占位 `【待补充：图 1 研究框架图——各项研究内容、它们之间的输入输出、对应的科学问题】`；配置了而某张图在重画上限内仍不合格或失败时，框架图放上面这处占位，设计图在对应研究的「设计」（数据驱动研究为「方法」）小标题下放占位，写法见 figure_guide 第 7 节。占位列入占位清单（模板只加载 graphicx，没有 TikZ；图是 WisImage 生成的 PNG，用 `\includegraphics` 插入）。研究方案借用的方法，引用第 3 步入库的方法类文献。写完直接运行 `python3 SK/nsfc-research-content-writer/scripts/check_project_outputs.py --project-root P`，三个文件逐一 `mark-written`。检查脚本加 `--project-type "<项目类型>"`（取 `scientific_case.yaml` 的 `project.type`）；研究期限以 content-writer 的 `yearly_plan` 表为准。检查把正确的专业写法（如「L5–S1」「S100β」）误报为 S 编号时，把该写法加入 `SK/nsfc-research-content-writer/config.yaml` 的 `checks.allowed_s_tokens`，或在 `stages.md` 记录误报；不为通过检查改写正确的专业术语。不用 `run_checks.py`：它先跑 `validate_skill.py`，后者在当前版本中会因打包问题提前退出，检查没有执行。
-6.3 研究基础、工作条件：用 `--writer nsfc-research-foundation-writer` 生成信息表，按 `SK/nsfc-research-foundation-writer/SKILL.md` 执行。写完同样直接运行 `python3 SK/nsfc-research-foundation-writer/scripts/check_project_outputs.py --project-root P`，两个文件逐一 `mark-written`。
-6.4 摘要：按 `SK/nsfc-abstract/SKILL.md` 在 `P` 下写 `NSFC-ABSTRACTS.md`，科学问题与术语以科学论证为准，然后 `mark-written --file NSFC-ABSTRACTS.md`。nsfc-abstract 的结构要求写 1–2 条前期发现。申请人材料写明没有前期结果时（研究基础、预实验为「无」），这一部分改为从认知缺口直接引出假设，不留「【待补充：……前期研究发现】」占位，并在 `stages.md` 记录这一偏离。申请人有前期结果但缺细节时，照常写可见占位。
+   写作：按 `references/research_content.md` 写三份文件。小标题按每项研究的类型选，同类研究用同一组，一章中两类都有时各用各的一组，不为统一改用另一组。通过自检的图按 figure_guide 第 7 节放进正文，正文与图用同样的名称和数值。出图失败或未配置时，才放占位：未配置（退出码 3）或 `figures.enabled` 为 false 时，只在研究内容开头放一处可见占位 `【待补充：图 1 研究框架图——各项研究内容、它们之间的输入输出、对应的科学问题】`；配置了而某张图在重画上限内仍不合格或失败时，框架图放上面这处占位，设计图在对应研究的「设计」（数据驱动研究为「方法」）小标题下放占位，写法见 figure_guide 第 7 节。占位列入占位清单（模板只加载 graphicx，没有 TikZ；图是 WisImage 生成的 PNG，用 `\includegraphics` 插入）。研究方案借用的方法，引用第 3 步入库的方法类文献。检查时 `chapter_check.py` 一次查三章；研究期限取自科学论证的项目类型，年数表在 `config.yaml` 的 `yearly_plan`。
+
+6.3 研究基础、工作条件：按 `references/foundation.md` 写两份文件。
+
+6.4 摘要：按 `references/abstract.md` 在 `P` 下写 `NSFC-ABSTRACTS.md`，科学问题与术语以科学论证为准；用 `chapter_check.py --section 摘要`（或直接 `abstract_check.py`）检查，然后 `mark-written --file NSFC-ABSTRACTS.md`。申请人材料写明没有前期结果时，摘要的前期研究一句按写法中的规定处理，并在 `stages.md` 记录这一偏离。
 
 **7. 跨章一致性检查**
 
@@ -207,7 +237,7 @@ python3 S/scripts/case.py render --project-root P
 python3 S/scripts/consistency_check.py --project-root P
 ```
 
-- 「必须修正」：回到对应的写作 skill 修改，再查；最多 `consistency.max_fix_rounds` 轮。仍不通过的写进收尾报告。
+- 「必须修正」：回到对应的章节，按该章写法修改，重跑该章的 `chapter_check.py`，再查；最多 `consistency.max_fix_rounds` 轮。仍不通过的写进收尾报告。
   - `cite_not_in_ledger`（引用的文献不在引用台账中）、`bib_entry_modified`（.bib 条目与引用台账哈希不一致）：删去该引用，或按规则 8 的流程重新解析后再引用。常见原因：`init` 之前就在 `.bib` 中、未经申请人确认的条目（如模板示例），或 `init` 之后被手写进 `.bib` 的条目。确由申请人提供的，经申请人确认后运行 `register-user --key K`（见规则 8）。全自动模式下没有人可确认：不登记，不引用，把这些条目列入 `assumptions.md` 的「## 待核实项」和收尾报告。
   - `no_citation_ledger`（没有引用台账）：台账类检查无法进行。补建：用原来的 `--title`、`--type` 重跑 `case.py init`；它不覆盖已有文件，只建一个空台账，并把 `.bib` 中已有的条目列入「待核实项」。然后对申请人确认由其提供的条目逐条 `register-user --key K`；其余条目要引用的，先从 `.bib` 删去，再用原来的检索记录重跑 `bib_resolve` 入账；不引用的列入「待核实项」。
   - `placeholder_nonstandard`（占位写法不规范）：把占位改写为 `【待补充：……】`，并列入占位清单。英文摘要用同样的中文占位写法。
@@ -227,11 +257,30 @@ python3 S/scripts/consistency_check.py --project-root P
 
 **8. 收尾**
 
-1. 起草 AI 使用说明，写入 `section_plan.yaml` 中 writer 为 `nsfc-proposal` 的文件（`extraTex/4.5.生成式人工智能.tex` 或 `proposal/ai_declaration.md`）。只写 `stages.md` 里记录过的使用。说明用 WisDoc 解析了哪些材料（`index.json` 中 `parser` 为 `wisdoc` 的文件）；用了 `--local-only` 时写本机解析。用进正文的图写「研究框架图与设计图由 WisImage 根据科学论证生成，经 AI 自检，申请人核对」，按实际情况增删图的种类；只列实际用进正文的图，只用了研究框架图时只写研究框架图。不写模型名。第一行写 `【待补充：申请人核对本声明后删除此行】`，并列入占位清单。
+1. 起草 AI 使用说明，写入 `section_plan.yaml` 中「生成式人工智能使用说明」一章的文件（`extraTex/4.5.生成式人工智能.tex` 或 `proposal/ai_declaration.md`）。只写 `stages.md` 里记录过的使用。说明用 WisDoc 解析了哪些材料（`index.json` 中 `parser` 为 `wisdoc` 的文件）；用了 `--local-only` 时写本机解析。用进正文的图写「研究框架图与设计图由 WisImage 根据科学论证生成，经 AI 自检，申请人核对」，按实际情况增删图的种类；只列实际用进正文的图，只用了研究框架图时只写研究框架图。不写模型名。第一行写 `【待补充：申请人核对本声明后删除此行】`，并列入占位清单。
 2. 再运行一次 `consistency_check.py`，并运行 `python3 S/scripts/citation_ledger.py audit --project-root P`。`audit` 输出两节：「条目文本与台账哈希不一致」必须为 0，否则按规则 8 处理；「`.bib` 中有、台账中无」的条目不得被引用（`cite_not_in_ledger` 会拦），逐条列入 `assumptions.md` 的「## 待核实项」与收尾报告。其中的模板示例条目可按规则 8 的例外从 `.bib` 删去；不得为让 `audit` 通过而删去申请人的条目。后一节不为 0 时 `audit` 退出码为 1，这本身不算失败。
-3. 项目有编译脚本且本机字体齐全时编译，用 `pdfinfo` 记页数。超过 28 页时在报告中写明页数，并建议用 nsfc-length-aligner 压缩。字体缺失导致编译报错时，写「页数未核」。各章篇幅取自 nsfc-length-aligner 的下限时，加上参考文献，正文仍可能超过 30 页。
+3. 检查篇幅：`python3 S/scripts/length_check.py --input P --out-dir T/nsfc-proposal/output/length`。项目有编译脚本且本机字体齐全时编译，用 `pdfinfo` 记页数，并把 PDF 传给 `length_check.py --pdf`。超过 28 页时在报告中写明页数，并建议按「篇幅对齐」压缩。字体缺失导致编译报错时，写「页数未核」。各章篇幅取预算下限时，加上参考文献，正文仍可能超过 30 页。
 4. 按「输出」一节的格式向用户报告。报告列出用进正文的图（名称、路径）与每张图的重画次数（取自 `T/nsfc-proposal/output/figures/index.json`）；没有出图时写明原因（未配置、额度不足、自检不合格）。申请人在确认点只答「同意」时，把 AI 拟定项在报告中再列一次，标「申请人未逐条回应」。
 5. 用户要求时，调用 nsfc-reviewers 或 nsfc-qc。
+
+**只改一章**
+
+用户要修改、润色或重写已写好的某一章时：
+
+1. 按第 0 步建任务目录（说明本次只改哪一章）。
+2. `P/proposal/` 存在时：先运行 `case.py validate`，把问题告诉用户但不阻塞。按第 6 步的循环改写该章，九条规则照常适用；需要新的文献时按第 3 步检索、核对、入账后再引用。改完运行 `consistency_check.py`。
+3. `P/proposal/` 不存在时：只改措辞、结构与可读性，按该章写法改写。不新增引用、数字和事实；已有的 `\cite` 原样保留；缺的内容写占位。同样先复制到 `T/nsfc-proposal/output/before/`，改后运行 `chapter_check.py`。
+4. 向用户报告改了哪些地方（按小节列出），以及检查结果。
+
+**只写摘要**
+
+1. `P/proposal/` 存在且各章已写成时，按 6.4 写。
+2. 否则信息取自申请人给的内容与 `P` 中已有的各章，按 `references/abstract.md` 写，不建科学论证、不提问。有 `P` 时写到 `P/NSFC-ABSTRACTS.md`，没有时写到当前目录的 `NSFC-ABSTRACTS.md`。用 `abstract_check.py` 检查。
+3. 只要求把中文摘要译成英文时，按写法中「英文摘要」一节忠实翻译，写回同一文件的 `# English Abstract` 下，再检查。
+
+**篇幅对齐**
+
+按 `references/length.md`：运行 `length_check.py` → 找差距 → 扩写或压缩 → 复检。改动过的章节重跑 `chapter_check.py`；`P/proposal/` 存在时九条规则照常适用，并重跑 `consistency_check.py` 与 `case.py mark-written`。
 
 ### 输出
 
@@ -249,11 +298,11 @@ python3 S/scripts/consistency_check.py --project-root P
 需要你确认：……（没有就写「无」）
 ```
 
-最终报告还要列出：写入的文件、用进正文的图与重画次数、各章引用的不同文献数（取自 `consistency_check.py` 的 `citations`；立项依据少于 `literature.min_distinct_refs_justification` 时写明原因，如离线、检索不足）、占位清单、待核实项、未解决的一致性问题、建议的下一步（编译、nsfc-length-aligner、nsfc-reviewers、nsfc-qc）。
+最终报告还要列出：写入的文件、用进正文的图与重画次数、各章引用的不同文献数（取自 `consistency_check.py` 的 `citations`；立项依据少于 `literature.min_distinct_refs_justification` 时写明原因，如离线、检索不足）、各章篇幅与页数（取自 `length_check.py`）、占位清单、待核实项、未解决的一致性问题、建议的下一步（编译、篇幅对齐、nsfc-reviewers、nsfc-qc）。
 
 ### 输出管理
 
-- 正式交付物写在 `P` 中。过程文件只写在 `T` 中：材料解析结果（`T/shared/materials/`）、wispaper 原始返回、检索 bundle、信息表、`.bib` 备份、`bib_resolve.json`（试运行为 `bib_resolve.dryrun.json`）、`bib_refresh.json`（`bib_refresh.py` 写入，同在 `T/nsfc-proposal/output/`）、出图提示词与 `index.json`（`T/nsfc-proposal/output/figures/`）、运行日志。
+- 正式交付物写在 `P` 中。过程文件只写在 `T` 中：材料解析结果（`T/shared/materials/`）、wispaper 原始返回、文献池（`T/nsfc-proposal/output/literature/`）、写作要点、写前副本（`T/nsfc-proposal/output/before/`）、篇幅报告（`T/nsfc-proposal/output/length/`）、`.bib` 备份、`bib_resolve.json`（试运行为 `bib_resolve.dryrun.json`）、`bib_refresh.json`（`bib_refresh.py` 写入，同在 `T/nsfc-proposal/output/`）、出图提示词与 `index.json`（`T/nsfc-proposal/output/figures/`）、运行日志。
 - `P/figures/nsfc-proposal/` 是本 skill 写图的目录，列在 `config.yaml` 的 `guardrails.allowed_write_dirs` 中；只由 `figures.py` 写入。重画用新名称，不覆盖已有的图。
 - `T` 中不保存密钥、令牌和个人身份信息；HTTP 请求不附带个人邮箱。
 - 不修改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`；`.bib` 只追加；例外有三种，都按规则 8：`drop` 之后删去该条目；删去不属于申请人的未入账条目（如模板示例）；`bib_refresh.py` 按台账 DOI 用原 key 重写同一篇文献的条目（写前备份）。
@@ -262,11 +311,11 @@ python3 S/scripts/consistency_check.py --project-root P
 ### 校验
 
 - 第 2、3 步：`case.py validate` 中 `[scientific_case]` 和 `[evidence_map]` 前缀的问题清零。进入第 5 步前：全部问题清零。
-- 写作期间：各写作 skill 自带的检查通过（立项依据的 Tier2、研究内容和研究基础的 `check_project_outputs.py`、摘要的 `validate_abstract.py`）。
+- 写作期间：每章 `chapter_check.py` 无 ERROR（摘要由其中的摘要校验检查字数、引号、千分位、题目候选与主要研究领域），并按该章写法完成「写完自查」。
 - 收尾前：`consistency_check.py` 的「必须修正」为 0，或剩余问题已写入报告。
 - 收尾前：`citation_ledger.py audit --project-root P` 的「条目文本与台账哈希不一致」为 0；「`.bib` 中有、台账中无」的条目正文未引用，并已列入待核实项和收尾报告。
-- 篇幅：`python3 SK/nsfc-length-aligner/scripts/check_length.py --input P --out-dir T/nsfc-length-aligner/output`。这里 `T` 写绝对路径：`--out-dir` 的相对路径按 `--input` 解析，报告会落进 `P`。
-- 项目有编译脚本且本机字体齐全时运行它（`python3 P/scripts/nsfc_build.py`，不带参数时编译脚本所在的项目；不要传相对路径的 `--project-dir`，脚本在项目目录下解析它），确认 PDF 生成，并用 `pdfinfo` 记页数；超过 28 页，报告写明页数并建议用 nsfc-length-aligner 压缩。字体缺失导致报错时，写「页数未核」。
+- 篇幅：`python3 S/scripts/length_check.py --input P --out-dir T/nsfc-proposal/output/length`，`--out-dir` 按当前目录解析，报告不写进 `P`。
+- 项目有编译脚本且本机字体齐全时运行它（`python3 P/scripts/nsfc_build.py`，不带参数时编译脚本所在的项目；不要传相对路径的 `--project-dir`，脚本在项目目录下解析它），确认 PDF 生成，并用 `pdfinfo` 记页数；超过 28 页，报告写明页数并建议按「篇幅对齐」压缩。字体缺失导致报错时，写「页数未核」。
 
 ### 失败与恢复
 
@@ -274,13 +323,16 @@ python3 S/scripts/consistency_check.py --project-root P
 |---|---|
 | `case.py validate` 在第 4 步后仍有问题 | 不进入写作；按提示修改后重试 |
 | wispaper 不可用（`wispaper_search.py` 退出码 3） | 停在第 3 步，不改用其他检索源。告诉申请人检查 `WIS_MCP_URL`、`WIS_MCP_TOKEN`（未配置，或凭据被拒）；全自动运行也停下，在报告中写明。配置好后重跑被打断的那条命令，已存档的检索式不重查 |
-| 部分检索式重跑后仍失败（退出码 1） | 补摘要的标题检索按第 3 步第 6 项处理，不改写标题。其余检索式：把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。bundle 用已取得的结果建，不改用其他检索源；建 bundle 时加 `--min-queries 1`，输出到新的 bundle 目录（如 `keyword-bundle-2`、`claims-bundle-<n>`） |
+| 部分检索式重跑后仍失败（退出码 1） | 补摘要的标题检索按第 3 步第 6 项处理，不改写标题。其余检索式：把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。文献池用已取得的结果建，用新的名称 |
+| `literature.py pool` 退出码 1（检索式全都没有结果） | 按第 3 步第 5 项换写法再检索一次；仍没有结果的，相关论断保持 `unsupported`，在 `stages.md` 记下 |
 | CrossRef 不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
 | `bib_resolve` 未核实，原因含「非出版物条目」（试验注册、数据集等） | 不引用该条。要引用这项研究，按论文题名用 wispaper 检索它正式发表的版本，挑入 `selected.jsonl` 后只对这条记录重跑 `bib_resolve`；找不到时相关论断保持 `unsupported`，在 `stages.md` 记下。已写进 `.bib` 的这类条目（旧版写入）按规则 8 的 drop 流程处理，`bib_refresh.py` 会报同样的原因 |
 | 编译时 bibtex 报 `Unsupported entry type`（多见于 `@mastersthesis` 条目），该文献显示为 [?] | 本机或项目用的 bensz-nsfc 包早于本分支，参考文献样式缺少 `mastersthesis`。更新或重新安装 bensz-nsfc 包后重新编译；不手改 `.bib` 的条目类型 |
-| 某个写作 skill 失败 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续 |
+| 某一章写作中断 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续。写坏的文件从 `T/nsfc-proposal/output/before/` 恢复后重写 |
+| `chapter_check.py` 的 ERROR 改了两轮仍在 | 停止重试，问题列入报告；属误报的在 `stages.md` 记下理由 |
 | 写完后科学论证又被修改 | `case.py bump` 后，一致性检查会列出依据旧版的章节，逐章重写 |
 | 一致性检查 2 轮后仍不通过 | 停止重试，问题列入报告 |
+| 摘要压缩 3 轮仍超限 | 保留当前版本，超出的字符数写进 `stages.md` 与报告 |
 | 编译失败 | 报告错误位置；不改动结构命令 |
 | `.bib` 写入出错 | 用 `T/nsfc-proposal/output/bib_backup/` 中的备份恢复 |
 | 台账与 `.bib` 不一致 | 找出手写或手改的条目，按规则 8 处理 |
@@ -314,4 +366,5 @@ python3 S/scripts/consistency_check.py --project-root P
 - 不编造文献、数据、病例数、前期成果和合作单位；申请人没提供的内容只写占位。
 - 文献的作者、期刊、年份、卷期页码只取自 CrossRef 的返回，不凭记忆填写。
 - 全流程只有一个确认点；其余步骤不打断用户。
+- 只用本 skill 目录中的脚本与参考资料，不读取、不调用其他 skill 的文件。
 - 不调用 research-idea。需要系统探索选题时，建议用户先运行它，再把结论写进 `scientific_case.yaml`。

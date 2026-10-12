@@ -42,24 +42,32 @@ class SkillDocTest(unittest.TestCase):
         self.assertIn(block, TEXT)
 
     def test_referenced_files_exist(self) -> None:
+        self.assertNotIn("SK/", TEXT)
         local = set(re.findall(r"(?<![A-Za-z])S/((?:scripts|references|assets)/[\w.\-]+)", TEXT))
         local |= set(re.findall(r"`(references/[\w.\-]+\.md)`", TEXT))
-        shared = set(re.findall(r"(?<![A-Za-z])SK/([\w\-]+/(?:scripts/[\w.\-]+|SKILL\.md))", TEXT))
-        self.assertTrue(local and shared)
+        self.assertTrue(local)
         for rel in sorted(local):
             self.assertTrue((SKILL / rel).is_file(), rel)
-        for rel in sorted(shared):
-            self.assertTrue((SKILLS / rel).is_file(), rel)
+
+    def test_config_guides_exist(self) -> None:
+        config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
+        guides = {s["guide"] for s in config["sections"] if s.get("guide")}
+        self.assertEqual(len(guides), 4)
+        for rel in sorted(guides):
+            self.assertTrue((SKILL / rel).is_file(), rel)
+            self.assertIn(f"`{rel}`", TEXT, rel)
 
     def test_version_only_in_config(self) -> None:
         config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
-        self.assertEqual(config["skill_info"]["version"], "0.1.0")
-        self.assertNotIn("0.1.0", TEXT)
-        self.assertNotIn("0.1.0", (SKILL / "README.md").read_text(encoding="utf-8"))
+        self.assertEqual(config["skill_info"]["version"], "0.2.0")
+        self.assertNotIn("0.2.0", TEXT)
+        self.assertNotIn("0.2.0", (SKILL / "README.md").read_text(encoding="utf-8"))
 
     def test_changelog(self) -> None:
         changelog = (SKILL / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("## [0.2.0] - 2026-10-12", changelog)
         self.assertIn("## [0.1.0] - 2026-10-09", changelog)
+        self.assertLess(changelog.index("## [0.2.0]"), changelog.index("## [0.1.0]"))
         self.assertIn("初始化技能，实现核心功能", changelog)
         self.assertIn("本分支未写 BAC 记录，经负责人同意。", changelog)
 
@@ -101,15 +109,18 @@ class RoundFiveRetrievalDocsTest(unittest.TestCase):
             for name in ("openalex", "semantic scholar", "semantic_scholar"):
                 self.assertNotIn(name, text, f"{rel}: {name}")
 
-    def test_bundles_are_wispaper_only(self) -> None:
-        self.assertEqual(TEXT.count("--provider-order mcp"), 2)
+    def test_pools_are_wispaper_only(self) -> None:
+        self.assertIn("literature.py pool", TEXT)
+        self.assertNotIn("--provider-order", TEXT)
+        self.assertNotIn("search_runner.py", TEXT)
         self.assertNotIn("--no-fallback", TEXT)
         self.assertNotIn("其他检索源", TEXT.replace("不改用其他检索源", ""))
 
     def test_abstracts_come_from_wispaper_offline(self) -> None:
-        self.assertIn("abstract-queries", TEXT)
+        self.assertIn("literature.py abstract-queries", TEXT)
         self.assertIn("--name abstracts_1 --tool quick_search", TEXT)
-        self.assertIn("enrich-abstracts --offline", TEXT)
+        self.assertIn("literature.py enrich-abstracts", TEXT)
+        self.assertNotIn("--offline", TEXT)
         self.assertNotIn("exhausted_providers", TEXT)
 
     def test_wispaper_unavailable_stops(self) -> None:
@@ -142,6 +153,31 @@ class RoundSixFigureDocsTest(unittest.TestCase):
         self.assertIn("数量：", guide)
         self.assertIn("在提示词中写明个数", guide)
         self.assertIn("重复图标的个数与 Brief 一致", guide)
+
+
+class FusionDocsTest(unittest.TestCase):
+    SIBLINGS = ("nsfc-justification-writer", "nsfc-research-content-writer", "nsfc-research-foundation-writer",
+                "nsfc-abstract", "nsfc-length-aligner", "research-literature-search")
+
+    def test_no_sibling_skill_names(self) -> None:
+        suffixes = {".py", ".md", ".yaml", ".yml", ".json", ".txt", ".tex", ".sh"}
+        hits = [f"{p.relative_to(SKILL)}: {name}" for p in sorted(SKILL.rglob("*"))
+                if p.is_file() and p.suffix in suffixes and p.name != "CHANGELOG.md" and "__pycache__" not in p.parts
+                for name in self.SIBLINGS if name in p.read_text(encoding="utf-8", errors="ignore")]
+        self.assertEqual(hits, [])
+
+    def test_description_covers_single_tasks(self) -> None:
+        description = frontmatter().get("description") or ""
+        for word in ("摘要", "篇幅", "润色", "立项依据", "研究基础"):
+            self.assertIn(word, description)
+
+    def test_task_types_and_chapter_loop(self) -> None:
+        for heading in ("### 任务类型", "**只改一章**", "**只写摘要**", "**篇幅对齐**"):
+            self.assertIn(heading, TEXT)
+        for command in ("case.py brief", "chapter_check.py", "length_check.py", "output/before/"):
+            self.assertIn(command, TEXT)
+        self.assertNotIn("to-info-form", TEXT)
+        self.assertNotIn("check_project_outputs.py", TEXT)
 
 
 class NsfcSkillsHaveNoOpenAlexTest(unittest.TestCase):

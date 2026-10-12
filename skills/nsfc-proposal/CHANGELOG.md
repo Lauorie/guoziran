@@ -4,6 +4,34 @@ All notable changes to this skill will be documented in this file.
 
 The version number is the single source of truth in `config.yaml` (`skill_info.version`).
 
+## [0.2.0] - 2026-10-12
+
+本版把 nsfc-proposal 与它原先调用的 6 个 skill（立项依据、研究内容、研究基础、摘要、篇幅、文献检索）融合成一个自包含的 skill。写作规则进 `references/`，确定性检查进 `scripts/`；不再读取或调用其他 skill 的文件（来源：申请人 2026-10-12 的要求）。
+
+### Added（新增）
+
+- 各章写法：`references/justification.md`（立项依据）、`research_content.md`（研究内容、特色与创新、年度研究计划）、`foundation.md`（研究基础、工作条件）、`abstract.md`（摘要与题目）、`length.md`（篇幅对齐）。规则冲突时按本 skill 统一：只在确认点提问，缺失写占位，措辞不超过证据。
+- `scripts/literature.py`（与 `literature_records.py`）：`pool` 把 wispaper 的检索结果建成去重的文献池，退出码 1 表示检索式全都没有结果；`abstract-queries`、`enrich-abstracts` 只从 wispaper 结果补摘要，不发网络请求。
+- `scripts/chapter_check.py`：按章检查内部编号、非标准占位、绝对化短语、年度标题与研究期限、风险条数、已具备与尚缺条件；`scripts/abstract_check.py`：摘要字数、引号、千分位、Markdown 标记、题目候选与主要研究领域。
+- `scripts/length_check.py`：篇幅检查，`--out-dir` 必填并按当前目录解析，报告不再落进项目目录。
+- `scripts/plan_years.py`：按项目类型定研究期限。
+- 三种新任务：只改一章、只写摘要、篇幅对齐。
+- `config.yaml` 新增 `yearly_plan`、`chapter_checks`、`abstract`、`length_standard`、`length_checker`；各章新增 `guide` 与 `brief`。
+
+### Changed（变更）
+
+- `case.py to-info-form --writer …` 改为 `case.py brief --section 立项依据|研究内容|研究基础`，输出写作要点。
+- `section_plan.yaml` 的条目由 `writer` 改为 `section`（章节名）；只有 `writer` 的旧条目按文件名识别，照常可用。
+- 第 6 步每章走同一个循环：写作要点 → 读写法 → 写前副本 → 写入 → `chapter_check.py` → 自查 → `mark-written`。规则 7 改为各章写法没有提问环节。
+- 科学问题与假设的写法并入 `references/scientific_case_guide.md`；`section_boundaries.md` 只留各章分工表，各章细节移入写法文件。
+
+### Removed（移除）
+
+- 对兄弟 skill 的全部依赖：`length_budget_source`、按路径加载的 `plan_years.py`、执行说明中的 `SK/` 路径。
+- 不再使用立项依据写作器的 `run.py`（写作教练、AI responder、HTML 报告、示例推荐、版本回滚），由写法文件、写前副本与检查脚本取代。
+- 检索流程中的 `--provider-order`、`--offline` 与 bundle `validate`：文献池只读 wispaper 结果，离线是唯一行为。
+- 本分支未写 BAC 记录，经负责人同意。
+
 ## [0.1.0] - 2026-10-09
 
 ### Added（新增）

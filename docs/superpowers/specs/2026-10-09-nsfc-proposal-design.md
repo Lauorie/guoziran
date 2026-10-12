@@ -530,3 +530,17 @@ nsfc-abstract 只在 `SKILL.md` 中补一句：存在科学论证时，科学问
 - 把 nsfc-proposal 安装到 `~/.claude/skills/`，在本仓库以外也能触发。
 - 申请人同意后，推送分支到 GitHub fork，或向上游提 PR。
 - 申请人同意后，按 `bensz-collect-bugs` 的规范，向上游报告 3 处 bug。
+
+## 15. 2026-10-12 融合
+
+申请人 2026-10-12 要求把 nsfc-proposal 与它调用的 6 个 skill 融合成一个，不再保留下级 skill：「我要的不仅仅是简单的复制合并，是要融合，要非常地协调」。本节记录融合后的结构，取代第 4 节中「按固定顺序调用写作 skill」的做法。
+
+- **一个 skill**：nsfc-proposal 不再读取或调用 nsfc-justification-writer、nsfc-research-content-writer、nsfc-research-foundation-writer、nsfc-abstract、nsfc-length-aligner、research-literature-search 的文件。这 6 个 skill 留在仓库原位，不改动，供单独使用与其他 skill 调用。
+- **拆分规则**：确定性工作进脚本，语义判断进参考资料。
+  - 脚本：`plan_years.py`（研究期限）、`literature.py` 与 `literature_records.py`（只读 wispaper 结果的文献池与离线补摘要）、`chapter_check.py` 与 `abstract_check.py`（各章与摘要检查）、`length_check.py`（篇幅）。
+  - 参考资料：`justification.md`、`research_content.md`、`foundation.md`、`abstract.md`、`length.md`；科学问题与假设的写法并入 `scientific_case_guide.md`。
+- **配置**：研究期限表、各章检查参数、摘要限制、篇幅预算并入 `config.yaml`。`section_plan.yaml` 的条目改记 `section`（章节名）；旧条目的 `writer` 照常可读。
+- **写作循环**：每章同一个循环——写作要点（`case.py brief`）→ 读写法 → 写前副本（`T/nsfc-proposal/output/before/`）→ 写入 → `chapter_check.py` → 写完自查 → `case.py mark-written`。
+- **不搬的部分**：立项依据写作器的写作教练、AI responder、HTML 报告、示例推荐与版本回滚；检索的其他 provider 与补充检索逻辑；写作器的结构自检与测试会话脚本。
+- **新任务类型**：只改一章、只写摘要、篇幅对齐，接住原下级 skill 的单独用法。
+- **版本**：nsfc-proposal 0.2.0。实施计划见 `docs/plans/2026-10-12-nsfc-proposal-融合.md`。

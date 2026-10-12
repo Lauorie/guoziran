@@ -2,7 +2,9 @@
 
 ## 它做什么
 
-帮你写国家自然科学基金申请书的正文。它先和你确定科学问题与假设，再按立项依据、研究内容、研究基础、摘要的顺序成稿。各章用同一套问题、假设和术语；引用的文献都经过检索和元数据核对。
+帮你写国家自然科学基金申请书的正文。它先和你确定科学问题与假设，再按立项依据、研究内容（含特色与创新、年度研究计划）、研究基础（含工作条件与风险应对）、摘要的顺序成稿。各章用同一套问题、假设和术语；引用的文献都经过检索和元数据核对。
+
+它是一个自包含的 skill：检索、核对、出图、各章写法、各章检查、摘要校验、篇幅检查都在这一个目录里，不依赖其他 skill。
 
 ## 怎么用
 
@@ -20,15 +22,29 @@
 
 想全程不被打断，加一句「全自动，不用停下来问我」。
 
+也可以只做其中一件事：
+
+| 你说 | 它做 |
+|---|---|
+| 「帮我润色立项依据」「把研究基础重写一遍」 | 只改这一章，按该章写法改写并检查 |
+| 「写中英文摘要和题目」「把中文摘要译成英文」 | 只写 `NSFC-ABSTRACTS.md`，检查字数与格式 |
+| 「检查篇幅」「把研究内容压到预算以内」 | 统计各章篇幅，按预算扩写或压缩，再复检 |
+
 ## 你会得到什么
 
-- 各章正文，写进项目的 `extraTex/`；摘要写进 `NSFC-ABSTRACTS.md`。
+- 各章正文，写进项目的 `extraTex/`；摘要与题目建议写进 `NSFC-ABSTRACTS.md`。
 - `proposal/` 目录：科学论证、证据图谱、章节分工、待核实清单、文献线索。正文里缺的内容都写成 `【待补充：……】`，并列在 `proposal/assumptions.md` 里。
 - 核对过的参考文献，追加到项目的 `.bib`。查不到的只进线索清单，正文不引用。元数据只经 Crossref 核对；DOI 不在 Crossref 登记的文献（如 arXiv 的 10.48550、Zenodo 等 DataCite DOI）无法核对，nsfc-proposal 把它们列入线索清单、正文不引用。
 - 你提供的材料先被解析成文字再读。PDF 经团队的 WisDoc 服务解析（文件会上传到该服务），需要 `WISDOCRS_BASE_URL`（环境变量或 `.env`）；未配置时退回本机解析。解析结果只从该服务的主机、其子域名或同一上级域名下的主机下载；放在其他主机上时，在 `WISDOC_ALLOWED_HOSTS` 中列出（逗号分隔）。材料不能离开本机时，告诉它只在本机解析。DOCX、Markdown、TXT 只在本机处理。
 - 文献检索经团队的 wis-scholar-search 服务（MCP）执行，检索式会发送到该服务，原始返回存在任务目录。需要 `WIS_MCP_URL`（MCP 端点）、`WIS_MCP_TOKEN`（Bearer token，不带 `Bearer ` 前缀）（环境变量或 `.env`）；`WIS_MCP_CONSUMER` 可选，网关要求时填。未配置时停在检索这一步，请你配置；不改用其他检索源。
 - 研究内容中的研究框架图和各项研究的设计图，由团队的 WisImage 服务生成，存放在项目的 `figures/nsfc-proposal/`。作图说明取自科学论证，会发送到该服务。需要 `WISMODEL_IMAGE_URL`、`WISMODEL_API_KEY`、`DEPLOY_REGION`（环境变量或 `.env`）；未配置或出图失败时，正文留占位。图由 AI 生成，请逐张核对内容与文字。
 - 每条文献的来源记在 `proposal/citation_ledger.jsonl`。项目 `.bib` 里原有的文献，要你确认由你提供后才入账；没入账、手写或改动过的文献，正文一引用就会被检查拦下。
+
+## 目录里有什么
+
+- `scripts/`：确定性的工作。科学论证的校验与渲染（`case.py`）、材料解析（`materials.py`）、wispaper 检索（`wispaper_search.py`）与文献池（`literature.py`）、元数据核对与引用台账（`bib_resolve.py`、`bib_refresh.py`、`citation_ledger.py`）、出图（`figures.py`）、各章检查（`chapter_check.py`）、摘要校验（`abstract_check.py`）、篇幅检查（`length_check.py`）、跨章一致性检查（`consistency_check.py`）。
+- `references/`：需要判断的部分。科学论证、证据措辞、章节分工、出图，以及各章写法：`justification.md`（立项依据）、`research_content.md`（研究内容、特色与创新、年度研究计划）、`foundation.md`（研究基础、工作条件）、`abstract.md`（摘要与题目）、`length.md`（篇幅对齐）。
+- `config.yaml`：检索、出图、章节、研究期限、各章检查、摘要限制与篇幅预算的参数。
 
 ## 流程中你需要做什么
 
@@ -37,7 +53,7 @@
 ## 写完之后
 
 1. 逐条处理 `proposal/assumptions.md` 里的占位和待核实项。
-2. 编译 PDF，检查篇幅（nsfc-length-aligner）。
+2. 编译 PDF，检查篇幅；超出时让它做篇幅对齐。
 3. 需要时用 nsfc-reviewers 模拟评审，用 nsfc-qc 质检。
 
 ## 注意
