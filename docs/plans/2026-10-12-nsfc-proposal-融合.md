@@ -211,7 +211,7 @@
     - `工作条件`：没有「已具备/具备」或没有「尚缺/缺少/不足」（WARN）。
     - `摘要`：调用 `abstract_check.check_text(text, config)`，其 errors 记 ERROR、warnings 记 WARN。
     - `立项依据`、`研究内容`：只有通用规则。
-  - `abstract_check.py`：`check_text(text: str, config: Mapping) -> dict`（键 `errors`、`warnings`、`counts`），命令行 `python3 S/scripts/abstract_check.py <文件或 -> [--json]`，退出码 0/1/2 同上。只认 Markdown 标题格式（`abstract.headings`），不认 `[ZH]` 标记。检查：四个标题齐全且顺序为标题建议、中文摘要、English Abstract、主要研究领域；中文摘要字符数（连续空白折叠为一个空格后计数，含标点）≤ `zh_max_chars`；英文 ≤ `en_max_chars`；中文摘要不含 ASCII 双引号 `"`、全角引号 `＂`、直角引号 `「」『』`、单引号 `'`、`'`、`'`（只允许 U+201C、U+201D）；中文摘要不含千分位逗号（如 `1,000`、`1，000`）；中文摘要不含 Markdown 标记 `**`、`__`、行首 `#`；标题建议含「推荐标题：」「Recommended Title:」两行，编号候选不少于 `title_candidates` 条且每条含「理由」与「EN:」；主要研究领域为一句、汉字数 ≤ `field_max_chars`；中文摘要正文末行与 `# English Abstract` 之间没有空行（WARN）。
+  - `abstract_check.py`：`check_text(text: str, config: Mapping) -> dict`（键 `errors`、`warnings`、`counts`），命令行 `python3 S/scripts/abstract_check.py <文件或 -> [--json]`，退出码 0/1/2 同上。只认 Markdown 标题格式（`abstract.headings`），不认 `[ZH]` 标记。检查：四个标题齐全且顺序为标题建议、中文摘要、English Abstract、主要研究领域；中文摘要字符数（连续空白折叠为一个空格后计数，含标点）≤ `zh_max_chars`；英文 ≤ `en_max_chars`；中文摘要不含这些引号字符：U+0022（ASCII 双引号）、U+FF02、U+301D、U+301E、U+300C、U+300D、U+300E、U+300F（同原 `validate_abstract.py` 的 `_count_ascii_double_quotes` 与 `_count_other_nonstandard_quotes`；双引号只允许 U+201C、U+201D；单引号不检查）；中文摘要不含千分位逗号（如 `1,000`、`1，000`）；中文摘要不含 Markdown 标记 `**`、`__`、行首 `#`；标题建议含「推荐标题：」「Recommended Title:」两行，编号候选不少于 `title_candidates` 条且每条含「理由」与「EN:」；主要研究领域为一句、汉字数 ≤ `field_max_chars`；中文摘要正文末行与 `# English Abstract` 之间没有空行（WARN）。
 
 - [ ] **Step 1: 写失败测试。** 移植 `tests/nsfc-research-content-writer/test_nrcw_checker.py`、`test_nrcw_years.py`（检查器部分）、`tests/nsfc-research-foundation-writer/test_nrfw_risk_count.py`、`test_nrfw_placeholder_style.py` 的用例到 `test_np_chapter_check.py`，改为调用 `chapter_check.py`。加：项目类型「面上项目」写到第五年报 ERROR；「第十年随访」不报；`L5–S1`、`S100β` 不报；`--section 不存在` 退出码 2；只有 `writer` 的旧 `section_plan.yaml` 也能找到文件。`test_np_abstract_check.py` 覆盖 Review Focus 第 3 条的每一项，各一正一反；再加一个完整合格的样例文件通过。
 - [ ] **Step 2: 运行，确认失败。**
@@ -257,7 +257,7 @@
 - `abstract.md`：取自摘要 skill 的五句式、篇幅比例、压缩优先级、输出格式与 `references/title-rules.md`。超限压缩最多 3 轮，仍超限时保留当前版本、记入 `stages.md` 与报告（不问用户）。引号规则写成「只用中文弯引号“”」。数字限制写成「见 `config.yaml` 的 `abstract` 段」。
 - `length.md`：取自篇幅对齐 skill 的「解读差距」「扩写/压缩」「复检闭环」与两个 references；命令改为 `length_check.py`；预算以 `config.yaml` 的 `length_standard` 为准；加一句「证据不足时篇幅下限只作提示，不用推测凑字（规则 6）」。
 
-- [ ] **Step 1: 起草五份写法文件与 `section_boundaries.md` 的改动。**
+- [ ] **Step 1: 起草五份写法文件与 `section_boundaries.md` 的改动。** 同一提交里把 `tests/nsfc-proposal/test_np_skill_docs.py` 中读 `section_boundaries.md` 的两个用例（`test_motor_matched_control_rule`、`test_subheadings_follow_each_study_type` 的 bounds 部分）改读 `references/research_content.md`，断言文字不变，保证该提交测试全绿。
 - [ ] **Step 2: 自查**：每份文件里的数字、命令、文件名与 `config.yaml`、脚本参数一致；没有「询问用户」「请用户」「先提问」；没有兄弟 skill 名；没有中标书题材词；`grep -n "XXX\|\[请补充\|\[需补充" references/*.md` 只在「不要这样写」的反例里出现。
 - [ ] **Step 3: 提交。** `docs(nsfc-proposal): 各章写法并入 references`
 
