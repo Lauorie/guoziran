@@ -179,7 +179,7 @@ def determine_years(args: argparse.Namespace, root: Path, label: str, report: Re
 def check_generic(label: str, text: str, name: str, checks: Mapping[str, Any], report: Report) -> None:
     leaked = find_leaked_ids(text, checks.get("allowed_s_tokens") or [])
     if leaked:
-        report.error(label, f"正文出现内部编号 {'、'.join(leaked)}，请改成自然语言；若是专业写法，把它加到 config.yaml 的 chapter_checks.allowed_s_tokens")
+        report.error(label, f"正文出现内部编号 {'、'.join(leaked)}，请改成自然语言；若是正确的专业写法（如基因名、解剖节段名），不改写，在 stages.md 记下误报")
     for phrase in find_risk_phrases(text, checks.get("risk_phrases") or []):
         (report.error if name == INNOVATION_SECTION else report.warn)(label, f"含绝对化措辞「{phrase}」，请改为可核验的表述")
     for legacy in LEGACY_PLACEHOLDERS:

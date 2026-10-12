@@ -1,6 +1,6 @@
 ---
 name: nsfc-proposal
-description: 当用户要写、重写、续写或润色国家自然科学基金申请书正文时使用，包括立项依据、研究内容、特色与创新、年度研究计划、研究基础、工作条件与风险应对中的一章或多章；也用于写中英文摘要与题目、检查或调整正文篇幅、为申请书检索并核实参考文献，以及要求各章围绕同一套科学问题与假设、引用可核验的情形。⚠️ 不适用：预算、申请代码、模拟评审、质检、去 AI 腔、尚未确定研究方向而要系统探索选题、与申请书无关的翻译或文献综述。
+description: 当用户要写、重写、续写、修改或润色国家自然科学基金申请书正文时使用，包括立项依据、研究内容、特色与创新、年度研究计划、研究基础、工作条件与风险应对中的一章或多章；也用于写中英文摘要与题目、把中文摘要译成英文、检查正文篇幅、扩写或压缩篇幅、为申请书检索并核实参考文献，以及要求各章围绕同一套科学问题与假设、引用可核验的情形。⚠️ 不适用：预算、申请代码、模拟评审、质检、去 AI 腔、尚未确定研究方向而要系统探索选题、与申请书无关的翻译或文献综述。
 metadata:
   author: Lauorie
 ---
@@ -42,9 +42,9 @@ metadata:
 - 必需：
   - `project_root`：含 `main.tex` 和 `extraTex/` 的 NSFC 正文项目，例如 `projects/NSFC_Young` 的副本。只写摘要时可以没有。
   - 申请人的研究信息：题目或方向、研究对象、痛点、科学问题与假设的初步想法、已有材料。
-  - wispaper 检索凭据：`WIS_MCP_URL`、`WIS_MCP_TOKEN`（环境变量或 `.env`）。缺失或被拒时停在第 3 步，见「失败与恢复」。只改一章、只写摘要、篇幅对齐不需要。
+  - wispaper 检索凭据：`WIS_MCP_URL`、`WIS_MCP_TOKEN`（环境变量或 `.env`）。缺失或被拒时停在第 3 步，见「失败与恢复」。只改一章、只写摘要、篇幅对齐不需要，需要新文献时除外。
 - 可选：项目类型；要写的章节（默认全部）；协作方式；论文、数据、预实验结果等材料（PDF、DOCX、Markdown、TXT）；参考文献；生图服务凭据（`WISMODEL_IMAGE_URL`、`WISMODEL_API_KEY`、`DEPLOY_REGION`，环境变量或 `.env`）；没有生图凭据时不出图，保留占位。
-- 缺 `project_root` 时停下，请用户指定；无人值守时报错退出。
+- 缺 `project_root` 时停下（只写摘要除外），请用户指定；无人值守时报错退出。
 - 申请人没提供的信息不追问（确认点除外），按保守假设处理，并记入 `assumptions.md`。
 
 ### 执行步骤
@@ -53,7 +53,7 @@ metadata:
 
 **0. 说明与建目录**
 
-1. 向用户逐项说明本次要做的事，按顺序：检索并核实文献 → 建立科学论证并请申请人确认一次 → 逐章写作（列出要写的章节）→ 出图 → 跨章检查与收尾。用户只要部分章节时，只列相关的事。不向用户说明检索式、材料和作图说明发往哪些服务。说明后不停下等回答。
+1. 向用户逐项说明本次要做的事，按顺序：建立科学论证 → 检索并核实文献 → 请申请人确认一次 → 逐章写作（列出要写的章节；出图在研究内容之前）→ 跨章检查与收尾。用户只要部分章节时，只列相关的事。不向用户说明检索式、材料和作图说明发往哪些服务。说明后不停下等回答。
 2. 宣布唯一任务目录 `T = ./.bensz-api/task-{yyyymmdd-hhmm}-{简短描述}/`，之后不更换。建立 `T/README.md`、`T/shared/` 和 `T/nsfc-proposal/{input,output,log}/`。
 3. 此后每完成一步，在 `T/nsfc-proposal/log/stages.md` 追加一行：时间、步骤、AI 做了什么、产出文件、申请人是否确认。第 8 步据此起草 AI 使用说明。
 
@@ -186,7 +186,7 @@ python3 S/scripts/case.py render --project-root P
 - 规则 4：正文不出现内部编号。
 - 规则 5：凡是叙述研究现状、他人方法或结论、流行病学数据的句子，必须 `\cite`，且只能引用同时满足三条的 bibkey：(a) 是 `bib_resolve.py` 的 `added`，或 `exists` 且该 key 在台账中有有效记录；(b) 列在这句话所表达的那条论断的 `evidence` 中，`role` 为 supporting；(c) 措辞不超过该论断的 `support`。内容没有对应论断时，先按第 3 步把论断补进 `evidence_map.yaml`，或按 `unsupported` 的两类处理、删去。`unsupported` 论断分两类。缺口类，即本项目要回答的认知缺口：写「尚不清楚」「尚未检验」，每个缺口写一次，不在相邻句子重复推测词。背景类，即背景与现状论断（领域事实，申请人在材料中写明的现有不足）：不逐句改成「可能」。集中写成一段，作为本项目对现状的判断，段末放一处可见占位，逐条列出要补的文献，例如 `【待补充：支持上述判断的文献——(1) 现有模型多基于单中心数据；(2) 外部验证中性能下降；(3) 已有瘤周研究所用的环带宽度】`。占位列入占位清单。这一段不写凭记忆的研究名称、作者、年份，也不写任何凭记忆的具体数字。每条背景类判断都要在 `evidence_map.yaml` 中有对应论断，`support` 为 `unsupported`，以便追溯。「已有研究做到哪一步」（创新点的参照）按背景类处理：在线时引用；离线时列进同一处占位。不把某项具体研究的结果改写成「可能」来回避引用：转述某项研究发现了什么的句子，必须引用该研究。一个段落讲几项研究，就逐项引用，不在段末堆一个引用。申请人自己的结果按申请人材料写或写占位，不需 `\cite`（材料本身是已入 `.bib` 的已发表论文时才引用）；本项目自己的设计、目标和假设不是现状，不需引用；教科书级定义不需引用，除非引用具体标准或指南（此时引用，或按下句写明名称）。国家或部门的政策文件、诊疗规范、行业指南，联网到发文机关的官方网站核对文件名、发文机关与年份后，可在正文写明，如「《“健康中国2030”规划纲要》（中共中央、国务院，2016）」，不进 `.bib`，网址与核对日期写入 `P/proposal/literature_leads.md` 的「## 官方文件」一节（`init` 已建好）。核对不到的不写，按背景类论断处理。正文只写文件明文规定的内容。示例见 `references/evidence_wording.md` 的「哪些句子必须引用」与「政策文件」。
 - 规则 6：证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标。不用推测或泛泛的背景凑字数；字数不足的原因写进收尾报告。
-- 规则 7：各章写法中没有提问环节。缺信息时按规则 3 写占位；要在几种写法之间取舍时，取保守的一种（保留已有文件的内容、少写不多写、超限时保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md`，并列入最终报告。整个流程只有第 5 步向用户提问。
+- 规则 7：各章写法中没有提问环节。缺信息时按规则 3 写占位；要在几种写法之间取舍时，取保守的一种（保留申请人已写的内容、少写不多写、超限时保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md`，并列入最终报告。整个流程只有第 5 步向用户提问。
 - 规则 8：`citation_ledger.py register-user` 只用于申请人逐条确认过、由申请人提供的文献：`python3 S/scripts/citation_ledger.py register-user --project-root P --key K`，每条一个 `--key`（可重复）。本流程只用 `--key`，不用一次登记全部未入账条目的 `--all`。AI 不得用它登记自己写的或改过的条目。`register-user` 登记的条目只能支持 `applicant_material` 论断，不计入 `single_verified`、`multi_verified` 的篇数。不得手写或手改 `.bib`（例外：只删不改。删去已 `drop` 的条目，或删去不属于申请人的未入账条目，如模板示例）。要修正某条文献：仍是同一篇、只是条目文本有误（如期刊名显示 `&amp;`、类型或字段缺失）时，运行 `python3 S/scripts/bib_refresh.py --project-root P --task-root T --key K`（可重复 `--key`），按台账中的 DOI 重新取 CrossRef 元数据，原 key 不变，台账追加一条记录；退出码 1 表示有条目没有刷新，原样保留，原因见 `T/nsfc-proposal/output/bib_refresh.json`。同一条目重跑仍失败（如 CrossRef 没有这个 DOI、标题不符）时，按下一句的 drop 流程处理。要换成另一篇，或条目是申请人登记的、台账中没有 DOI，先 `python3 S/scripts/citation_ledger.py drop --project-root P --key K --reason "…"`，从 `.bib` 删去该条，再用 `bib_resolve` 重新解析（仍留在 `.bib` 的作废条目会被报为 `exists`）。不在台账中的文献不得引用。
 - 规则 9：正文中，「核实」「检索」「文献支持」「本次未」等描述写作过程的话，以及 `proposal/` 下的文件名，只写进 `assumptions.md`、`stages.md` 或收尾报告，不进正文；可见占位不受此限；第 8 步由本 skill 写的 AI 使用说明也不受此限。写给申请人的嘱咐（如「建议申请人优先补充……」「不补充的条目应在提交前删去」）放进对应占位的括号内或 `assumptions.md`。对申请人原有口径的改动，只在 `assumptions.md` 的「AI 拟定项」中说明；正文直接写采用的口径和理由，不写「申请人提出的原始口径是……」。
 
@@ -201,7 +201,7 @@ python3 S/scripts/case.py render --project-root P
    写作要点汇集该章要用的科学论证条目、研究期限、篇幅、不写的内容和要照抄的占位。
 2. 读该章写法（`config.yaml` 中该章的 `guide`）和写作要点。
 3. 写前把该章原有的文件复制到 `T/nsfc-proposal/output/before/`（文件不存在时跳过）。要撤回某次写入时从这里恢复。
-4. 写入。只写该章自己的文件；不改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`。模板中已有的标题怎么处理，见该章写法：研究基础、工作条件保留模板标题，只换正文；立项依据、研究内容的模板标题是示例提纲，按写法换成本项目的结构。
+4. 写入。只写该章自己的文件；不改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`。模板中已有的标题怎么处理，见该章写法：研究基础、工作条件、年度研究计划保留模板标题，只换正文；特色与创新只留一个总标题，示例分类标题换成本项目的 1–3 条创新；立项依据、研究内容的模板标题是示例提纲，按写法换成本项目的结构。
 5. 检查：
 
    ```bash
@@ -229,7 +229,7 @@ python3 S/scripts/case.py render --project-root P
 
 6.3 研究基础、工作条件：按 `references/foundation.md` 写两份文件。
 
-6.4 摘要：按 `references/abstract.md` 在 `P` 下写 `NSFC-ABSTRACTS.md`，科学问题与术语以科学论证为准；用 `chapter_check.py --section 摘要`（或直接 `abstract_check.py`）检查，然后 `mark-written --file NSFC-ABSTRACTS.md`。申请人材料写明没有前期结果时，摘要的前期研究一句按写法中的规定处理，并在 `stages.md` 记录这一偏离。
+6.4 摘要：按 `references/abstract.md` 在 `P` 下写 `NSFC-ABSTRACTS.md`，科学问题与术语以科学论证为准；用 `chapter_check.py --section 摘要`（或直接 `python3 S/scripts/abstract_check.py P/NSFC-ABSTRACTS.md [--json]`）检查，然后 `mark-written --file NSFC-ABSTRACTS.md`。申请人材料写明没有前期结果时，摘要的前期研究一句按写法中的规定处理，并在 `stages.md` 记录这一偏离。
 
 **7. 跨章一致性检查**
 
@@ -274,13 +274,15 @@ python3 S/scripts/consistency_check.py --project-root P
 
 **只写摘要**
 
-1. `P/proposal/` 存在且各章已写成时，按 6.4 写。
-2. 否则信息取自申请人给的内容与 `P` 中已有的各章，按 `references/abstract.md` 写，不建科学论证、不提问。有 `P` 时写到 `P/NSFC-ABSTRACTS.md`，没有时写到当前目录的 `NSFC-ABSTRACTS.md`。用 `abstract_check.py` 检查。
+按第 0 步建任务目录（说明本次只写摘要）。
+
+1. `P/proposal/scientific_case.yaml` 存在时：信息取自科学论证和已写成的各章，术语以科学论证为准，按 6.4 写到 `P/NSFC-ABSTRACTS.md`。用 `python3 S/scripts/abstract_check.py P/NSFC-ABSTRACTS.md [--json]` 检查，通过后运行 `python3 S/scripts/case.py mark-written --project-root P --file NSFC-ABSTRACTS.md`。
+2. 不存在时：信息取自申请人给的内容与 `P` 中已有的各章，按 `references/abstract.md` 写，不建科学论证、不提问。有 `P` 时写到 `P/NSFC-ABSTRACTS.md`，没有时写到当前目录的 `NSFC-ABSTRACTS.md`。用 `python3 S/scripts/abstract_check.py <文件> [--json]` 检查，文件为 `P/NSFC-ABSTRACTS.md`，没有 `P` 时为 `./NSFC-ABSTRACTS.md`。
 3. 只要求把中文摘要译成英文时，按写法中「英文摘要」一节忠实翻译，写回同一文件的 `# English Abstract` 下，再检查。
 
 **篇幅对齐**
 
-按 `references/length.md`：运行 `length_check.py` → 找差距 → 扩写或压缩 → 复检。改动过的章节重跑 `chapter_check.py`；`P/proposal/` 存在时九条规则照常适用，并重跑 `consistency_check.py` 与 `case.py mark-written`。
+按第 0 步建任务目录。按 `references/length.md`：运行 `length_check.py` → 找差距 → 扩写或压缩 → 复检。改写前把要改的文件复制到 `T/nsfc-proposal/output/before/`。改动过的章节重跑 `chapter_check.py`；`P/proposal/` 存在时九条规则照常适用，并重跑 `consistency_check.py` 与 `case.py mark-written`。
 
 ### 输出
 
