@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from citation_ledger import load_ledger
+from citation_ledger import dropped_keys, load_ledger
 from literature_records import read_jsonl, write_json, write_jsonl
 from proposal_common import ProposalError, proposal_paths, resolve_project_root
 
@@ -117,14 +117,25 @@ def _load_map(path: Path) -> dict[str, list[str]]:
     return {str(claim): list(refs) for claim, refs in data.items()}
 
 
+def _best_copy(copies: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """有完整摘要的副本优先；都没有时取第一份。"""
+    return next((c for c in copies if _abstract_state(c) == "完整"), copies[0])
+
+
 def _find(ref: str, candidates: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """record_id 精确匹配优先；否则题名前缀匹配。同一 record_id 在多个池里只算一篇。"""
+    """record_id 精确匹配优先；否则题名前缀匹配。
+
+    同一 record_id 在多个池里只算一篇；record_id 不同而规范化题名相同（无 DOI 的同一篇在两个池）也只算一篇。
+    """
     by_id = [c for c in candidates if c.get("record_id") == ref.strip()]
     hits = by_id or [c for c in candidates if _norm(c.get("title")).startswith(_norm(ref))]
-    unique: dict[str, dict[str, Any]] = {}
+    by_rid: dict[str, list[dict[str, Any]]] = {}
     for hit in hits:
-        unique.setdefault(str(hit.get("record_id")), hit)
-    return list(unique.values())
+        by_rid.setdefault(str(hit.get("record_id")), []).append(hit)
+    by_title: dict[str, list[dict[str, Any]]] = {}
+    for copy in (_best_copy(copies) for copies in by_rid.values()):
+        by_title.setdefault(_norm(copy.get("title")), []).append(copy)
+    return [_best_copy(copies) for copies in by_title.values()]
 
 
 def _nearest(ref: str, candidates: Sequence[dict[str, Any]]) -> list[str]:
@@ -176,6 +187,31 @@ def _read_json(path: Path, label: str) -> Any:
         raise ProposalError(f"读不了 {label}：{exc}") from exc
 
 
+def _drop_reasons(ledger_path: Path) -> dict[str, str]:
+    """当前仍处于作废状态的 bibkey 及最后一次 drop 的原因。"""
+    reasons: dict[str, str] = {}
+    for event in read_jsonl(ledger_path):
+        key = event.get("bibkey")
+        if event.get("event") == "drop" and isinstance(key, str):
+            reasons[key] = str(event.get("reason") or "").strip() or "无原因记录"
+    current = dropped_keys(ledger_path)
+    return {key: reason for key, reason in reasons.items() if key in current}
+
+
+def _evidence_head(outcome: Mapping[str, Any], ledger: Mapping[str, Any], dropped: Mapping[str, str]) -> tuple[str, bool]:
+    """返回（标题行, 是否可引用）。"""
+    key = outcome.get("bibkey")
+    if not outcome:
+        return "- 未核对（bib_resolve 结果中没有这条记录）", False
+    if outcome.get("status") in ("added", "exists") and key and key in ledger:
+        return f"- {key}", True
+    if key in dropped:
+        return f"- 已作废：{dropped[key]}", False
+    status = outcome.get("status") or "未处理"
+    reason = outcome.get("reason") or ("不在台账中" if key else "无原因记录")
+    return f"- 未入库：{status}，{reason}", False
+
+
 def build_evidence(task_root: Path, project_root: Path) -> Path:
     """每条论断下列出可引用文献及台账摘要，写 evidence_by_claim.md。"""
     out = _output(task_root)
@@ -183,10 +219,14 @@ def build_evidence(task_root: Path, project_root: Path) -> Path:
     resolved = _read_json(out / "bib_resolve.json", "bib_resolve.json（先跑 bib_resolve.py）")
     if not isinstance(claim_map, dict) or not isinstance(resolved, dict):
         raise ProposalError("selected_claim_map.json 或 bib_resolve.json 格式不对")
+    ledger_path = proposal_paths(resolve_project_root(project_root)).ledger
+    if not ledger_path.is_file():
+        raise ProposalError("缺少引用台账 proposal/citation_ledger.jsonl（先跑 case.py init）")
     selected = out / "selected.jsonl"
     records = {str(r.get("record_id")): r for r in read_jsonl(selected)} if selected.is_file() else {}
     outcomes = {str(o.get("record_id")): o for o in resolved.get("outcomes", []) if isinstance(o, dict)}
-    ledger = load_ledger(proposal_paths(resolve_project_root(project_root)).ledger)
+    ledger = load_ledger(ledger_path)
+    dropped = _drop_reasons(ledger_path)
     sections: list[str] = []
     for claim, ids in claim_map.items():
         blocks: list[str] = []
@@ -195,16 +235,12 @@ def build_evidence(task_root: Path, project_root: Path) -> Path:
             outcome, record = outcomes.get(rid, {}), records.get(rid, {})
             title = outcome.get("title") or record.get("title") or rid
             year = record.get("year") or ""
-            key = outcome.get("bibkey")
-            if outcome.get("status") in ("added", "exists") and key and key in ledger:
+            head, ok = _evidence_head(outcome, ledger, dropped)
+            body = ""
+            if ok:
                 usable += 1
-                abstract = ledger[key].get("abstract")
-                head = f"- {key}"
+                abstract = ledger[outcome["bibkey"]].get("abstract")
                 body = abstract.strip() if isinstance(abstract, str) and abstract.strip() else "（无摘要）"
-            else:
-                status = outcome.get("status") or "未处理"
-                reason = outcome.get("reason") or ("不在台账中" if key else "无原因记录")
-                head, body = f"- 未入库：{status}，{reason}", ""
             blocks.append("\n".join(x for x in (head, f"  题名：{title}（{year}）" if year else f"  题名：{title}",
                                                 f"  摘要：{body}" if body else "") if x))
         sections.append(f"## {claim}\n\n可引用 {usable} 篇（共选 {len(ids)} 篇）。\n\n" + "\n\n".join(blocks))

@@ -115,6 +115,46 @@ class SelectTests(ViewsBase):
         self.assertIn("Deep learning for nodule", res.stderr)
         self.assertFalse((self.out / "selected.jsonl").exists())
 
+    def test_same_title_without_doi_counts_as_one_paper(self) -> None:
+        self.pool("p3", [rec("w1", "Shared Title Of One Paper", status="missing")])
+        self.pool("p4", [rec("w2", "shared  title of one PAPER", status="present", abstract="full " * 30)])
+        self.write_map({"C1": ["shared title of one"]})
+        res = run("select", "--task-root", self.task, "--map", self.map)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        rows = [json.loads(x) for x in (self.out / "selected.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([r["record_id"] for r in rows], ["w2"])
+        self.assertEqual(rows[0]["abstract_status"], "present")
+        self.assertEqual(json.loads((self.out / "selected_claim_map.json").read_text(encoding="utf-8")), {"C1": ["w2"]})
+
+    def test_same_title_both_without_abstract_takes_first(self) -> None:
+        self.pool("p3", [rec("w1", "Twin paper", status="missing")])
+        self.pool("p4", [rec("w2", "Twin paper", status="missing")])
+        self.write_map({"C1": ["twin paper"]})
+        self.assertEqual(run("select", "--task-root", self.task, "--map", self.map).returncode, 0)
+        rows = [json.loads(x) for x in (self.out / "selected.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([r["record_id"] for r in rows], ["w1"])
+
+    def test_cross_pool_copy_with_full_abstract_wins(self) -> None:
+        self.pool("p3", [rec("r9", "Snippet copy", status="missing", snippet="… part …")])
+        self.pool("p4", [rec("r9", "Snippet copy", status="present", abstract="full abstract " * 10)])
+        self.write_map({"C1": ["r9"], "C2": ["snippet copy"]})
+        res = run("select", "--task-root", self.task, "--map", self.map)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        rows = [json.loads(x) for x in (self.out / "selected.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["abstract_status"], "present")
+        self.assertIn("full abstract", rows[0]["abstract"])
+
+    def test_same_id_with_different_title_strings_is_one_paper(self) -> None:
+        self.pool("p3", [rec("doi:10.1/t", "Twin paper.", status="missing")])
+        self.pool("p4", [rec("doi:10.1/t", "Twin paper", status="present", abstract="full abstract " * 10)])
+        self.write_map({"C1": ["doi:10.1/t"]})
+        res = run("select", "--task-root", self.task, "--map", self.map)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        rows = [json.loads(x) for x in (self.out / "selected.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["abstract_status"], "present")
+
     def test_bad_map_is_usage_error(self) -> None:
         self.write_map(["not", "a", "dict"])
         self.assertEqual(run("select", "--task-root", self.task, "--map", self.map).returncode, 2)
@@ -163,10 +203,28 @@ class EvidenceTests(ViewsBase):
     def test_dropped_entry_counts_as_not_in_library(self) -> None:
         ledger = self.proj / "proposal/citation_ledger.jsonl"
         with ledger.open("a", encoding="utf-8") as h:
-            h.write(json.dumps({"event": "drop", "bibkey": "a2021x"}) + "\n")
+            h.write(json.dumps({"event": "drop", "bibkey": "a2021x", "reason": "换成正式发表版"}) + "\n")
         run("evidence", "--task-root", self.task, "--project-root", self.proj)
         text = (self.out / "evidence_by_claim.md").read_text(encoding="utf-8")
         self.assertIn("可引用 1 篇", text.split("C2", 1)[0])
+        self.assertIn("已作废：换成正式发表版", text)
+        self.assertNotIn("未入库：added", text)
+
+    def test_record_without_outcome_is_unchecked(self) -> None:
+        (self.out / "selected_claim_map.json").write_text(json.dumps({"C1": ["r1", "r5"]}), encoding="utf-8")
+        res = run("evidence", "--task-root", self.task, "--project-root", self.proj)
+        self.assertEqual(res.returncode, 0, res.stderr)
+        text = (self.out / "evidence_by_claim.md").read_text(encoding="utf-8")
+        self.assertIn("未核对（bib_resolve 结果中没有这条记录）", text)
+        self.assertNotIn("未处理", text)
+        self.assertIn("可引用 1 篇", text)
+
+    def test_missing_ledger_exit_2(self) -> None:
+        (self.proj / "proposal/citation_ledger.jsonl").unlink()
+        res = run("evidence", "--task-root", self.task, "--project-root", self.proj)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("引用台账", res.stderr)
+        self.assertFalse((self.out / "evidence_by_claim.md").exists())
 
     def test_missing_inputs_exit_2(self) -> None:
         (self.out / "bib_resolve.json").unlink()
