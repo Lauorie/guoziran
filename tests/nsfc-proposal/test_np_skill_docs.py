@@ -180,6 +180,25 @@ class FusionDocsTest(unittest.TestCase):
         self.assertNotIn("check_project_outputs.py", TEXT)
 
 
+class AskUserDocsTest(unittest.TestCase):
+    def test_skill_asks_instead_of_deciding(self) -> None:
+        self.assertIn("### 提问", TEXT)
+        self.assertIn("AskUserQuestion", TEXT)
+        self.assertIn("（未能提问）", TEXT)
+        self.assertIn("第 1、2 类问题照样问", TEXT)
+        self.assertNotIn("全流程只有一个确认点", TEXT)
+        self.assertNotIn("整个流程只有第 5 步向用户提问", TEXT)
+
+    def test_guides_no_longer_forbid_questions(self) -> None:
+        for rel in ("references/abstract.md", "references/confirm_prompt.md"):
+            text = (SKILL / rel).read_text(encoding="utf-8")
+            self.assertNotIn("不向申请人提问", text, rel)
+            self.assertNotIn("全流程只在这里停一次", text, rel)
+
+    def test_stage_log_uses_real_time(self) -> None:
+        self.assertIn("date '+%F %H:%M'", TEXT)
+
+
 class NsfcSkillsHaveNoOpenAlexTest(unittest.TestCase):
     def test_no_nsfc_skill_mentions_openalex(self) -> None:
         suffixes = {".py", ".md", ".yaml", ".yml", ".json", ".txt", ".tex", ".sh"}

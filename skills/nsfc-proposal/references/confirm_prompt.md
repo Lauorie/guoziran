@@ -1,6 +1,6 @@
 # 确认点
 
-全流程只在这里停一次。展示内容取自 `proposal/scientific_case.md` 和 `proposal/assumptions.md` 的「## AI 拟定项」，用申请人能直接判断的语言。不出现内部编号、YAML 字段名和 skill 名。
+这是科学论证的确认点；写作中其他要问的事见 SKILL.md「提问」。展示完要点后用 AskUserQuestion 提问。展示内容取自 `proposal/scientific_case.md` 和 `proposal/assumptions.md` 的「## AI 拟定项」，用申请人能直接判断的语言。不出现内部编号、YAML 字段名和 skill 名。
 
 长度控制在申请人一屏读完：科学问题、假设（含否定条件）、术语、研究对象差异各用一两句；各章分工只写每章写什么，不写技术细节。「我替你拟定」清单一屏放不下时，单独占第二屏，第一屏末尾写「我替你拟定的内容见下一屏」。
 
