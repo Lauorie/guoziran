@@ -7,7 +7,7 @@
 - 预算唯一来源是 `config.yaml` 的 `length_standard`：各章的字数区间（`files`）、合计区间（`overall`）、页数（建议不超过 `pages.max`，原则上不超过 `pages.hard_max`）。
 - 页数是硬约束，以编译出的 PDF 为准。字数是代理指标，用于改写后的复检。`cjk_chars` 只统计汉字，英文、数字和标点会被低估。
 - 预算是示例口径。申请人给出当年指南的要求时，以指南为准，并在 `assumptions.md` 记下所用的口径。
-- 有科学论证时，各章篇幅以 `section_plan.yaml` 的 `length` 为准。证据不足时篇幅下限只作提示：不用推测或泛泛的背景凑字（规则 6），字数不足的原因写进收尾报告。
+- 有科学论证时，各章篇幅以 `section_plan.yaml` 的 `length` 为准；它在 `case.py init` 时从 `length_standard` 复制。证据不足时篇幅下限只作提示：不用推测或泛泛的背景凑字（规则 6），字数不足的原因写进收尾报告。
 
 ## 检查
 
@@ -66,4 +66,10 @@ python3 S/scripts/length_check.py --input P --out-dir T/nsfc-proposal/output/len
 
 - 不缩小字体、不缩小行距来挤页数。
 - 不顶格写到上限，留出余量。
-- 改动了已写好的章节时，重新运行该章的 `chapter_check.py` 与 `consistency_check.py`；有科学论证时再运行 `case.py mark-written`。
+- 改动了已写好的章节时，重新运行该章的检查；有科学论证时再标记该文件已写（`--file` 照 `section_plan.yaml` 中该条的 `file` 写）：
+
+```bash
+python3 S/scripts/chapter_check.py --project-root P --section <章名>
+python3 S/scripts/consistency_check.py --project-root P
+python3 S/scripts/case.py mark-written --project-root P --file <改动的文件>
+```
