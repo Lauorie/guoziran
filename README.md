@@ -289,7 +289,7 @@ AI 会自动联网访问项目文档了解安装方式并完成安装。小白�
 | [nsfc-justification-writer](skills/nsfc-justification-writer/) | ✍️ 标书写作 | v1.4.0 | 全自动立项依据语义写作、专业可读性复核与可逆写入 | ✅ 稳定 |
 | [nsfc-research-content-writer](skills/nsfc-research-content-writer/) | ✍️ 标书写作 | v1.1.0 | NSFC 研究内容编排写作 | ✅ 稳定 |
 | [nsfc-research-foundation-writer](skills/nsfc-research-foundation-writer/) | ✍️ 标书写作 | v0.2.0 | NSFC 研究基础编排写作 | 🚧 开发中 |
-| [nsfc-proposal](skills/nsfc-proposal/) | ✍️ 标书写作 | v0.1.0 | 国自然正文统一入口：科学论证、文献核验与引用台账、分章调用与跨章一致性检查 | 🚧 开发中 |
+| [nsfc-proposal](skills/nsfc-proposal/) | ✍️ 标书写作 | v0.2.0 | 国自然正文统一入口：科学论证、文献核验与引用台账、分章写作与各章检查、篇幅对齐、跨章一致性检查 | 🚧 开发中 |
 | [nsfc-qc](skills/nsfc-qc/) | ✍️ 标书写作 | v1.2.1 | NSFC 标书只读质量控制（多线程检查文风/引用/篇幅/逻辑 + 全文级缩写注册表 QC） | ✅ 稳定 |
 | [nsfc-ref-alignment](skills/nsfc-ref-alignment/) | ✍️ 标书写作 | v0.1.1 | NSFC 参考文献与正文引用一致性核查（只读） | 🚧 开发中 |
 | [nsfc-reviewers](skills/nsfc-reviewers/) | ✍️ 标书写作 | v1.4.1 | NSFC 标书多专家多维度评审模拟（默认 3 组、最多 5 组，含函评/会评给不过判断与资助约束识别） | ✅ 稳定 |

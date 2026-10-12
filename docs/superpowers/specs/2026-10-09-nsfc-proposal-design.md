@@ -533,7 +533,7 @@ nsfc-abstract 只在 `SKILL.md` 中补一句：存在科学论证时，科学问
 
 ## 15. 2026-10-12 融合
 
-申请人 2026-10-12 要求把 nsfc-proposal 与它调用的 6 个 skill 融合成一个，不再保留下级 skill：「我要的不仅仅是简单的复制合并，是要融合，要非常地协调」。本节记录融合后的结构，取代第 4 节中「按固定顺序调用写作 skill」的做法。
+申请人 2026-10-12 要求把 nsfc-proposal 与它调用的 6 个 skill 融合成一个，不再保留下级 skill：「我要的不仅仅是简单的复制合并，是要融合，要非常地协调」。本节记录融合后的结构。前文各节（不只第 4 节）凡写到调用写作 skill、`case.py to-info-form` 和信息表的地方，都以本节为准：不再调用写作 skill，`to-info-form` 与信息表由 `case.py brief` 生成的写作要点取代。
 
 - **一个 skill**：nsfc-proposal 不再读取或调用 nsfc-justification-writer、nsfc-research-content-writer、nsfc-research-foundation-writer、nsfc-abstract、nsfc-length-aligner、research-literature-search 的文件。这 6 个 skill 留在仓库原位，不改动，供单独使用与其他 skill 调用。
 - **拆分规则**：确定性工作进脚本，语义判断进参考资料。

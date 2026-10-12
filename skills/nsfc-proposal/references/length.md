@@ -4,10 +4,10 @@
 
 ## 预算
 
-- 预算唯一来源是 `config.yaml` 的 `length_standard`：各章的字数区间（`files`）、合计区间（`overall`）、页数（建议不超过 `pages.max`，原则上不超过 `pages.hard_max`）。
+- 默认预算在 `config.yaml` 的 `length_standard`：各章的字数区间（`files`）、合计区间（`overall`）、页数（建议不超过 `pages.max`，原则上不超过 `pages.hard_max`）。`case.py init` 把各章的区间写进 `section_plan.yaml` 的 `length`，写作与对齐以它为准；没有 `section_plan.yaml` 时按默认预算。
 - 页数是硬约束，以编译出的 PDF 为准。字数是代理指标，用于改写后的复检。`cjk_chars` 只统计汉字，英文、数字和标点会被低估。
-- 预算是示例口径。申请人给出当年指南的要求时，以指南为准，并在 `assumptions.md` 记下所用的口径。
-- 有科学论证时，各章篇幅以 `section_plan.yaml` 的 `length` 为准；它在 `case.py init` 时从 `length_standard` 复制。证据不足时篇幅下限只作提示：不用推测或泛泛的背景凑字（规则 6），字数不足的原因写进收尾报告。
+- 申请人给出当年指南的不同要求时，按指南写，在 `assumptions.md` 记下所用口径；`length_check.py` 的报告仍按默认预算，在收尾报告中写明差异。不改 `config.yaml`。
+- 证据不足时篇幅下限只作提示：不用推测或泛泛的背景凑字（规则 6），字数不足的原因写进收尾报告。
 
 ## 检查
 
@@ -66,10 +66,12 @@ python3 S/scripts/length_check.py --input P --out-dir T/nsfc-proposal/output/len
 
 - 不缩小字体、不缩小行距来挤页数。
 - 不顶格写到上限，留出余量。
-- 改动了已写好的章节时，重新运行该章的检查；有科学论证时再标记该文件已写（`--file` 照 `section_plan.yaml` 中该条的 `file` 写）：
+- 改动了已写好的章节时，重新运行该章的检查（没有科学论证时，`chapter_check.py` 按 SKILL.md「只改一章」第 3 条加 `--project-type` 或 `--years`）；有科学论证时再运行一致性检查，并标记该文件已写（`--file` 照 `section_plan.yaml` 中该条的 `file` 写）：
 
 ```bash
 python3 S/scripts/chapter_check.py --project-root P --section <章名>
 python3 S/scripts/consistency_check.py --project-root P
 python3 S/scripts/case.py mark-written --project-root P --file <改动的文件>
 ```
+
+`consistency_check.py` 报「章节依据旧版科学论证」时，该章是按旧版科学论证写的：先按 SKILL.md 第 6 步重写该章，不在篇幅改动后用 `mark-written` 消去这一项。

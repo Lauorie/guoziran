@@ -201,14 +201,14 @@ python3 S/scripts/case.py render --project-root P
    写作要点汇集该章要用的科学论证条目、研究期限、篇幅、不写的内容和要照抄的占位。
 2. 读该章写法（`config.yaml` 中该章的 `guide`）和写作要点。
 3. 写前把该章原有的文件复制到 `T/nsfc-proposal/output/before/`（文件不存在时跳过）。要撤回某次写入时从这里恢复。
-4. 写入。只写该章自己的文件；不改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`。模板中已有的标题怎么处理，见该章写法：研究基础、工作条件、年度研究计划保留模板标题，只换正文；特色与创新只留一个总标题，示例分类标题换成本项目的 1–3 条创新；立项依据、研究内容的模板标题是示例提纲，按写法换成本项目的结构。
+4. 写入。只写该章自己的文件；不改 `main.tex`、`extraTex/@config.tex` 和任何 `.cls`、`.sty`。模板中已有的标题怎么处理，见该章写法：研究基础、工作条件保留模板标题，只换正文；年度研究计划保留模板标题，按研究期限补足或删去年度标题（不写第 N+1 年）；特色与创新保留模板的总标题（模板没有总标题时不加），示例分类标题换成本项目的 1–3 条创新；立项依据、研究内容的模板标题是示例提纲，按写法换成本项目的结构。
 5. 检查：
 
    ```bash
    python3 S/scripts/chapter_check.py --project-root P --section <章节名> [--section <章节名> ...]
    ```
 
-   ERROR 改到 0。例外：内部编号检查把正确的专业写法（如基因名、解剖节段名）当成 S 编号时，不改写术语，在 `stages.md` 记下这一误报与理由，视为已处理。WARN 逐条判断，属于误报的同样记下理由。退出码 0 无 ERROR，1 有 ERROR，2 参数错误。
+   ERROR 改到 0。例外是误报：ERROR 指向的是正确的内容时，不为通过检查改写它，在 `stages.md` 记下这一误报与理由，视为已处理。例如把基因名、解剖节段名这类正确的专业术语当成 S 编号，或在 3 年期项目中把「第四年随访」这类随访年份当成超出研究期限的年度标题。WARN 逐条判断，属于误报的同样记下理由。退出码 0 无 ERROR，1 有 ERROR，2 参数错误。
 6. 按该章写法的「写完自查」逐项核对，结论与改动记入 `stages.md`。
 7. 该章每个文件运行一次 `python3 S/scripts/case.py mark-written --project-root P --file <文件>`。
 
@@ -269,12 +269,12 @@ python3 S/scripts/consistency_check.py --project-root P
 
 1. 按第 0 步建任务目录（说明本次只改哪一章）。
 2. `P/proposal/` 存在时：先运行 `case.py validate`，把问题告诉用户但不阻塞。按第 6 步的循环改写该章，九条规则照常适用；需要新的文献时按第 3 步检索、核对、入账后再引用。改完运行 `consistency_check.py`。
-3. `P/proposal/` 不存在时：只改措辞、结构与可读性，按该章写法改写。不新增引用、数字和事实；已有的 `\cite` 原样保留；缺的内容写占位。同样先复制到 `T/nsfc-proposal/output/before/`，改后运行 `chapter_check.py`。
+3. `P/proposal/` 不存在时：只改措辞、结构与可读性，按该章写法改写。不新增引用、数字和事实；已有的 `\cite` 原样保留；缺的内容写占位。同样先复制到 `T/nsfc-proposal/output/before/`，改后运行 `chapter_check.py`，加 `--project-type "<项目类型>"`，类型取自申请人的话或模板（如青年科学基金项目、面上项目）。类型不明时改加 `--years N`，N 为现有年度研究计划已写到的年数，并把这一假定记入 `stages.md`。
 4. 向用户报告改了哪些地方（按小节列出），以及检查结果。
 
 **只写摘要**
 
-按第 0 步建任务目录（说明本次只写摘要）。
+按第 0 步建任务目录（说明本次只写摘要）。写前把已有的 `NSFC-ABSTRACTS.md` 复制到 `T/nsfc-proposal/output/before/`（文件不存在时跳过）。
 
 1. `P/proposal/scientific_case.yaml` 存在时：信息取自科学论证和已写成的各章，术语以科学论证为准，按 6.4 写到 `P/NSFC-ABSTRACTS.md`。用 `python3 S/scripts/abstract_check.py P/NSFC-ABSTRACTS.md [--json]` 检查，通过后运行 `python3 S/scripts/case.py mark-written --project-root P --file NSFC-ABSTRACTS.md`。
 2. 不存在时：信息取自申请人给的内容与 `P` 中已有的各章，按 `references/abstract.md` 写，不建科学论证、不提问。有 `P` 时写到 `P/NSFC-ABSTRACTS.md`，没有时写到当前目录的 `NSFC-ABSTRACTS.md`。用 `python3 S/scripts/abstract_check.py <文件> [--json]` 检查，文件为 `P/NSFC-ABSTRACTS.md`，没有 `P` 时为 `./NSFC-ABSTRACTS.md`。
@@ -282,7 +282,7 @@ python3 S/scripts/consistency_check.py --project-root P
 
 **篇幅对齐**
 
-按第 0 步建任务目录。按 `references/length.md`：运行 `length_check.py` → 找差距 → 扩写或压缩 → 复检。改写前把要改的文件复制到 `T/nsfc-proposal/output/before/`。改动过的章节重跑 `chapter_check.py`；`P/proposal/` 存在时九条规则照常适用，并重跑 `consistency_check.py` 与 `case.py mark-written`。
+按第 0 步建任务目录。按 `references/length.md`：运行 `length_check.py` → 找差距 → 扩写或压缩 → 复检。改写前把要改的文件复制到 `T/nsfc-proposal/output/before/`。改动过的章节重跑 `chapter_check.py`；`P/proposal/` 不存在时，按「只改一章」第 3 条加 `--project-type` 或 `--years`。`P/proposal/` 存在时九条规则照常适用，并重跑 `consistency_check.py`。它报「章节依据旧版科学论证」（`stale_section`）时，先按第 6 步重写该章，不在篇幅改动后用 `mark-written` 消去这一项；没有这一项时，再对改动的文件运行 `case.py mark-written`。
 
 ### 输出
 

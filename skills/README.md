@@ -13,9 +13,8 @@ graph LR
     A[research-topic-extractor<br>提取综述主题] --> S[research-literature-search<br>候选文献检索]
     S --> B[research-literature-review<br>规范化文献综述]
     B --> C[research-guide-updater<br>优化项目指南]
-    C --> P[nsfc-proposal<br>科学论证与分章总控]
-    P --> D[nsfc系列写作 skills<br>立项依据 / 研究内容 / 研究基础 / 摘要]
-    D --> F[nsfc-reviewers<br>专家评审模拟]
+    C --> P[nsfc-proposal<br>科学论证、文献核验、分章写作与检查]
+    P --> F[nsfc-reviewers<br>专家评审模拟]
 ```
 
 ### 工作流步骤
@@ -44,10 +43,8 @@ graph LR
 
 **第四步：标书各部分写作**
 - 使用 nsfc 系列技能，基于优化后的项目指南进行标书写作：
-  - 推荐以 `nsfc-proposal` 为入口：它先建立科学论证、证据图谱与章节分工，再按顺序调用下列写作 skill，并做跨章一致性检查。
-  - `nsfc-justification-writer`：立项依据
-  - `nsfc-research-content-writer`：研究内容
-  - `nsfc-research-foundation-writer`：研究基础
+  - 推荐以 `nsfc-proposal` 为入口：它先建立科学论证、证据图谱与章节分工，再自己写立项依据、研究内容、研究基础和摘要，逐章检查，检查篇幅，并做跨章一致性检查。
+  - `nsfc-proposal` 不再调用 `nsfc-justification-writer`、`nsfc-research-content-writer`、`nsfc-research-foundation-writer`；这三个 skill 留在仓库中，可在 nsfc-proposal 之外单独写某一章。
   - 其他 nsfc 系列技能
 
 ### 工作流优势
@@ -770,7 +767,7 @@ python3 research-literature-search/scripts/search_runner.py validate --bundle ./
 
 **类型**：📝 日常
 
-**功能**：国自然正文的统一入口。先建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef 元数据核对，再按固定顺序调用各写作 skill，并做跨章一致性检查。
+**功能**：国自然正文的统一入口。先建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef 元数据核对，按各章写法分章成稿，逐章检查摘要与篇幅，并做跨章一致性检查。
 
 **推荐 Prompt 模板**：
 

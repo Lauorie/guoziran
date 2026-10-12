@@ -76,7 +76,7 @@
 
 #### 研究内容的例子
 
-子目标写成可判定的形式。下面是一个数据驱动任务的规划，写正文时化进叙述：
+研究任务写成可判定的形式。下面是一个数据驱动任务的规划，写正文时化进叙述：
 
 - 目标：构建可解释的风险预测模型，提高高风险样本的识别能力。
 - 指标：AUC、AUPRC、固定特异度下的灵敏度、校准误差。
@@ -133,4 +133,4 @@
 python3 S/scripts/chapter_check.py --project-root P --section 研究内容 --section 特色与创新 --section 年度研究计划
 ```
 
-研究期限按 `scientific_case.yaml` 的 `project.type` 取。没有科学论证时，加 `--project-type <项目类型>`。
+研究期限按 `scientific_case.yaml` 的 `project.type` 取。没有科学论证时，加 `--project-type <项目类型>`；类型不明时改加 `--years N`，N 为现有年度研究计划已写到的年数，并把这一假定记入 `stages.md`。
