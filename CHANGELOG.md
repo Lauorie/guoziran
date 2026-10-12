@@ -54,6 +54,7 @@
 - `nsfc-proposal` 0.1.0：开始时不再提示数据发往哪些服务。
 - `nsfc-proposal` 0.2.0：与原先调用的 6 个 skill 融合为一个自包含的 skill，写作规则并入 `references/`，检查并入 `scripts/`（`literature.py`、`chapter_check.py`、`abstract_check.py`、`length_check.py`、`plan_years.py`），不再依赖其他 skill；新增只改一章、只写摘要、篇幅对齐三种任务。
 - `nsfc-proposal` 0.2.0：参考文献中的 U+2010、U+2011 连字符改写为普通连字符，编译不再缺字；`projects/NSFC_Young`、`NSFC_General`、`NSFC_Local` 的 AGENTS.md 技能指引改为指向 nsfc-proposal。
+- `nsfc-proposal` 0.3.0：拿不准的事用 AskUserQuestion 问申请人；扩写时页数优先；新增 `literature.py digest/select/evidence` 与 `power.py`；SKILL.md 第 3、7 步的细节移入 `references/literature.md`、`references/consistency_fixes.md`。
 - 本分支未写 BAC 记录，经负责人同意。
 - 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。

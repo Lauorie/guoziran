@@ -42,8 +42,8 @@
 
 ## 目录里有什么
 
-- `scripts/`：确定性的工作。科学论证的校验与渲染（`case.py`）、材料解析（`materials.py`）、wispaper 检索（`wispaper_search.py`）与文献池（`literature.py`）、元数据核对与引用台账（`bib_resolve.py`、`bib_refresh.py`、`citation_ledger.py`）、出图（`figures.py`）、各章检查（`chapter_check.py`）、摘要校验（`abstract_check.py`）、篇幅检查（`length_check.py`）、跨章一致性检查（`consistency_check.py`）。
-- `references/`：需要判断的部分。科学论证、证据措辞、章节分工、出图，以及各章写法：`justification.md`（立项依据）、`research_content.md`（研究内容、特色与创新、年度研究计划）、`foundation.md`（研究基础、工作条件）、`abstract.md`（摘要与题目）、`length.md`（篇幅对齐）。
+- `scripts/`：确定性的工作。科学论证的校验与渲染（`case.py`）、材料解析（`materials.py`）、wispaper 检索（`wispaper_search.py`）与文献池（`literature.py`：建池、阅读表、按论断选文、按论断汇总证据）、样本量估算（`power.py`）、元数据核对与引用台账（`bib_resolve.py`、`bib_refresh.py`、`citation_ledger.py`）、出图（`figures.py`）、各章检查（`chapter_check.py`）、摘要校验（`abstract_check.py`）、篇幅检查（`length_check.py`）、跨章一致性检查（`consistency_check.py`）。
+- `references/`：需要判断的部分。科学论证、证据措辞、文献检索（`literature.md`）、章节分工、一致性问题的处理（`consistency_fixes.md`）、出图，以及各章写法：`justification.md`（立项依据）、`research_content.md`（研究内容、特色与创新、年度研究计划）、`foundation.md`（研究基础、工作条件）、`abstract.md`（摘要与题目）、`length.md`（篇幅对齐）。
 - `config.yaml`：检索、出图、章节、研究期限、各章检查、摘要限制与篇幅预算的参数。
 
 ## 流程中你需要做什么

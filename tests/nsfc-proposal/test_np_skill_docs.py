@@ -59,12 +59,14 @@ class SkillDocTest(unittest.TestCase):
 
     def test_version_only_in_config(self) -> None:
         config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
-        self.assertEqual(config["skill_info"]["version"], "0.2.0")
-        self.assertNotIn("0.2.0", TEXT)
-        self.assertNotIn("0.2.0", (SKILL / "README.md").read_text(encoding="utf-8"))
+        self.assertEqual(config["skill_info"]["version"], "0.3.0")
+        self.assertNotIn("0.3.0", TEXT)
+        self.assertNotIn("0.3.0", (SKILL / "README.md").read_text(encoding="utf-8"))
 
     def test_changelog(self) -> None:
         changelog = (SKILL / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("## [0.3.0] - 2026-10-12", changelog)
+        self.assertLess(changelog.index("## [0.3.0]"), changelog.index("## [0.2.0]"))
         self.assertIn("## [0.2.0] - 2026-10-12", changelog)
         self.assertIn("## [0.1.0] - 2026-10-09", changelog)
         self.assertLess(changelog.index("## [0.2.0]"), changelog.index("## [0.1.0]"))
@@ -197,6 +199,30 @@ class AskUserDocsTest(unittest.TestCase):
 
     def test_stage_log_uses_real_time(self) -> None:
         self.assertIn("date '+%F %H:%M'", TEXT)
+
+
+class RoundSevenDocsTest(unittest.TestCase):
+    def test_length_keeps_page_cap_first(self) -> None:
+        guide = (SKILL / "references" / "length.md").read_text(encoding="utf-8")
+        self.assertIn("页数优先于字数下限", guide)
+        self.assertIn("页数优先于字数下限", TEXT)
+        self.assertIn("pages.hard_max", TEXT)
+
+    def test_unasked_questions_have_a_home_without_case(self) -> None:
+        self.assertIn("T/nsfc-proposal/output/assumptions.md", TEXT)
+
+    def test_literature_helpers_replace_hand_written_code(self) -> None:
+        for command in ("literature.py digest", "literature.py select", "literature.py evidence"):
+            self.assertIn(command, TEXT)
+        self.assertIn("evidence_by_claim.md", TEXT)
+        guide = (SKILL / "references" / "scientific_case_guide.md").read_text(encoding="utf-8")
+        self.assertIn("power.py", guide)
+
+    def test_detail_moved_out_of_skill(self) -> None:
+        for rel in ("references/literature.md", "references/consistency_fixes.md"):
+            self.assertIn(f"`{rel}`", TEXT)
+        self.assertNotIn("`no_citation_ledger`（没有引用台账）", TEXT)
+        self.assertLess(len(TEXT), 27000)
 
 
 class NsfcSkillsHaveNoOpenAlexTest(unittest.TestCase):

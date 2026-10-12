@@ -4,6 +4,26 @@ All notable changes to this skill will be documented in this file.
 
 The version number is the single source of truth in `config.yaml` (`skill_info.version`).
 
+## [0.3.0] - 2026-10-12
+
+依据：fresh-3 完整运行的记录，以及四个单章任务的新旧对比测试（2026-10-12，skill-creator）。
+
+### Added（新增）
+
+- 「提问」一节：会改变正文内容又拿不准的事，用 AskUserQuestion 问申请人。开头集中问一次缺的材料；写作中的取舍（科学问题候选、设计参数、口径与文献冲突、章节与文件对不上、删改申请人原文）都问；用户说「全自动」时确认点不停，其余照样问；没有提问工具时按保守做法写，把本该问的事标「（未能提问）」记入 AI 拟定项并列入报告（来源：申请人 2026-10-12 的要求）。
+- `literature.py digest`（文献池阅读表）、`select`（按论断选文，生成 `selected.jsonl`）、`evidence`（按论断汇总入库文献与摘要）：取代每次运行手写的处理代码。
+- `scripts/power.py`：两比例、两均值的样本量与最小可检测效应，含整群设计；只用标准库。
+- `references/literature.md`（第 3 步的细节与退出码）、`references/consistency_fixes.md`（第 7 步各类问题的处理）。
+
+### Changed（变更）
+
+- 篇幅对齐：页数优先于字数下限，扩写后全文不超过 `pages.hard_max`；冲突时问申请人从哪里腾篇幅（来源：单章测试中扩写研究基础后全文 31 页）。
+- 三种单章任务只读要用的写法；字数与段落没有增加时不编译。
+- SKILL.md 第 3、7 步只留命令顺序与要点，细节移入参考资料。
+- 日志时间用 `date` 取，不估填；写前先读原文件；研究内容写完编译一次看页数。
+- 没有科学论证时，「（未能提问）」等记录写在 `T/nsfc-proposal/output/assumptions.md`。
+- 本分支未写 BAC 记录，经负责人同意。
+
 ## [0.2.0] - 2026-10-12
 
 本版把 nsfc-proposal 与它原先调用的 6 个 skill（立项依据、研究内容、研究基础、摘要、篇幅、文献检索）融合成一个自包含的 skill。写作规则进 `references/`，确定性检查进 `scripts/`；不再读取或调用其他 skill 的文件（来源：申请人 2026-10-12 的要求）。
