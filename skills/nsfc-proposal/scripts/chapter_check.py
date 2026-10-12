@@ -91,7 +91,9 @@ def _norm(ordinal: str) -> str:
 def count_risks(text: str) -> int:
     """研究风险条数：按条目计数，取三种写法中最大的一个，不相加（它们描述的是同一批风险）。
 
-    - 序号：「风险」后接一…十或阿拉伯数字；按（紧邻「风险」之前的 0-8 个汉字类别前缀，序号）去重，
+    - 序号：只在条目开头计数（行首，可带 \\item、标题命令开括号、\\textbf{ 或 # ），
+      正文里的「针对风险一」「上述风险一」不算。「风险」后接一…十或阿拉伯数字，再接 ：: 、 . ) } 或空白（「风险一的应对」「风险一，」是行文，不算）；
+      按（开头到「风险」之间 0-8 个汉字的类别前缀，归一序号）去重，
       「风险一」与「风险1」同一条，「技术风险一」与「资源风险一」是两条。
     - 标题：\\subsubsubsection、\\subsubsection 与 # 标题中含「风险」的，
       同时含「应对/措施」的（如「研究风险的应对措施」）是章节标题，不计。
@@ -100,7 +102,9 @@ def count_risks(text: str) -> int:
     """
     ordinals = {
         (prefix, _norm(num))
-        for prefix, num in re.findall(rf"([\u4e00-\u9fff]{{0,8}})风险\s*({_ORDINAL})", text)
+        for prefix, num in re.findall(
+            rf"(?m)^[ \t]*(?:\\item\s*)?(?:\\(?:subsubsubsection|subsubsection|paragraph)\*?\{{)?"
+            rf"(?:\\textbf\{{)?(?:#+[ \t]*)?([\u4e00-\u9fff]{{0,8}})风险\s*({_ORDINAL})(?=[：:、.．)）}}\s]|$)", text)
     }
     headings = [
         h for h in (

@@ -299,6 +299,12 @@ class FoundationRulesTest(unittest.TestCase):
         six = "".join(f"{k}：甲；应对：乙。\n" for k in ("技术风险一", "技术风险二", "技术风险三", "进度风险", "资源风险一", "资源风险二"))
         self.assertEqual(count_risks(six), 6)
 
+    def test_ordinal_in_running_text_is_not_an_item(self) -> None:
+        self.assertEqual(count_risks("\\subsubsubsection{风险一：甲}\n如前所述，针对风险一，我们预留缓冲。\n"), 1)
+        three = "".join(f"\\subsubsubsection{{风险{n}：甲}}\n应对：乙。\n" for n in "一二三")
+        self.assertEqual(count_risks(three + "上述风险一的应对是乙。\n针对风险二，另有安排。\n"), 3)
+        self.assertEqual(count_risks("\\subsubsubsection{风险一：甲}\n\\subsubsubsection{风险二：乙}\n针对风险一的预案见上。\n"), 2)
+
     def test_single_ordinal_heading_reports_one(self) -> None:
         proc = self.run_foundation("\\subsubsubsection{风险一：甲}\n应对：乙。\n")
         self.assertEqual(proc.returncode, 1)
