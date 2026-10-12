@@ -86,7 +86,7 @@ Brief 只供自己用，不发送，不进正文。每张图写六项：
 
 ## 7. 放进正文
 
-给 nsfc-research-content-writer 的约束（追加到信息表末尾）中，写明每张图的路径、图注、`\label`、位置，以及图中的可见标签和数字，让正文与图用同样的名称和数值。路径用 `figures.py` 输出的那一行（`已生成 figures/nsfc-proposal/<名称>.png` 或 `.jpg`），即 `index.json` 中该条的 `png` 字段，不自行改扩展名。
+写研究内容时，按每张图的路径、图注、`\label`、位置，以及图中的可见标签和数字写正文，让正文与图用同样的名称和数值。路径用 `figures.py` 输出的那一行（`已生成 figures/nsfc-proposal/<名称>.png` 或 `.jpg`），即 `index.json` 中该条的 `png` 字段，不自行改扩展名。
 
 位置：
 

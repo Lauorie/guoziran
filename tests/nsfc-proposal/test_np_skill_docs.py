@@ -83,7 +83,7 @@ class RoundThreeDocsTest(unittest.TestCase):
         self.assertIn("原样重跑", blocks[0])
 
     def test_motor_matched_control_rule(self) -> None:
-        bounds = (SKILL / "references" / "section_boundaries.md").read_text(encoding="utf-8")
+        bounds = (SKILL / "references" / "research_content.md").read_text(encoding="utf-8")
         self.assertIn("动作匹配的对照", bounds)
         self.assertIn("出声朗读", bounds)
         self.assertIn("前三条", bounds)
@@ -121,7 +121,7 @@ class RoundFiveRetrievalDocsTest(unittest.TestCase):
 
 class RoundFiveWritingDocsTest(unittest.TestCase):
     def test_subheadings_follow_each_study_type(self) -> None:
-        bounds = (SKILL / "references" / "section_boundaries.md").read_text(encoding="utf-8")
+        bounds = (SKILL / "references" / "research_content.md").read_text(encoding="utf-8")
         self.assertIn("小标题按每项研究的类型选", bounds)
         self.assertIn("各用各的一组", bounds)
         self.assertNotIn("全章一致", bounds)
