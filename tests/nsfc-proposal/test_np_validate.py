@@ -260,6 +260,16 @@ class PlanRuleTest(unittest.TestCase):
         plan["files"][0]["must_include"].append("Q9")
         self.assertTrue(any("Q9" in e for e in validate_plan(plan, valid_case())))
 
+    def test_unknown_must_include_lists_allowed_fields(self) -> None:
+        plan = valid_plan()
+        plan["files"][0]["must_include"].extend(["科学假设", "C3"])
+        errors = validate_plan(plan, valid_case())
+        for ref in ("科学假设", "C3"):
+            hit = [e for e in errors if ref in e]
+            self.assertTrue(hit, ref)
+            self.assertIn("hypothesis", hit[0])
+            self.assertIn("研究任务的 id", hit[0])
+
     def test_foundation_placeholders_cover_missing_feasibility(self) -> None:
         plan = valid_plan()
         plan["files"][1]["placeholders"] = []

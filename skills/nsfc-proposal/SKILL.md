@@ -161,7 +161,7 @@ python3 S/scripts/case.py validate --project-root P
 
 **4. 章节分配**
 
-按 `references/section_boundaries.md` 填写 `P/proposal/section_plan.yaml` 各文件的 `must_include`、`must_exclude` 和 `placeholders`。`scientific_case.yaml` 中 `source: missing` 的可行性条目，逐条写进研究基础的 `placeholders`。然后运行下面两条；此时 `[section_plan]` 前缀的问题也要清零。
+按 `references/section_boundaries.md` 填写 `P/proposal/section_plan.yaml` 各文件的 `must_include`、`must_exclude` 和 `placeholders`。`must_include` 只填两类：科学论证中缺口、科学问题、研究任务的 `id`，以及字段名 `hypothesis`、`entry_point`、`aim`、`terms`、`research_object`、`importance`、`mainstream_routes`、`feasibility`、`risks`、`constraints`；不填中文名，不填论断编号 `C<n>`（论断与章节的对应写在 `evidence_map.yaml` 的 `sections`）。`scientific_case.yaml` 中 `source: missing` 的可行性条目，逐条写进研究基础的 `placeholders`。然后运行下面两条；此时 `[section_plan]` 前缀的问题也要清零。
 
 ```bash
 python3 S/scripts/case.py validate --project-root P
@@ -230,7 +230,7 @@ python3 S/scripts/case.py render --project-root P
 
    在前台运行，Bash 超时设 600000 ms；单张图的总时限 `figures.total_timeout_s`（含重试与等待）小于这个超时。框架图的画幅取 `figures.framework_aspect_ratio`，设计图取 `figures.design_aspect_ratio`；不加 `--aspect-ratio` 时，名称含 `framework` 取前者，否则取后者。退出码 0 表示已生成图片：PNG 存为 `P/figures/nsfc-proposal/<名称>.png`，JPEG 存为 `<名称>.jpg`，以脚本输出的「已生成 ……」一行为准；每次运行都记入 `T/nsfc-proposal/output/figures/index.json`。生成后用 Read 读脚本输出的图片文件，按 figure_guide 第 6 节自检；不合格时改写提示词，用新名称（`-v2`、`-v3`）重画，最多 `figures.max_rerenders` 次。退出码不为 0 时按「失败与恢复」处理。
 
-   写作：按 `references/research_content.md` 写三份文件。小标题按每项研究的类型选，同类研究用同一组，一章中两类都有时各用各的一组，不为统一改用另一组。通过自检的图按 figure_guide 第 7 节放进正文，正文与图用同样的名称和数值。出图失败或未配置时，才放占位：未配置（退出码 3）或 `figures.enabled` 为 false 时，只在研究内容开头放一处可见占位 `【待补充：图 1 研究框架图——各项研究内容、它们之间的输入输出、对应的科学问题】`；配置了而某张图在重画上限内仍不合格或失败时，框架图放上面这处占位，设计图在对应研究的「设计」（数据驱动研究为「方法」）小标题下放占位，写法见 figure_guide 第 7 节。占位列入占位清单（模板只加载 graphicx，没有 TikZ；图是 WisImage 生成的 PNG，用 `\includegraphics` 插入）。研究方案借用的方法，引用第 3 步入库的方法类文献。检查时 `chapter_check.py` 一次查三章；研究期限取自科学论证的项目类型，年数表在 `config.yaml` 的 `yearly_plan`。三份文件写完后，项目有编译脚本且本机字体齐全时编译一次，用 `pdfinfo` 记页数：已接近 28 页时，研究基础、工作条件按篇幅下限写，或先压缩已写的章节，免得收尾时再返工。
+   写作：按 `references/research_content.md` 写三份文件。小标题按每项研究的类型选，同类研究用同一组，一章中两类都有时各用各的一组，不为统一改用另一组。通过自检的图按 figure_guide 第 7 节放进正文，正文与图用同样的名称和数值。出图失败或未配置时，才放占位：未配置（退出码 3）或 `figures.enabled` 为 false 时，只在研究内容开头放一处可见占位 `【待补充：图 1 研究框架图——各项研究内容、它们之间的输入输出、对应的科学问题】`；配置了而某张图在重画上限内仍不合格或失败时，框架图放上面这处占位，设计图在对应研究的「设计」（数据驱动研究为「方法」）小标题下放占位，写法见 figure_guide 第 7 节。占位列入占位清单（模板只加载 graphicx，没有 TikZ；图是 WisImage 生成的 PNG，用 `\includegraphics` 插入）。研究方案借用的方法，引用第 3 步入库的方法类文献。检查时 `chapter_check.py` 一次查三章；研究期限取自科学论证的项目类型，年数表在 `config.yaml` 的 `yearly_plan`。三份文件写完后，项目有编译脚本且本机字体齐全时编译一次，用 `pdfinfo` 记页数：已接近 28 页时，研究基础、工作条件按篇幅下限写。这时不压缩已写的章节：研究基础的篇幅取决于申请人的材料，写完才知道会不会超页。要不要压缩、压缩哪一章，到第 8 步第 3 项再定。
 
 6.3 研究基础、工作条件：按 `references/foundation.md` 写两份文件。
 
@@ -254,7 +254,7 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 
 1. 起草 AI 使用说明，写入 `section_plan.yaml` 中「生成式人工智能使用说明」一章的文件（`extraTex/4.5.生成式人工智能.tex` 或 `proposal/ai_declaration.md`）。只写 `stages.md` 里记录过的使用。说明用 WisDoc 解析了哪些材料（`index.json` 中 `parser` 为 `wisdoc` 的文件）；用了 `--local-only` 时写本机解析。用进正文的图写「研究框架图与设计图由 WisImage 根据科学论证生成，经 AI 自检，申请人核对」，按实际情况增删图的种类；只列实际用进正文的图，只用了研究框架图时只写研究框架图。不写模型名。第一行写 `【待补充：申请人核对本声明后删除此行】`，并列入占位清单。
 2. 再运行一次 `consistency_check.py`，并运行 `python3 S/scripts/citation_ledger.py audit --project-root P`。`audit` 输出两节：「条目文本与台账哈希不一致」必须为 0，否则按规则 8 处理；「`.bib` 中有、台账中无」的条目不得被引用（`cite_not_in_ledger` 会拦），逐条列入 `assumptions.md` 的「## 待核实项」与收尾报告。其中的模板示例条目可按规则 8 的例外从 `.bib` 删去；不得为让 `audit` 通过而删去申请人的条目。后一节不为 0 时 `audit` 退出码为 1，这本身不算失败。
-3. 检查篇幅：`python3 S/scripts/length_check.py --input P --out-dir T/nsfc-proposal/output/length`。项目有编译脚本且本机字体齐全时编译，用 `pdfinfo` 记页数，并把 PDF 传给 `length_check.py --pdf`。超过 28 页时在报告中写明页数，并建议按「篇幅对齐」压缩。字体缺失导致编译报错时，写「页数未核」。各章篇幅取预算下限时，加上参考文献，正文仍可能超过 30 页。
+3. 检查篇幅：`python3 S/scripts/length_check.py --input P --out-dir T/nsfc-proposal/output/length`。项目有编译脚本且本机字体齐全时编译，用 `pdfinfo` 记页数，并把 PDF 传给 `length_check.py --pdf`。超过 28 页时在报告中写明页数，并建议按「篇幅对齐」压缩。超过 `length_standard.pages.hard_max` 页时，按 `references/length.md` 的「偏长时压缩」压到上限以内，再按其「复检」重跑检查：压缩哪一章，按「提问」问申请人（推荐篇幅比下限多出最多的一章）；不能提问时按推荐压缩。删去的段落、论断与引用记入 `assumptions.md` 的「## AI 拟定项」，不能提问时标「（未能提问）」。字体缺失导致编译报错时，写「页数未核」。各章篇幅取预算下限时，加上参考文献，正文仍可能超过 30 页。
 4. 按「输出」一节的格式向用户报告。报告列出用进正文的图（名称、路径）与每张图的重画次数（取自 `T/nsfc-proposal/output/figures/index.json`）；没有出图时写明原因（未配置、额度不足、自检不合格）。申请人在确认点只答「同意」时，把 AI 拟定项在报告中再列一次，标「申请人未逐条回应」。
 5. 用户要求时，调用 nsfc-reviewers 或 nsfc-qc。
 

@@ -264,7 +264,10 @@ def validate_plan(plan: Mapping[str, Any], case: Mapping[str, Any], config: Mapp
                 errors.append(f"{name} 的 {key} 必须是列表")
         for ref in _str_list(entry.get("must_include")):
             if ref not in ids and ref not in PLAN_KEYWORDS:
-                errors.append(f"{name} 的 must_include 含未知编号或字段 {ref}")
+                errors.append(
+                    f"{name} 的 must_include 含未知编号或字段 {ref}"
+                    f"（只填缺口、科学问题、研究任务的 id，或字段名 {'、'.join(PLAN_KEYWORDS)}）"
+                )
         length = entry.get("length")
         if length is not None:
             low, high = _mapping(length).get("min"), _mapping(length).get("max")

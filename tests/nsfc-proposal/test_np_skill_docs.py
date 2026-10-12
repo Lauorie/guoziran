@@ -295,5 +295,26 @@ class NsfcSkillsHaveNoOpenAlexTest(unittest.TestCase):
         self.assertEqual(hits, [])
 
 
+
+class FreshFourDocsTest(unittest.TestCase):
+    def test_no_compression_before_foundation_is_written(self) -> None:
+        self.assertNotIn("或先压缩已写的章节", TEXT)
+        self.assertIn("这时不压缩已写的章节", TEXT)
+        self.assertIn("到第 8 步第 3 项再定", TEXT)
+        step8 = TEXT.split("**8. 收尾**", 1)[1].split("\n**", 1)[0]
+        item3 = step8.split("\n3. ", 1)[1].split("\n4. ", 1)[0]
+        self.assertIn("检查篇幅", item3)
+        self.assertIn("超过 `length_standard.pages.hard_max` 页时", item3)
+        self.assertIn("「偏长时压缩」", item3)
+        self.assertIn("删去的段落、论断与引用记入 `assumptions.md` 的「## AI 拟定项」", item3)
+
+    def test_must_include_values_are_spelled_out(self) -> None:
+        step4 = TEXT.split("**4. 章节分配**", 1)[1].split("\n**", 1)[0]
+        self.assertIn("`must_include` 只填两类", step4)
+        for field in ("hypothesis", "entry_point", "feasibility", "risks"):
+            self.assertIn(f"`{field}`", step4)
+        self.assertIn("不填论断编号 `C<n>`", step4)
+
+
 if __name__ == "__main__":
     unittest.main()

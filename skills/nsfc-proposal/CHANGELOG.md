@@ -21,6 +21,8 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - 三种单章任务只读要用的写法；字数与段落没有增加时不编译。
 - SKILL.md 第 3、7 步只留命令顺序与要点，细节移入参考资料。
 - 日志时间用 `date` 取，不估填；写前先读原文件；研究内容写完编译一次看页数。
+- 完整流程的压缩时机：研究内容写完后的编译只用来决定研究基础、工作条件按下限写，不再压缩已写的章节；收尾时超过 `pages.hard_max` 才压缩，压缩哪一章按「提问」问申请人，删去的内容记入 AI 拟定项（来源：fresh-4 在研究基础写完前把立项依据的引用从 73 篇删到 56 篇，最终 27 页，空出一页）。
+- 第 4 步写明 `must_include` 能填的编号与字段名；`case.py validate` 报未知项时列出可填的字段（来源：fresh-3、fresh-4 都因填中文名或论断编号返工一次）。
 - 没有科学论证时，「（未能提问）」等记录写在 `T/nsfc-proposal/output/assumptions.md`。
 - 本分支未写 BAC 记录，经负责人同意。
 
