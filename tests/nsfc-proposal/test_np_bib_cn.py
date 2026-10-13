@@ -147,47 +147,52 @@ class ResolveFallbackTest(unittest.TestCase):
         self.assertNotIn("doi =", self.bib.read_text(encoding="utf-8"))
         self.assertIn("未在 doi.org 注册", (self.root / "proposal" / "assumptions.md").read_text(encoding="utf-8"))
 
-    def test_page_without_journal_stays_unresolved(self) -> None:
+    def from_record(self, outcome: dict, why: str) -> None:
+        """出版方页面用不上时，按检索记录写入（不再挡掉），页面没用上的原因留在 notes。"""
+        self.assertEqual((outcome["status"], outcome["source"]), ("added", "record"))
+        self.assertIn(why, "；".join(outcome["notes"]))
+        self.assertIn("author = {朱姝娲 and 张俊杰 and 高莉洁}", self.bib.read_text(encoding="utf-8"))
+        self.assertNotIn("[unverified]", (self.root / "proposal" / "literature_leads.md").read_text(encoding="utf-8"))
+
+    def test_page_without_journal_is_not_used(self) -> None:
         text = "\n".join(line for line in PAGE.splitlines() if "journal_title" not in line)
         outcome = self.resolve(Session({URL: page(text)}))["outcomes"][0]
-        self.assertEqual(outcome["status"], "unresolved")
-        self.assertIn("没有期刊名", outcome["reason"])
-        self.assertEqual(self.bib.read_text(encoding="utf-8"), "")
-        self.assertIn("[unverified]", (self.root / "proposal" / "literature_leads.md").read_text(encoding="utf-8"))
+        self.from_record(outcome, "没有期刊名")
+        self.assertNotIn("环境卫生工程", self.bib.read_text(encoding="utf-8"))
 
     def test_page_for_another_paper_is_rejected(self) -> None:
         other = PAGE.replace(TITLE, "城市居民生活垃圾分类行为意愿研究")
         outcome = self.resolve(Session({URL: page(other)}))["outcomes"][0]
-        self.assertEqual(outcome["status"], "unresolved")
-        self.assertIn("题名与记录不符", outcome["reason"])
+        self.from_record(outcome, "题名与记录不符")
+        self.assertNotIn("城市居民生活垃圾分类行为意愿研究", self.bib.read_text(encoding="utf-8"))
 
     def test_unreachable_or_non_html_page(self) -> None:
         for response in (requests.ConnectionError("down"), page(content_type="application/pdf"), Response(403)):
+            self.bib.write_text("", encoding="utf-8")
             outcome = self.resolve(Session({URL: response}))["outcomes"][0]
-            self.assertEqual(outcome["status"], "unresolved")
-            self.assertIn("中文文献兜底", outcome["reason"])
+            self.from_record(outcome, "中文文献兜底")
 
     def test_pdf_url_is_not_fetched(self) -> None:
         record = dict(RECORD, url="https://www.journal.example.cn/download/paper.PDF")
         session = Session({})
         outcome = self.resolve(session, record)["outcomes"][0]
-        self.assertEqual(outcome["status"], "unresolved")
-        self.assertIn("地址是 PDF", outcome["reason"])
+        self.from_record(outcome, "地址是 PDF")
         self.assertNotIn(record["url"], session.calls)
 
     def test_english_record_never_falls_back(self) -> None:
         record = dict(RECORD, title="Household recycling habits in Bangkok")
         session = Session({URL: page()})
         outcome = self.resolve(session, record)["outcomes"][0]
-        self.assertEqual(outcome["status"], "unresolved")
+        self.assertEqual((outcome["status"], outcome["source"]), ("added", "record"))
         self.assertNotIn(URL, session.calls)
 
     def test_private_address_is_not_fetched(self) -> None:
         record = dict(RECORD, url="http://10.0.0.5/paper.htm")
         session = Session({})
         outcome = self.resolve(session, record)["outcomes"][0]
-        self.assertEqual(outcome["status"], "unresolved")
+        self.from_record(outcome, "中文文献兜底")
         self.assertNotIn("http://10.0.0.5/paper.htm", session.calls)
+        self.assertNotIn("10.0.0.5", self.bib.read_text(encoding="utf-8"))  # 内网地址也不写进参考文献
 
     def test_refresh_refuses_publisher_page_entries(self) -> None:
         import bib_refresh

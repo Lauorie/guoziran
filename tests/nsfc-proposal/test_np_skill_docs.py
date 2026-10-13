@@ -59,12 +59,14 @@ class SkillDocTest(unittest.TestCase):
 
     def test_version_only_in_config(self) -> None:
         config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
-        self.assertEqual(config["skill_info"]["version"], "0.5.1")
-        self.assertNotIn("0.5.1", TEXT)
-        self.assertNotIn("0.5.1", (SKILL / "README.md").read_text(encoding="utf-8"))
+        self.assertEqual(config["skill_info"]["version"], "0.6.0")
+        self.assertNotIn("0.6.0", TEXT)
+        self.assertNotIn("0.6.0", (SKILL / "README.md").read_text(encoding="utf-8"))
 
     def test_changelog(self) -> None:
         changelog = (SKILL / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("## [0.6.0] - 2026-10-13", changelog)
+        self.assertLess(changelog.index("## [0.6.0]"), changelog.index("## [0.5.1]"))
         self.assertIn("## [0.5.1] - 2026-10-13", changelog)
         self.assertLess(changelog.index("## [0.5.1]"), changelog.index("## [0.5.0]"))
         self.assertIn("## [0.5.0] - 2026-10-13", changelog)
@@ -327,7 +329,7 @@ class ChineseFallbackDocsTest(unittest.TestCase):
     def test_chinese_queries_and_publisher_page_rule(self) -> None:
         self.assertIn("另写几条中文检索式", TEXT)
         self.assertIn("来源记为 `publisher_page`", TEXT)
-        self.assertIn("CrossRef 没有记录的中文文献，取自出版方文章页的引文标签", TEXT)
+        self.assertIn("只取自 CrossRef、出版方文章页的引文标签或检索记录本身", TEXT)  # 0.6.0 起 CrossRef 只补字段
         guide = (SKILL / "references" / "literature.md").read_text(encoding="utf-8")
         for phrase in ("`citation_*` 引文标签", "期刊名必须有", "doi.org 确认已注册", "`bib_refresh` 不刷新这类条目"):
             self.assertIn(phrase, guide)
@@ -373,6 +375,22 @@ class RoundEightDocsTest(unittest.TestCase):
         for name in ("export_docx.py", "docx_writer.py", "docx_latex.py", "docx_blocks.py", "docx_bib.py"):
             self.assertTrue((SKILL / "scripts" / name).is_file(), name)
 
+
+
+class CrossrefFillsFieldsDocsTest(unittest.TestCase):
+    """0.6.0：能否引用由检索决定，CrossRef 只补字段；查不到的按检索记录写，不再挡掉。"""
+
+    def test_crossref_no_longer_gates_citations(self) -> None:
+        literature = (SKILL / "references" / "literature.md").read_text(encoding="utf-8")
+        readme = (SKILL / "README.md").read_text(encoding="utf-8")
+        for phrase in ("CrossRef 查不到不是不引用的理由", "来源 `record`", "记录里没有的字段空着"):
+            self.assertIn(phrase, TEXT)
+        self.assertIn("`record`", literature)
+        self.assertIn("Crossref 只补字段", readme)
+        for old in ("不新增 `.bib` 条目", "只取自 CrossRef 的返回", "文章页缺期刊名的仍为未核实"):
+            self.assertNotIn(old, TEXT)
+        self.assertNotIn("照常记为未核实", literature)
+        self.assertNotIn("无法核对，nsfc-proposal 把它们列入线索清单", readme)
 
 if __name__ == "__main__":
     unittest.main()

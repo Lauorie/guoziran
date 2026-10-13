@@ -2,7 +2,7 @@
 """按引用台账中的 DOI 重新取 CrossRef 元数据，用原 key 重写 .bib 条目，并在台账追加 add 事件（reason 为 refresh）。
 
 用途：旧版 bib_resolve 写入的条目有缺陷（如期刊名中的 &amp;），或条目需要按来源更新。条目文本只来自检索，
-不接受手改；key 不变，正文的 \\cite 不用改。只处理台账中由 bib_resolve 写入（add）且带 DOI 的条目；
+不接受手改；key 不变，正文的 \\cite 不用改。只处理台账中由 bib_resolve 按 CrossRef 写入（add）且带 DOI 的条目；
 申请人登记的条目（register_user）与没有 DOI 的条目不刷新：先 citation_ledger.py drop，从 .bib 删去，再用 bib_resolve 重新解析。
 退出码：0 全部刷新或无需改动；1 有条目刷新失败（该条目保持原样）；2 输入或路径错误（不写任何文件）。
 """
@@ -58,6 +58,10 @@ def _check_keys(keys: Sequence[str], texts: Mapping[str, str], ledger: Mapping[s
     if from_page:
         raise ProposalError(f"这些条目的元数据取自出版方文章页（中文文献兜底），不能按 CrossRef 刷新：{'、'.join(from_page)}；"
                             "有误时先 citation_ledger.py drop，从 .bib 删去，再用 bib_resolve 重新解析")
+    from_record = [k for k in keys if ledger[k].get("source") == "record"]
+    if from_record:
+        raise ProposalError(f"这些条目的元数据取自检索记录（CrossRef 无记录），不能按 CrossRef 刷新：{'、'.join(from_record)}；"
+                            "要再查 CrossRef，先 citation_ledger.py drop，从 .bib 删去，再用 bib_resolve 重新解析")
     no_doi = [k for k in keys if not normalize_doi(ledger[k].get("doi"))]
     if no_doi:
         raise ProposalError(f"这些条目在台账中没有 DOI，不能刷新：{'、'.join(no_doi)}；"

@@ -114,7 +114,7 @@ def format_authors(raw: str) -> str:
 def reference_text(entry: dict[str, str]) -> str:
     """一条参考文献，GB/T 7714 顺序编码制；缺的字段跳过。"""
     kind = entry.get("_type", "misc")
-    mark = TYPE_MARKS.get(kind, "Z")
+    mark = "EB/OL" if kind == "misc" and entry.get("url") else TYPE_MARKS.get(kind, "Z")  # 预印本等网络文献
     authors = format_authors(entry.get("author", ""))
     title = clean(entry.get("title", ""))
     year = clean(entry.get("year", ""))
@@ -140,12 +140,15 @@ def reference_text(entry: dict[str, str]) -> str:
     elif kind in ("phdthesis", "mastersthesis"):
         tail = ", ".join(x for x in (clean(entry.get("school", "")), year) if x)
     else:
-        tail = ", ".join(x for x in (clean(entry.get("publisher", "")), year) if x)
+        tail = ", ".join(x for x in (clean(entry.get("howpublished", "")), clean(entry.get("publisher", "")), year) if x)
     joiner = "" if tail.startswith("//") else ". "
     text = f"{head}{joiner}{tail}".rstrip(". ") if tail else head
     doi = clean(entry.get("doi", ""))
     text = text.rstrip(".") + "."
-    return f"{text} DOI: {doi}." if doi else text
+    if doi:
+        return f"{text} DOI: {doi}."
+    url = entry.get("url", "").strip()
+    return f"{text} {url}." if mark == "EB/OL" and url else text
 
 
 def iter_bib_keys(command_args: str) -> Iterator[str]:

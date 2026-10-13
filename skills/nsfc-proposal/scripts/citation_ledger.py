@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """引用台账：proposal/citation_ledger.jsonl，只追加的 JSONL 事件日志。
 
-每条进入 .bib 的文献留一条记录：来自哪条检索记录、元数据出自哪个服务（现只用 CrossRef；旧台账中其他来源的记录照常读取）、
+每条进入 .bib 的文献留一条记录：来自哪条检索记录、元数据出自哪里（crossref；中文文献的出版方文章页 publisher_page；
+两者都没有时取自记录本身 record；旧台账中其他来源的记录照常读取）、
 写入 .bib 的条目文本哈希、可用的摘要原文。一致性检查据此拒绝手写或手改的条目。
 事件：add（bib_resolve 写入；bib_refresh 按台账中的 DOI 重新取元数据、原 key 重写条目后再记一条，reason 为 refresh）、
 register_user（申请人确认由其提供、用 register-user --key 登记的条目）、drop（作废）。case.py init 只建空台账，不登记任何条目。
@@ -23,6 +24,7 @@ from latex_files import DOI_FIELD_RE, bib_entry_texts, normalize_doi, scan_latex
 from proposal_common import ProposalError, proposal_paths, resolve_project_root
 
 EVENTS = ("add", "register_user", "drop")
+RECORD_SOURCE = "record"  # 与 bib_record.SOURCE 相同：条目按记录本身的字段写成
 MIN_ABSTRACT_CHARS = 80
 
 
@@ -123,15 +125,15 @@ def _record_doi(record: Mapping[str, Any]) -> str | None:
 def record_added(ledger_path: Path, bib_files: list[Path], records: list[dict[str, Any]], outcomes: list[Any]) -> None:
     """给每个 status 为 added 的结果追加 add 事件；哈希取实际写入 .bib 的条目文本，来源缺失时记 null。
 
-    记录的摘要只在写入 .bib 的就是这条记录时才记：解析出的 DOI 与记录 DOI 规范化后相同，或记录本来没有 DOI。
-    记录 DOI 的标题核对失败、改按标题解析到另一篇时，摘要属于原 DOI 那一篇，台账记 null。
+    记录的摘要只在写入 .bib 的就是这条记录时才记：条目取自记录本身（source 为 record），解析出的 DOI 与记录 DOI
+    规范化后相同，或记录本来没有 DOI。记录 DOI 的标题核对失败、改按标题解析到另一篇时，摘要属于原 DOI 那一篇，台账记 null。
     """
     texts = bib_entry_texts(bib_files)
     for record, outcome in zip(records, outcomes):
         if outcome.status != "added" or outcome.bibkey not in texts:
             continue
         record_doi = _record_doi(record)
-        same_work = record_doi is None or normalize_doi(outcome.doi) == record_doi
+        same_work = outcome.source == RECORD_SOURCE or record_doi is None or normalize_doi(outcome.doi) == record_doi
         provenance = _record_provenance(record, outcome.record_id)
         page_abstract = getattr(outcome, "abstract", None)
         if getattr(outcome, "landing_url", None):

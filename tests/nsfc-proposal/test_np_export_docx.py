@@ -136,6 +136,27 @@ class BibTest(unittest.TestCase):
                          "Processing Systems 35. 2022: 22199-22213. DOI: 10.52202/068431-1613.")
         self.assertEqual(format_authors("Smith, John and Doe, Jane Q. and A, B and C, D"), "Smith J, Doe J Q, A B, et al")
 
+    def test_preprint_is_online_resource(self) -> None:
+        entries = parse_bib("""@misc{cho2025breaking,
+  title = {{Breaking the Safety-Capability Tradeoff}},
+  author = {Cho, Dongkyu Derek and Song, Huan},
+  howpublished = {arXiv preprint arXiv:2511.21050},
+  year = {2025},
+  doi = {10.48550/arxiv.2511.21050},
+  url = {https://arxiv.org/abs/2511.21050},
+}
+@misc{lee2024open,
+  title = {Open Test Notes},
+  author = {Lee, Ann},
+  year = {2024},
+  url = {https://example.org/notes},
+}
+""")
+        self.assertEqual(reference_text(entries["cho2025breaking"]),
+                         "Cho D D, Song H. Breaking the Safety-Capability Tradeoff[EB/OL]. arXiv preprint arXiv:2511.21050, 2025. "
+                         "DOI: 10.48550/arxiv.2511.21050.")
+        self.assertEqual(reference_text(entries["lee2024open"]), "Lee A. Open Test Notes[EB/OL]. 2024. https://example.org/notes.")
+
     def test_cite_label_compresses_ranges(self) -> None:
         cites = {"a": 1, "b": 2, "c": 3, "d": 5}
         self.assertEqual(cite_label(["c", "a", "b"], cites), "[1-3]")

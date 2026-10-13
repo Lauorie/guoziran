@@ -182,7 +182,7 @@ python3 S/scripts/case.py validate --project-root P
    python3 S/scripts/literature.py evidence --task-root T --project-root P
    ```
 
-   CrossRef 没有记录的中文文献，`bib_resolve` 改从出版方文章页的引文标签取期刊名与卷期页（来源记为 `publisher_page`），并在 `assumptions.md` 的「## 待核实项」逐条登记，请申请人投稿前对照知网核对；文章页缺期刊名的仍为未核实。两个 jsonl 文件都要以换行结尾。可引用的是 `added` 条目，以及 `exists` 且在台账中有有效记录的条目；其余不得引用，能否在正文引用还取决于规则 5 的三个条件。
+   能否引用由检索决定，CrossRef 只补字段。`bib_resolve` 把每条记录写进 `.bib`：CrossRef 有记录时用它的作者、刊名、卷期页与文献类型；没有记录的中文文献，从出版方文章页的引文标签补全（来源记为 `publisher_page`，在 `assumptions.md` 的「## 待核实项」逐条登记，请申请人投稿前对照知网核对）；仍没有的，按记录自带的作者、题名、刊名、年份与 DOI 写（来源 `record`，预印本写成网络文献），缺卷期页的条目在「## 待核实项」合并列一行。CrossRef 查不到不是不引用的理由：arXiv、OpenReview 上的论文大多不在 CrossRef。只有 CrossRef 认定为数据集、试验注册等非出版物的，和记录缺作者或年份的，记为未核实。两个 jsonl 文件都要以换行结尾。可引用的是 `added` 条目，以及 `exists` 且在台账中有有效记录的条目；其余不得引用，能否在正文引用还取决于规则 5 的三个条件。
 8. 读 `T/nsfc-proposal/output/evidence_by_claim.md` 中的完整摘要，按 `references/evidence_wording.md` 填写每条论断的 `evidence` 与 `support`，再运行 `case.py validate`，直到 `[scientific_case]` 和 `[evidence_map]` 前缀的问题清零。
 
 申请人要求不联网（完全离线），或 `literature.use_wispaper` 为 false 时，跳过 4–7：文献类论断保持 `unsupported`，并在 `assumptions.md` 的「## 待核实项」写明「本次未检索文献」。现状论断的写法见规则 5 的 `unsupported` 两类。证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标；不用推测或泛泛的背景凑字数。
@@ -220,7 +220,7 @@ python3 S/scripts/case.py render --project-root P
 - 规则 5：凡是叙述研究现状、他人方法或结论、流行病学数据的句子，必须 `\cite`，且只能引用同时满足三条的 bibkey：(a) 是 `bib_resolve.py` 的 `added`，或 `exists` 且该 key 在台账中有有效记录；(b) 列在这句话所表达的那条论断的 `evidence` 中，`role` 为 supporting；(c) 措辞不超过该论断的 `support`。内容没有对应论断时，先按第 3 步把论断补进 `evidence_map.yaml`，或按 `unsupported` 的两类处理、删去。`unsupported` 论断分两类。缺口类，即本项目要回答的认知缺口：写「尚不清楚」「尚未检验」，每个缺口写一次，不在相邻句子重复推测词。背景类，即背景与现状论断（领域事实，申请人在材料中写明的现有不足）：不逐句改成「可能」。集中写成一段，作为本项目对现状的判断，段末放一处可见占位，逐条列出要补的文献，例如 `【待补充：支持上述判断的文献——(1) 现有模型多基于单中心数据；(2) 外部验证中性能下降；(3) 已有瘤周研究所用的环带宽度】`。占位列入占位清单。这一段不写凭记忆的研究名称、作者、年份，也不写任何凭记忆的具体数字。每条背景类判断都要在 `evidence_map.yaml` 中有对应论断，`support` 为 `unsupported`，以便追溯。「已有研究做到哪一步」（创新点的参照）按背景类处理：在线时引用；离线时列进同一处占位。不把某项具体研究的结果改写成「可能」来回避引用：转述某项研究发现了什么的句子，必须引用该研究。一个段落讲几项研究，就逐项引用，不在段末堆一个引用。申请人自己的结果按申请人材料写或写占位，不需 `\cite`（材料本身是已入 `.bib` 的已发表论文时才引用）；本项目自己的设计、目标和假设不是现状，不需引用；教科书级定义不需引用，除非引用具体标准或指南（此时引用，或按下句写明名称）。国家或部门的政策文件、诊疗规范、行业指南，联网到发文机关的官方网站核对文件名、发文机关与年份后，可在正文写明，如「《“健康中国2030”规划纲要》（中共中央、国务院，2016）」，不进 `.bib`，网址与核对日期写入 `P/proposal/literature_leads.md` 的「## 官方文件」一节（`init` 已建好）。核对不到的不写，按背景类论断处理。正文只写文件明文规定的内容。示例见 `references/evidence_wording.md` 的「哪些句子必须引用」与「政策文件」。
 - 规则 6：`section_plan.yaml` 的篇幅是上限，下限只作参考，不是必须写满的目标。不用推测、泛泛的背景或复述上文的句子凑字数（如「这一步也说明……」「从这三个缺口可以读出……」）；字数不足的原因写进收尾报告。`chapter_check.py` 不因字数少于下限报错，看到字数偏少也不要为此补句子。
 - 规则 7：缺信息时按规则 3 写占位。遇到会改变内容、又拿不准的取舍，按「提问」问申请人；不能提问时（情形三）取保守的一种（保留申请人已写的内容、少写不多写、超限时保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md` 和「AI 拟定项」（行首标「（未能提问）」），并列入最终报告。
-- 规则 8：`citation_ledger.py register-user` 只用于申请人逐条确认过、由申请人提供的文献：`python3 S/scripts/citation_ledger.py register-user --project-root P --key K`，每条一个 `--key`（可重复）。本流程只用 `--key`，不用一次登记全部未入账条目的 `--all`。AI 不得用它登记自己写的或改过的条目。`register-user` 登记的条目只能支持 `applicant_material` 论断，不计入 `single_verified`、`multi_verified` 的篇数。不得手写或手改 `.bib`（例外：只删不改。删去已 `drop` 的条目，或删去不属于申请人的未入账条目，如模板示例）。要修正某条文献：仍是同一篇、只是条目文本有误（如期刊名显示 `&amp;`、类型或字段缺失）时，运行 `python3 S/scripts/bib_refresh.py --project-root P --task-root T --key K`（可重复 `--key`），按台账中的 DOI 重新取 CrossRef 元数据，原 key 不变，台账追加一条记录；退出码 1 表示有条目没有刷新，原样保留，原因见 `T/nsfc-proposal/output/bib_refresh.json`。同一条目重跑仍失败（如 CrossRef 没有这个 DOI、标题不符）时，按下一句的 drop 流程处理。要换成另一篇，或条目是申请人登记的、台账中没有 DOI，先 `python3 S/scripts/citation_ledger.py drop --project-root P --key K --reason "…"`，从 `.bib` 删去该条，再用 `bib_resolve` 重新解析（仍留在 `.bib` 的作废条目会被报为 `exists`）。不在台账中的文献不得引用。
+- 规则 8：`citation_ledger.py register-user` 只用于申请人逐条确认过、由申请人提供的文献：`python3 S/scripts/citation_ledger.py register-user --project-root P --key K`，每条一个 `--key`（可重复）。本流程只用 `--key`，不用一次登记全部未入账条目的 `--all`。AI 不得用它登记自己写的或改过的条目。`register-user` 登记的条目只能支持 `applicant_material` 论断，不计入 `single_verified`、`multi_verified` 的篇数。不得手写或手改 `.bib`（例外：只删不改。删去已 `drop` 的条目，或删去不属于申请人的未入账条目，如模板示例）。要修正某条文献：仍是同一篇、只是条目文本有误（如期刊名显示 `&amp;`、类型或字段缺失）时，运行 `python3 S/scripts/bib_refresh.py --project-root P --task-root T --key K`（可重复 `--key`），按台账中的 DOI 重新取 CrossRef 元数据，原 key 不变，台账追加一条记录（只适用于来源为 crossref 的条目；`publisher_page`、`record` 条目按下文的 drop 流程处理）；退出码 1 表示有条目没有刷新，原样保留，原因见 `T/nsfc-proposal/output/bib_refresh.json`。同一条目重跑仍失败（如 CrossRef 没有这个 DOI、标题不符）时，按下一句的 drop 流程处理。要换成另一篇，或条目是申请人登记的、台账中没有 DOI，先 `python3 S/scripts/citation_ledger.py drop --project-root P --key K --reason "…"`，从 `.bib` 删去该条，再用 `bib_resolve` 重新解析（仍留在 `.bib` 的作废条目会被报为 `exists`）。不在台账中的文献不得引用。
 - 规则 9：正文中，「核实」「检索」「文献支持」「本次未」等描述写作过程的话，以及 `proposal/` 下的文件名，只写进 `assumptions.md`、`stages.md` 或收尾报告，不进正文；可见占位不受此限；第 8 步由本 skill 写的 AI 使用说明也不受此限。写给申请人的嘱咐（如「建议申请人优先补充……」「不补充的条目应在提交前删去」）放进对应占位的括号内或 `assumptions.md`。对申请人原有口径的改动，只在 `assumptions.md` 的「AI 拟定项」中说明；正文直接写采用的口径和理由，不写「申请人提出的原始口径是……」。
 
 每一章按同一个循环写：
@@ -354,7 +354,7 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 | wispaper 不可用（`wispaper_search.py` 退出码 3） | 停在第 3 步，不改用其他检索源。告诉申请人检查 `WIS_MCP_URL`、`WIS_MCP_TOKEN`（未配置，或凭据被拒）；全自动运行也停下，在报告中写明。配置好后重跑被打断的那条命令，已存档的检索式不重查 |
 | 部分检索式重跑后仍失败（退出码 1） | 补摘要的标题检索按 `references/literature.md` 的「补摘要」处理，不改写标题。其余检索式：把仍失败的检索式换个写法（缩短，或换关键词），写入新的检索式文件（论断问句写入新的 `claim_queries_<n>.json`），按第 3 步第 4、5 项再检索一次；仍失败的在 `stages.md` 记下。文献池用已取得的结果建，用新的名称 |
 | `literature.py pool` 退出码 1（检索式全都没有结果） | 按第 3 步第 5 项换写法再检索一次；仍没有结果的，相关论断保持 `unsupported`，在 `stages.md` 记下 |
-| CrossRef 不可达 | 不新增 `.bib` 条目；相关论断记为 `unsupported` |
+| CrossRef 不可达 | `bib_resolve` 按记录写条目（来源 `record`），照常引用；缺卷期页的列入待核实项。要补卷期页，CrossRef 恢复后按规则 8 的 drop 流程重新解析这些条目 |
 | `bib_resolve` 未核实，原因含「非出版物条目」（试验注册、数据集等） | 不引用该条。要引用这项研究，按论文题名用 wispaper 检索它正式发表的版本，挑入 `selected.jsonl` 后只对这条记录重跑 `bib_resolve`；找不到时相关论断保持 `unsupported`，在 `stages.md` 记下。已写进 `.bib` 的这类条目（旧版写入）按规则 8 的 drop 流程处理，`bib_refresh.py` 会报同样的原因 |
 | 编译时 bibtex 报 `Unsupported entry type`（多见于 `@mastersthesis` 条目），该文献显示为 [?] | 本机或项目用的 bensz-nsfc 包早于本分支，参考文献样式缺少 `mastersthesis`。更新或重新安装 bensz-nsfc 包后重新编译；不手改 `.bib` 的条目类型 |
 | 某一章写作中断 | 保留已写章节；从 `section_plan.yaml` 中 `written_with_case_version` 为空或低于当前版本的章节继续。写坏的文件从 `T/nsfc-proposal/output/before/` 恢复后重写 |
@@ -376,7 +376,7 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 | 出图失败，类别 `credit`（额度不足） | 停止出图；已通过自检的图照用，其余放占位；报告写明 |
 | 出图失败，类别 `no_image`、`bad_image`、`unsupported_format`（返回的不是 PNG 或 JPEG） | 改写提示词，换名重画，计入 `figures.max_rerenders` |
 | 出图失败，类别 `http_5xx`、`network`、`timeout`（脚本已在总时限内重试 1 次）、`http_4xx`、`too_large` | 不再重试，该图放占位；类别记入 `stages.md` 与报告 |
-| CrossRef 限流 | `bib_resolve` 自动退避重试；仍未解析的记录稍后只对未解析的子集重跑 `bib_resolve`（未解析记录见 `T/nsfc-proposal/output/bib_resolve.json` 中 status 为 unresolved 的 outcomes；按 record_id 从 `bib_records.jsonl` 取出，另存为 JSONL 作 `--records`），不重跑已写入的记录。 |
+| CrossRef 限流 | `bib_resolve` 自动退避重试；重试后仍查不到的，按记录写入（来源 `record`），不重跑已写入的记录 |
 
 ## 约束
 
@@ -394,7 +394,7 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 ### Skill 专属约束
 
 - 不编造文献、数据、病例数、前期成果和合作单位；申请人没提供的内容只写占位。
-- 文献的作者、期刊、年份、卷期页码只取自 CrossRef 的返回；CrossRef 没有记录的中文文献，取自出版方文章页的引文标签（`bib_resolve.py` 自动处理）。都不凭记忆填写。
+- 文献的作者、期刊、年份、卷期页码只取自 CrossRef、出版方文章页的引文标签或检索记录本身（`bib_resolve.py` 自动处理）；记录里没有的字段空着，不凭记忆填写。
 - 只在「提问」一节列出的情形提问；其余步骤不打断用户。
 - 只用本 skill 目录中的脚本与参考资料，不读取、不调用其他 skill 的文件。
 - 不调用 research-idea。需要系统探索选题时，建议用户先运行它，再把结论写进 `scientific_case.yaml`。

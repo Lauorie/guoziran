@@ -4,6 +4,20 @@ All notable changes to this skill will be documented in this file.
 
 The version number is the single source of truth in `config.yaml` (`skill_info.version`).
 
+## [0.6.0] - 2026-10-13
+
+依据：托管运行环境的一次运行中，57 篇选作证据的文献有 31 篇因 CrossRef 没有记录被挡在正文外，多为 arXiv、ICLR 等 AI 领域的基础文献（arXiv 的 DOI 登记在 DataCite，OpenReview 论文没有 DOI）。检索已保证文献真实存在，CrossRef 只应补字段。
+
+### Added（新增）
+
+- `scripts/bib_record.py`：CrossRef 与出版方文章页都没有记录时，按记录自带的作者、题名、刊名、年份、DOI 写 `.bib` 条目（台账来源 `record`）。预印本与存储库写 `@misc`（arXiv 写明编号），会议写 `@inproceedings`，其余刊名写 `@article`；作者摊平成「姓, 名, 姓, 名」的两两配对，中文作者串按分隔符拆开；DOI 去掉网址参数；网址只写公网地址。卷、期、页码不补。
+
+### Changed（变更）
+
+- `bib_resolve.py`：能否引用由检索决定，CrossRef 查不到或连不上不再挡掉文献。CrossRef 认定为数据集、试验注册的，以及记录缺作者或年份的，仍不写；记录的 DOI 在 CrossRef 中是另一篇时不写该 DOI。按题名去重，重跑报 `exists`。缺卷期页的条目在 `assumptions.md` 的待核实项合并列一行。
+- `bib_refresh.py` 拒绝刷新 `record` 条目；引用台账为 `record` 条目记摘要；`docx_bib.py` 把带网址的 `@misc` 排成 `[EB/OL]`。
+- SKILL.md、`references/literature.md`、README：改写引用条件与 CrossRef 不可达时的处理。
+
 ## [0.5.1] - 2026-10-13
 
 依据：托管运行环境里，开场一条回复列出五个问题（填写模板），用户嫌一次问得太多。

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import html
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -12,6 +14,8 @@ INPUT_RE = re.compile(r"\\(?:input|include)\{([^}]+)\}")
 BIB_RE = re.compile(r"\\(?:bibliography|addbibresource(?:\[[^\]]*\])?)\{([^}]+)\}")
 ENTRY_START_RE = re.compile(r"@([A-Za-z]+)\s*[{(]\s*([^,\s]*)\s*,?")
 DOI_FIELD_RE = re.compile(r"\bdoi\s*=\s*[{\"]\s*([^}\"]+?)\s*[}\"]", re.IGNORECASE)
+TITLE_FIELD_RE = re.compile(r"\btitle\s*=\s*(.+?),?\s*$", re.IGNORECASE | re.MULTILINE)
+YEAR_FIELD_RE = re.compile(r"\byear\s*=\s*[{\"]?\s*(\d{4})", re.IGNORECASE)
 NON_ENTRY_TYPES = {"comment", "string", "preamble"}
 
 
@@ -25,6 +29,7 @@ class LatexTree:
 class BibIndex:
     keys: frozenset[str]
     doi_keys: dict[str, str] = field(default_factory=dict)
+    title_keys: dict[str, tuple[str, int | None]] = field(default_factory=dict)  # 规范化题名 →（key, 年份）
 
     @property
     def dois(self) -> frozenset[str]:
@@ -75,9 +80,17 @@ def normalize_doi(value: str | None) -> str | None:
     return raw.lower() or None
 
 
+def title_key(text: str | None) -> str:
+    """比较题名用：解 HTML 实体，去 LaTeX 命令、括号与标点，小写，空白归一。"""
+    text = re.sub(r"\\[A-Za-z]+\s*", " ", html.unescape(str(text or "")))
+    text = unicodedata.normalize("NFKC", text).lower()
+    return re.sub(r"[^\w]+", " ", text).strip()
+
+
 def read_bib_index(bib_files: list[Path]) -> BibIndex:
     keys: set[str] = set()
     doi_keys: dict[str, str] = {}
+    title_keys: dict[str, tuple[str, int | None]] = {}
     for path in bib_files:
         if not Path(path).is_file():
             continue
@@ -93,7 +106,11 @@ def read_bib_index(bib_files: list[Path]) -> BibIndex:
             doi = normalize_doi(doi_match.group(1)) if doi_match else None
             if doi:
                 doi_keys.setdefault(doi, key)
-    return BibIndex(keys=frozenset(keys), doi_keys=doi_keys)
+            title_match = TITLE_FIELD_RE.search(text, match.end(), end)
+            year_match = YEAR_FIELD_RE.search(text, match.end(), end)
+            if title_match and title_key(title_match.group(1)):
+                title_keys.setdefault(title_key(title_match.group(1)), (key, int(year_match.group(1)) if year_match else None))
+    return BibIndex(keys=frozenset(keys), doi_keys=doi_keys, title_keys=title_keys)
 
 
 def bib_entry_texts(bib_files: list[Path]) -> dict[str, str]:
