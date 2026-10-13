@@ -169,6 +169,8 @@ def fallback_meta(record: Mapping[str, Any], *, session: Any, settings: Any, wor
     url = safe_url(record.get("url"))
     if not url:
         return Fallback(reason="中文文献兜底：记录没有可访问的文章页地址")
+    if urlparse(url).path.lower().endswith(".pdf"):
+        return Fallback(reason="中文文献兜底：记录的地址是 PDF，不是文章页", landing_url=url)  # 不下载、不读 PDF
     text, failure = fetch_page(session, url, settings)
     if text is None:
         return Fallback(reason=f"中文文献兜底：{failure}", landing_url=url)

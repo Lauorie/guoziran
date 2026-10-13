@@ -167,6 +167,14 @@ class ResolveFallbackTest(unittest.TestCase):
             self.assertEqual(outcome["status"], "unresolved")
             self.assertIn("中文文献兜底", outcome["reason"])
 
+    def test_pdf_url_is_not_fetched(self) -> None:
+        record = dict(RECORD, url="https://www.journal.example.cn/download/paper.PDF")
+        session = Session({})
+        outcome = self.resolve(session, record)["outcomes"][0]
+        self.assertEqual(outcome["status"], "unresolved")
+        self.assertIn("地址是 PDF", outcome["reason"])
+        self.assertNotIn(record["url"], session.calls)
+
     def test_english_record_never_falls_back(self) -> None:
         record = dict(RECORD, title="Household recycling habits in Bangkok")
         session = Session({URL: page()})
