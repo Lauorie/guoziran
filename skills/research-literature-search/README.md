@@ -2,8 +2,6 @@
 
 `research-literature-search` 将“查询输入 → 多源召回 → 规范化 → canonical 去重 → 来源审计”做成可独立复用的证据生产环节。它适合只想先拿候选文献池、为研究选题准备查新材料，或被综述/标书等下游流程消费的场景。
 
-当前版本：`v1.0.4`。
-
 manifest 校验使用独立命名的 `rls_contract` 模块，避免与 `research-literature-review` 的同名 `query_contract` 在同一 Python 进程中互相遮蔽。
 
 ## 快速开始
@@ -30,9 +28,13 @@ python3 skills/research-literature-search/scripts/search_runner.py validate \
   --bundle ./.bensz-api/search-bundle
 ```
 
-可用 `--provider-order openalex,semantic_scholar,crossref` 固定来源顺序，
+可用 `--provider-order semantic_scholar,crossref` 固定来源顺序，
 并用 `--min-year/--max-year`、`--publication-type`、`--language`、`--open-access`
 设置过滤条件；指定 `--scope-root` 可强制 bundle 留在任务工作区内。
+
+已经通过 MCP 拿到 wispaper 结果时，按 `rls.host_results.v1` 格式保存，再用 `--host-results <文件>` 传入，结果会填进 `mcp` 检索源位置。格式见 SKILL.md「输入」一节。
+
+补摘要同样可以不联网：`abstract-queries` 列出缺摘要的标题，宿主用 wispaper 按标题检索后存成同格式文件，再用 `enrich-abstracts --offline --host-results <文件>` 填入。
 
 校验通过后，下游默认读取 `candidates_deduped.jsonl`，并使用 `provenance.jsonl` 与 `dedupe_map.json` 追溯来源和合并理由。
 
@@ -46,8 +48,8 @@ python3 skills/research-literature-search/scripts/search_runner.py validate \
 
 provider 返回 `null` 记录或其它非对象条目时，检索器会跳过坏条目、继续处理合法候选，并在 `manifest.json` / `search_log.json` 中记录 `empty_records`、`invalid_records` 和对应 warning。若所有返回条目均无法规范化，则返回 `failed`，`failure_code` 为 `no_valid_candidates`。
 
-OpenAlex 候选缺少嵌套来源元数据（例如 `primary_location.source` 为 `null`）时，检索器保留候选并将 `venue` 规范化为 `null`；候选的 `quality_warnings` 会记录 `missing_venue`，不会因此中断整个 bundle。
+候选的来源元数据缺少刊名时，检索器保留候选并将 `venue` 规范化为 `null`；候选的 `quality_warnings` 会记录 `missing_venue`，不会因此中断整个 bundle。
 
 ## 依赖
 
-Python 3.10+；联网 provider 使用 `requests`。MCP/duckduckgo 需要宿主工具，纯 Python runner 会显式记录 skipped。详见 [paper-schema.md](references/paper-schema.md)、[bundle-schema.md](references/bundle-schema.md) 和 [provider-guide.md](references/provider-guide.md)。
+Python 3.10+；联网 provider 使用 `requests`；manifest 从 `config.yaml` 读取版本号，需要 PyYAML。MCP/duckduckgo 需要宿主工具，纯 Python runner 会显式记录 skipped。详见 [paper-schema.md](references/paper-schema.md)、[bundle-schema.md](references/bundle-schema.md) 和 [provider-guide.md](references/provider-guide.md)。

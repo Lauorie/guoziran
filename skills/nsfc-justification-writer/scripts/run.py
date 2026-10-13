@@ -24,7 +24,7 @@ sys.dont_write_bytecode = True
 scripts_root_for_import = Path(__file__).resolve().parent
 sys.path.insert(0, str(scripts_root_for_import))
 
-from core.config_loader import load_config, get_runs_dir, validate_config
+from core.config_loader import RUNS_DIR_ENV, load_config, get_runs_dir, validate_config
 from core.config_access import get_bool, get_mapping, get_seq_str, get_str
 from core.bib_manager_integration import BibFixSuggestion
 from core.change_guard import inspect_proposal
@@ -37,7 +37,7 @@ from core.observability import ensure_run_dir, make_run_id
 from core.reference_validator import check_citations
 from core.security import validate_target_file
 from core.editor import apply_new_content
-from core.versioning import find_backup_for_run_v2, list_runs, rollback_from_backup, unified_diff
+from core.versioning import find_backup_for_run_v2, list_runs, locate_runs_root, rollback_from_backup, task_runs_roots, unified_diff
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +172,14 @@ def _write_json(path: Path, data: Dict[str, Any]) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _write_out(path: str, text: str) -> None:
+    """把 markdown 写到 --out 指定的文件；目录不存在时先建。"""
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"已输出：{path}")
+
+
 def _read_body_file(body_file: Optional[str]) -> str:
     if body_file is None or body_file == "-":
         return sys.stdin.read()
@@ -249,10 +257,18 @@ def cmd_diagnose(args: argparse.Namespace) -> int:
 
 
 def cmd_wordcount(args: argparse.Namespace) -> int:
+    info_form = getattr(args, "info_form", None)
+    if info_form and not Path(info_form).is_file():
+        print(f"✗ --info-form 文件不存在：{info_form}", file=sys.stderr)
+        return 2
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
     coord = HybridCoordinator(skill_root=skill_root, config=config)
-    status = coord.word_count_status(project_root=Path(args.project_root), mode=getattr(args, "mode", None))
+    status = coord.word_count_status(
+        project_root=Path(args.project_root),
+        mode=getattr(args, "mode", None),
+        info_form_path=Path(args.info_form) if getattr(args, "info_form", None) else None,
+    )
     print(json.dumps(status, ensure_ascii=False, indent=2))
     return 0
 
@@ -292,8 +308,7 @@ def cmd_refs(args: argparse.Namespace) -> int:
         else:
             md = md.rstrip() + "\n\n## Crossref（可选联网）校验\n\n- ✅ 未发现明显失败（仍建议抽查关键引用）\n"
     if args.out:
-        Path(args.out).write_text(md, encoding="utf-8")
-        print(f"已输出：{args.out}")
+        _write_out(args.out, md)
         return 0
     print(md, end="")
     return 0
@@ -544,7 +559,13 @@ def cmd_preview(args: argparse.Namespace) -> int:
     proposal = _read_body_file(args.proposal_file)
     original = target.read_text(encoding="utf-8", errors="ignore") if target.is_file() else ""
     try:
-        result = inspect_proposal(original=original, proposed=proposal, target_path=target, project_root=project_root)
+        result = inspect_proposal(
+            original=original,
+            proposed=proposal,
+            target_path=target,
+            project_root=project_root,
+            allowed_new_headings=get_seq_str(guard, "allowed_new_heading_commands"),
+        )
     except ValueError as exc:
         logger.error("❌ 目标路径越出 project_root：%s", exc)
         return 2
@@ -645,8 +666,7 @@ def cmd_review(args: argparse.Namespace) -> int:
         include_tier2=True,
     )
     if args.out:
-        Path(args.out).write_text(md, encoding="utf-8")
-        print(f"已输出：{args.out}")
+        _write_out(args.out, md)
         return 0
     print(md, end="")
     return 0
@@ -663,8 +683,7 @@ def cmd_coach(args: argparse.Namespace) -> int:
     if args.topic:
         md = coord.recommend_examples(query=str(args.topic), top_k=int(args.top_k)) + "\n" + md
     if args.out:
-        Path(args.out).write_text(md, encoding="utf-8")
-        print(f"已输出：{args.out}")
+        _write_out(args.out, md)
         return 0
     print(md, end="")
     return 0
@@ -678,11 +697,30 @@ def cmd_examples(args: argparse.Namespace) -> int:
     return 0
 
 
+def _runs_root_for_run(skill_root: Path, config: Dict[str, Any], run_id: str) -> Path:
+    """返回包含 run_id 的 runs_root；未指定 --task-root 时到各任务目录中查找。"""
+    runs_root = get_runs_dir(skill_root, config)
+    if os.environ.get(RUNS_DIR_ENV) or (runs_root / run_id).is_dir():
+        return runs_root
+    return locate_runs_root(run_id=run_id, search_base=Path.cwd()) or runs_root
+
+
+def _runs_roots_for_listing(skill_root: Path, config: Dict[str, Any]) -> list[Path]:
+    current = get_runs_dir(skill_root, config)
+    if os.environ.get(RUNS_DIR_ENV):
+        return [current]
+    roots = task_runs_roots(search_base=Path.cwd())
+    return roots if current in roots else [*roots, current]
+
+
 def cmd_list_runs(args: argparse.Namespace) -> int:
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
-    runs_root = get_runs_dir(skill_root, config)
-    runs = list_runs(runs_root=runs_root)
+    by_id = {}
+    for root in _runs_roots_for_listing(skill_root, config):
+        for run in list_runs(runs_root=root):
+            by_id[run.run_id] = run
+    runs = sorted(by_id.values(), key=lambda r: r.run_id, reverse=True)
     if not runs:
         print("（暂无 runs 记录）")
         return 0
@@ -695,7 +733,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
     coord = HybridCoordinator(skill_root=skill_root, config=config)
-    runs_root = get_runs_dir(skill_root, config)
+    runs_root = _runs_root_for_run(skill_root, config, str(args.run_id))
     target = coord.target_path(project_root=Path(args.project_root))
     try:
         target_relpath = target.relative_to(Path(args.project_root).resolve()).as_posix()
@@ -731,7 +769,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     skill_root = Path(__file__).resolve().parent.parent
     config = _load_config_for_args(skill_root, args)
     coord = HybridCoordinator(skill_root=skill_root, config=config)
-    runs_root = get_runs_dir(skill_root, config)
+    runs_root = _runs_root_for_run(skill_root, config, str(args.run_id))
     target = coord.target_path(project_root=Path(args.project_root))
     try:
         target_relpath = target.relative_to(Path(args.project_root).resolve()).as_posix()
@@ -760,6 +798,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--preset", help="加载学科预设 assets/presets/<name>.yaml（兼容旧路径 config/presets/，可选）")
     p.add_argument("--override", help="额外配置覆盖文件（yaml，可选，优先级最高）")
     p.add_argument("--no-user-override", action="store_true", help="不加载 ~/.config/nsfc-justification-writer/override.yaml")
+    p.add_argument("--task-root", help="本任务的 .bensz-api/task-*/ 目录；所有子命令的 runs_dir 固定为其下的 nsfc-justification-writer/")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     p_diag = sub.add_parser("diagnose", help="Tier1/Tier2 诊断（结构/引用/字数/表述）")
@@ -781,6 +820,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["cjk_only", "cjk_strip_commands"],
         help="统计口径：cjk_only（默认）或 cjk_strip_commands（更接近正文估计）",
     )
+    p_wc.add_argument("--info-form", help="可选：已填写的信息表文件（markdown），其中的字数要求优先于配置")
     p_wc.set_defaults(func=cmd_wordcount)
 
     p_refs = sub.add_parser("refs", help="引用核验摘要 + 生成 BibTeX 补齐/核验提示词")
@@ -869,6 +909,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     configure_logging(verbose=bool(getattr(args, "verbose", False)))
+    task_root = getattr(args, "task_root", None)
+    if task_root:
+        root = Path(task_root).expanduser().resolve()
+        if not root.name.startswith("task-") or root.parent.name != ".bensz-api":
+            logger.error("❌ --task-root 必须指向 .bensz-api/task-*/ 目录：%s", root)
+            return 2
+        os.environ[RUNS_DIR_ENV] = str(root / "nsfc-justification-writer")
     try:
         return int(args.func(args))
     except SystemExit:

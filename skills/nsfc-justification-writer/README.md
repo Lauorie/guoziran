@@ -1,6 +1,6 @@
 # nsfc-justification-writer — 用户使用指南
 
-本 README 面向使用者：说明如何触发、准备输入、分阶段写作和可逆自动写入。当前版本为 **v1.3.0**；AI 执行规范见 [`SKILL.md`](SKILL.md)，默认参数见 [`config.yaml`](config.yaml)。
+本 README 面向使用者：说明如何触发、准备输入、分阶段写作和可逆自动写入。AI 执行规范见 [`SKILL.md`](SKILL.md)，默认参数与版本号见 [`config.yaml`](config.yaml)。
 
 ## 它适合做什么
 
@@ -133,7 +133,8 @@ python skills/nsfc-justification-writer/scripts/run.py refs --project-root <项�
 ## 独立检查工具
 
 ```bash
-# 字数（默认中文字符口径）
+# 字数（默认中文字符口径；默认目标 7250±2750，即立项依据预算 4500–10000 字）
+# 信息表里的字数要求优先于默认目标，可用 --info-form <信息表.md> 指定
 python skills/nsfc-justification-writer/scripts/run.py wordcount --project-root <项目目录>
 
 # 语义审查或写作引导（完整流程必须包含 Tier2）
@@ -175,6 +176,8 @@ python skills/nsfc-justification-writer/scripts/run.py diff \
 python skills/nsfc-justification-writer/scripts/run.py rollback \
   --project-root <项目目录> --run-id <run_id> --yes
 ```
+
+多条命令属于同一任务时，加顶层参数 `--task-root .bensz-api/task-<时间>-<描述>/`，备份与日志写入同一目录。不加时，`diff`、`rollback` 和 `list-runs` 会在 `.bensz-api/task-*/nsfc-justification-writer/` 下按 run_id 查找。
 
 ## 常见问题
 

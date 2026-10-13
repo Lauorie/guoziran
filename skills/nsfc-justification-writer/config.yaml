@@ -1,6 +1,6 @@
 skill_info:
   name: nsfc-justification-writer
-  version: 1.3.0
+  version: 1.4.0
   description: "全自动撰写、重构、审查和润色 NSFC/科研基金立项依据；自动完成目标选择、Tier1+Tier2、保守假设、成稿、备份与写入，不在中途要求用户确认或审核。"
   category: writing
   author: "Bensz Conan"
@@ -58,6 +58,9 @@ guardrails:
   auto_select_target: true
   auto_create_target: true
   auto_retry_body_only: true
+  # 模板自带的标题命令允许在提案中新增；删改已有标题仍按结构变动拒绝。
+  allowed_new_heading_commands:
+    - subsubsection
 
 quality:
   # 吹牛式表述由宿主 AI 按 references/boastful_expression_guidelines.md 语义复核；
@@ -69,8 +72,9 @@ quality:
 constraints: {}
 
 word_count:
-  target: 9000
-  tolerance: 800
+  # 与 nsfc-length-aligner 的立项依据预算 4500–10000 字一致（中值 ± 半宽）
+  target: 7250
+  tolerance: 2750
   mode: cjk_only
 
 writing_coach:

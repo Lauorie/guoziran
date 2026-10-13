@@ -30,13 +30,16 @@ def main() -> int:
     parser.add_argument(
         "--no-risk-scan",
         action="store_true",
-        help="Skip scanning for risk phrases like '首次/领先'.",
+        help="Skip scanning for risk phrases like '首次提出/领先'.",
     )
     parser.add_argument(
         "--fail-on-risk-phrases",
         action="store_true",
         help="Treat risk phrases as errors (default: warnings).",
     )
+    duration = parser.add_mutually_exclusive_group()
+    duration.add_argument("--years", type=int, help="Research duration in years (passed to check_project_outputs.py).")
+    duration.add_argument("--project-type", help="Project type, e.g. 面上项目 (passed to check_project_outputs.py).")
     args = parser.parse_args()
 
     skill_root = Path(__file__).resolve().parents[1]
@@ -60,6 +63,10 @@ def main() -> int:
             cmd.append("--no-risk-scan")
         if args.fail_on_risk_phrases:
             cmd.append("--fail-on-risk-phrases")
+        if args.years is not None:
+            cmd += ["--years", str(args.years)]
+        if args.project_type is not None:
+            cmd += ["--project-type", args.project_type]
 
         rc = _run(cmd)
         if rc != 0:

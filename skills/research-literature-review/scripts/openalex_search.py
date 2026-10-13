@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Deprecated OpenAlex wrapper; implementation lives in research-literature-search."""
+"""Deprecated OpenAlex wrapper; implementation lives in openalex_provider.py."""
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
-SEARCH_ROOT = Path(os.environ.get("RESEARCH_LITERATURE_SEARCH_ROOT", str(Path(__file__).resolve().parents[2] / "research-literature-search"))).expanduser().resolve() / "scripts"
-sys.path.insert(0, str(SEARCH_ROOT))
-from providers.openalex import search as search_openalex  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from openalex_provider import search as search_openalex  # noqa: E402
 
 
 def _work_to_paper(work: dict[str, Any]) -> dict[str, Any]:

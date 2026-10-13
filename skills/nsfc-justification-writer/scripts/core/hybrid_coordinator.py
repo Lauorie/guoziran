@@ -219,7 +219,13 @@ class HybridCoordinator:
             self.obs.add("apply.backup", path=str(result.backup_path))
         return result
 
-    def word_count_status(self, *, project_root: Path, mode: Optional[str] = None) -> Dict[str, Any]:
+    def word_count_status(
+        self,
+        *,
+        project_root: Path,
+        mode: Optional[str] = None,
+        info_form_path: Optional[Path] = None,
+    ) -> Dict[str, Any]:
         project_root = Path(project_root).resolve()
         target = self._resolve_target(project_root)
         tex = read_text_streaming(target).text if target.exists() else ""
@@ -228,10 +234,13 @@ class HybridCoordinator:
         current = count_cjk_chars(tex, mode=used_mode).cjk_count
 
         info_form_text = ""
-        for candidate in [
+        candidates = [
             project_root / "info_form.md",
             project_root / "references" / "info_form.md",
-        ]:
+        ]
+        if info_form_path is not None:
+            candidates.insert(0, Path(info_form_path))
+        for candidate in candidates:
             if candidate.exists():
                 try:
                     info_form_text = candidate.read_text(encoding="utf-8", errors="ignore")

@@ -1,0 +1,133 @@
+"""沿 main.tex 的 \\input/\\include 遍历编译树，找出被编译的 .tex 与 \\bibliography 指向的 .bib。"""
+
+from __future__ import annotations
+
+import html
+import re
+import unicodedata
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from proposal_common import ProposalError, split_latex_comment
+
+INPUT_RE = re.compile(r"\\(?:input|include)\{([^}]+)\}")
+BIB_RE = re.compile(r"\\(?:bibliography|addbibresource(?:\[[^\]]*\])?)\{([^}]+)\}")
+ENTRY_START_RE = re.compile(r"@([A-Za-z]+)\s*[{(]\s*([^,\s]*)\s*,?")
+DOI_FIELD_RE = re.compile(r"\bdoi\s*=\s*[{\"]\s*([^}\"]+?)\s*[}\"]", re.IGNORECASE)
+TITLE_FIELD_RE = re.compile(r"\btitle\s*=\s*(.+?),?\s*$", re.IGNORECASE | re.MULTILINE)
+YEAR_FIELD_RE = re.compile(r"\byear\s*=\s*[{\"]?\s*(\d{4})", re.IGNORECASE)
+NON_ENTRY_TYPES = {"comment", "string", "preamble"}
+
+
+@dataclass(frozen=True)
+class LatexTree:
+    tex_files: list[Path]
+    bib_files: list[Path]
+
+
+@dataclass(frozen=True)
+class BibIndex:
+    keys: frozenset[str]
+    doi_keys: dict[str, str] = field(default_factory=dict)
+    title_keys: dict[str, tuple[str, int | None]] = field(default_factory=dict)  # 规范化题名 →（key, 年份）
+
+    @property
+    def dois(self) -> frozenset[str]:
+        return frozenset(self.doi_keys)
+
+
+def _inside(root: Path, path: Path) -> bool:
+    return path == root or root in path.parents
+
+
+def scan_latex_tree(project_root: Path) -> LatexTree:
+    root = Path(project_root).resolve()
+    main = root / "main.tex"
+    if not main.is_file():
+        raise ProposalError(f"project_root 缺少 main.tex：{root}")
+    tex_files: list[Path] = []
+    bib_files: list[Path] = []
+    queue = [main]
+    while queue:
+        tex = queue.pop(0)
+        if tex in tex_files or not tex.is_file():
+            continue
+        tex_files.append(tex)
+        for raw in tex.read_text(encoding="utf-8", errors="replace").splitlines():
+            line, _ = split_latex_comment(raw)
+            for match in INPUT_RE.finditer(line):
+                name = match.group(1).strip()
+                child = (root / (name if name.endswith(".tex") else name + ".tex")).resolve()
+                if _inside(root, child):
+                    queue.append(child)
+            for match in BIB_RE.finditer(line):
+                for name in match.group(1).split(","):
+                    name = name.strip()
+                    if not name:
+                        continue
+                    bib = (root / (name if name.endswith(".bib") else name + ".bib")).resolve()
+                    if _inside(root, bib) and bib not in bib_files:
+                        bib_files.append(bib)
+    return LatexTree(tex_files=tex_files, bib_files=bib_files)
+
+
+def normalize_doi(value: str | None) -> str | None:
+    if not value:
+        return None
+    raw = str(value).strip().replace("\\_", "_")
+    raw = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", raw, flags=re.IGNORECASE)
+    raw = re.sub(r"^doi:\s*", "", raw, flags=re.IGNORECASE).strip().rstrip(".,;")
+    return raw.lower() or None
+
+
+def title_key(text: str | None) -> str:
+    """比较题名用：解 HTML 实体，去 LaTeX 命令、括号与标点，小写，空白归一。"""
+    text = re.sub(r"\\[A-Za-z]+\s*", " ", html.unescape(str(text or "")))
+    text = unicodedata.normalize("NFKC", text).lower()
+    return re.sub(r"[^\w]+", " ", text).strip()
+
+
+def read_bib_index(bib_files: list[Path]) -> BibIndex:
+    keys: set[str] = set()
+    doi_keys: dict[str, str] = {}
+    title_keys: dict[str, tuple[str, int | None]] = {}
+    for path in bib_files:
+        if not Path(path).is_file():
+            continue
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        starts = list(ENTRY_START_RE.finditer(text))
+        for index, match in enumerate(starts):
+            if match.group(1).lower() in NON_ENTRY_TYPES or not match.group(2):
+                continue
+            key = match.group(2)
+            keys.add(key)
+            end = starts[index + 1].start() if index + 1 < len(starts) else len(text)
+            doi_match = DOI_FIELD_RE.search(text, match.end(), end)
+            doi = normalize_doi(doi_match.group(1)) if doi_match else None
+            if doi:
+                doi_keys.setdefault(doi, key)
+            title_match = TITLE_FIELD_RE.search(text, match.end(), end)
+            year_match = YEAR_FIELD_RE.search(text, match.end(), end)
+            if title_match and title_key(title_match.group(1)):
+                title_keys.setdefault(title_key(title_match.group(1)), (key, int(year_match.group(1)) if year_match else None))
+    return BibIndex(keys=frozenset(keys), doi_keys=doi_keys, title_keys=title_keys)
+
+
+def bib_entry_texts(bib_files: list[Path]) -> dict[str, str]:
+    """返回 {bibkey: 条目文本}；条目文本从条目起点到下一个 @ 起点之前。同名 key 取先出现的。"""
+    texts: dict[str, str] = {}
+    for path in bib_files:
+        if not Path(path).is_file():
+            continue
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+        starts = list(ENTRY_START_RE.finditer(text))
+        for index, match in enumerate(starts):
+            if match.group(1).lower() in NON_ENTRY_TYPES or not match.group(2):
+                continue
+            end = starts[index + 1].start() if index + 1 < len(starts) else len(text)
+            texts.setdefault(match.group(2), text[match.start():end])
+    return texts
+
+
+def relpath(project_root: Path, path: Path) -> str:
+    return Path(path).resolve().relative_to(Path(project_root).resolve()).as_posix()

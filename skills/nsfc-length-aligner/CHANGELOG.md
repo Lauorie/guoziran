@@ -14,6 +14,7 @@ The format is based on Keep a Changelog, and this skill adheres to Semantic Vers
 - `SKILL.md`：补充章节级统计（`sections`）的使用口径，指导在文件内做定点改写而非平均删改。
 - `SKILL.md`：在改写步骤末尾增加强制复检提示，强化闭环。
 - `SKILL.md`：为“三部分该瘦/该厚清单”增加按 `delta` 触发的使用方式，降低泛化建议风险。
+- 下调字数下限：立项依据 8000→4500、研究内容 12000→7000、合计 25000→18000（cjk_chars）；上限与页数上限不变。依据 2026-10 的试写与评测：获资助稿件与试写稿的这两章都低于原下限。
 
 ## [0.3.1] - 2026-03-08
 

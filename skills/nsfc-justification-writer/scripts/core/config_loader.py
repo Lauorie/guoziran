@@ -405,8 +405,12 @@ def load_config(
     return config
 
 
+# 指定后，runs_dir 固定为该路径（run.py 的 --task-root 会设置它）
+RUNS_DIR_ENV = "NSFC_JUSTIFICATION_WRITER_RUNS_DIR"
+
+
 def get_runs_dir(skill_root: Path, config: Dict[str, Any]) -> Path:
-    env_override = os.environ.get("NSFC_JUSTIFICATION_WRITER_RUNS_DIR")
+    env_override = os.environ.get(RUNS_DIR_ENV)
     if env_override:
         p = Path(env_override)
         if not p.is_absolute():
@@ -421,6 +425,8 @@ def get_runs_dir(skill_root: Path, config: Dict[str, Any]) -> Path:
 
 
 def get_cache_dir(skill_root: Path, config: Dict[str, Any]) -> Path:
+    if os.environ.get(RUNS_DIR_ENV):
+        return (get_runs_dir(skill_root, config) / "cache" / "ai").resolve()
     ai = config.get("ai", {}) if isinstance(config, dict) else {}
     value = str(ai.get("cache_dir", "") or "") if isinstance(ai, dict) else ""
     if not value or "{yyyymmdd" in value or value.startswith("tests/_artifacts"):

@@ -13,8 +13,8 @@ graph LR
     A[research-topic-extractor<br>提取综述主题] --> S[research-literature-search<br>候选文献检索]
     S --> B[research-literature-review<br>规范化文献综述]
     B --> C[research-guide-updater<br>优化项目指南]
-    C --> D[nsfc系列skills<br>标书各部分写作]
-    D --> F[nsfc-reviewers<br>专家评审模拟]
+    C --> P[nsfc-proposal<br>科学论证、文献核验、分章写作与检查]
+    P --> F[nsfc-reviewers<br>专家评审模拟]
 ```
 
 ### 工作流步骤
@@ -43,9 +43,8 @@ graph LR
 
 **第四步：标书各部分写作**
 - 使用 nsfc 系列技能，基于优化后的项目指南进行标书写作：
-  - `nsfc-justification-writer`：立项依据
-  - `nsfc-research-content-writer`：研究内容
-  - `nsfc-research-foundation-writer`：研究基础
+  - 推荐以 `nsfc-proposal` 为入口：它先建立科学论证、证据图谱与章节分工，再自己写立项依据、研究内容、研究基础和摘要，逐章检查，检查篇幅，并做跨章一致性检查。
+  - `nsfc-proposal` 不再调用 `nsfc-justification-writer`、`nsfc-research-content-writer`、`nsfc-research-foundation-writer`；这三个 skill 留在仓库中，可在 nsfc-proposal 之外单独写某一章。
   - 其他 nsfc 系列技能
 
 ### 工作流优势
@@ -175,7 +174,7 @@ graph LR
 
 ### 5. nsfc-justification-writer - 全自动立项依据语义写作与专业可读性复核
 
-**状态**：✅ 稳定（v1.3.1）
+**状态**：✅ 稳定（v1.4.0）
 
 **类型**：📝 日常
 
@@ -304,11 +303,11 @@ output_mode：preview（先预览）/ apply（确认后写入）
 
 ### 8.5. research-literature-search - 独立文献检索
 
-**状态**：✅ 稳定（v1.0.2）
+**状态**：✅ 稳定（v1.1.0）
 
 **类型**：📚 日常
 
-**功能**：校验 5–25 条查询，按 OpenAlex → Semantic Scholar/Crossref 的兼容策略检索，输出 `rls.paper.v1` canonical 候选、provenance、dedupe map 和可验证 `manifest.json`。
+**功能**：校验 5–25 条查询，按 宿主检索结果 → Semantic Scholar → Crossref 的顺序检索，输出 `rls.paper.v1` canonical 候选、provenance、dedupe map 和可验证 `manifest.json`。
 
 **适用场景**：只需要候选论文池、为研究选题/标书准备证据，或被 `research-literature-review` 作为检索生产者调用。
 
@@ -759,6 +758,37 @@ python3 research-literature-search/scripts/search_runner.py validate --bundle ./
 - 可选输出分层诊断、变更摘要与 STYLE_CARD，便于跨段落保持风格一致
 
 [详细文档 →](nsfc-humanization/README.md)
+
+---
+
+### 23. nsfc-proposal - 国自然正文统一入口
+
+**状态**：🚧 开发中（版本见 `skills/nsfc-proposal/config.yaml`）
+
+**类型**：📝 日常
+
+**功能**：国自然正文的统一入口。先建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef 元数据核对，按各章写法分章成稿，逐章检查摘要与篇幅，并做跨章一致性检查。
+
+**推荐 Prompt 模板**：
+
+```text
+用 nsfc-proposal 帮我写国自然青年基金正文。
+项目目录：projects/我的项目
+题目：……
+研究对象：……
+痛点：……
+科学问题与假设的初步想法：……
+已有材料：论文 / 预实验 / 没有
+```
+
+想全程不被打断，加一句「全自动，不用停下来问我」。
+
+**产出**：
+- 各章正文，写进项目的 `extraTex/`；摘要写进 `NSFC-ABSTRACTS.md`
+- `proposal/` 目录：科学论证、证据图谱、章节分工、待核实清单、文献线索
+- 核对过的参考文献，追加到项目的 `.bib`
+
+[详细文档 →](nsfc-proposal/README.md)
 
 ---
 

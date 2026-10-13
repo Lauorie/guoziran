@@ -25,6 +25,23 @@ The version number is the single source of truth in `config.yaml` (`skill_info.v
 - auto-test-skill A/B 轮优化：无唯一目标不再回退固定路径；统一 realpath/白名单校验；preview 对结构命令返回非零并提示缺失 bibkey；修复 coach/review/HTML 的旧四小节引导；Tier2 分块改为不依赖标题宏。
 - 新增 `tests/test_semantic_boundaries.py`，覆盖目标解析、结构 diff、正文-only diff 和引用守护。
 
+## [1.4.0] - 2026-10-09
+
+### Fixed（修复）
+- 提案可新增模板使用的标题命令（`guardrails.allowed_new_heading_commands`，默认 `subsubsection`）；删改已有标题仍被拒绝。
+- `list-runs` 不再把任务工作区的 `input/output/log/cache` 当作运行记录。
+- 新增顶层参数 `--task-root`；`diff`、`rollback`、`list-runs` 未指定时跨任务目录按 run_id 查找，修复跨分钟找不到前一步的问题。
+- README 删去版本号，版本以 `config.yaml` 为准。
+- `--task-root` 还要求父目录名为 `.bensz-api`，与 nsfc-proposal 的 `bib_resolve.py` 一致。
+- coach 提示词不再禁止新增引用：只要文献已核验、已入 .bib 并在引用台账中有记录即可引用；不再禁止新增配置允许的标题（来源：申请人 2026-10-10 决定）。
+- `refs`、`review`、`coach` 的 `--out` 指向不存在的目录时先建目录；此前报 FileNotFoundError（来源：nsfc-proposal fresh-1 验证运行）。
+- `wordcount` 新增 `--info-form`；默认字数目标改为 7250±2750（4500–10000 字），与 nsfc-length-aligner 的立项依据预算一致。
+- `wordcount --info-form` 指向不存在的文件时报错退出（退出码 2）。
+
+### Added（新增）
+- 与 nsfc-proposal 协作：读取 `proposal/` 下的信息表、篇幅与章节边界；Tier2 追加措辞强度与章节边界两项检查。
+- 本分支未写 BAC 记录，经负责人同意。
+
 ## [1.0.0] - 2026-02-24
 
 ### Changed

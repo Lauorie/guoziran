@@ -3,7 +3,7 @@
 ## 文件与结构边界
 
 - 目标文件来自用户、配置或唯一只读候选，不因文件名不同拒绝。
-- 不改 `main.tex`、`extraTex/@config.tex`；预览 diff 仅含授权正文，标题/标签/结构命令/样式不变。
+- 不改 `main.tex`、`extraTex/@config.tex`；预览 diff 仅含授权正文，标题/标签/结构命令/样式不变（`config.yaml` 中 `allowed_new_heading_commands` 允许新增的标题除外）。
 - 逻辑闭环：价值/必要性 → 证据与缺口 → 科学问题/假设 → 研究内容；切入点可选。
 
 ## 内容质量

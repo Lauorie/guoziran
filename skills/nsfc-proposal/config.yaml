@@ -1,0 +1,218 @@
+skill_info:
+  name: nsfc-proposal
+  version: 0.6.0
+  description: "国自然申请书正文的统一入口：建立科学论证、证据图谱和章节分工，检索并核实文献，按各章写法成稿，检查摘要、篇幅与跨章一致性。"
+  category: writing
+  author: "Lauorie"
+
+workspace:
+  task_root: .bensz-api/task-{yyyymmdd-hhmm}-{简短描述}
+
+confirm:
+  # ask：在确认点停下等申请人回答；auto：确认点不停，按「先继续」处理并记录；会改变内容的设计参数与口径取舍仍按 SKILL.md「提问」问
+  mode: ask
+
+literature:
+  use_wispaper: true
+  quick_search_top_n: 20
+  deep_search_top_n: 10
+  wispaper_workers: 4          # wispaper_search.py 的并发检索数
+  wispaper_timeout_s: 300      # 单次检索的读超时（deep_search 一次 40 秒起，top_n 大时更久）
+  wispaper_batch_budget_s: 240 # 到时不再发起新检索，未查的留到下一次运行（退出码 4）；加上单次读超时，一次运行不超过 10 分钟
+  keyword_queries: {min: 5, max: 25}   # 供执行说明引用，脚本不读取：关键词检索式的条数范围
+  bundle_max_queries: 25               # 供执行说明引用，脚本不读取：每个论断检索式文件的条数上限
+  title_similarity: 0.92
+  doi_title_similarity: 0.8
+  cn_publisher_fallback: true   # CrossRef 没有记录的中文文献，从出版方文章页的引文标签补全（bib_resolve 读取）
+  year_window: 1
+  http_timeout_s: 15
+  http_retries: 3       # 遇 429/500/502/503/504 或连接超时的重试次数
+  min_distinct_refs_justification: 30   # 立项依据引用的不同文献数下限；少于时一致性检查提示复核
+  http_backoff_s: 2     # 第 n 次重试等待 backoff*2**(n-1) 秒；Retry-After 不超过 60 秒时优先
+
+materials:
+  min_wisdoc_coverage: 0.9     # 本机文字长句在 WisDoc 结果中找到的比例低于此值时，正文以 local.txt 为准
+  wisdoc_poll_timeout_s: 520   # WisDoc 解析任务的轮询超时（秒）；留出余量，使单个 PDF 在 600 秒的 Bash 超时内完成
+  wisdoc_poll_interval_s: 5    # WisDoc 解析任务的轮询间隔（秒）
+  wisdoc_total_timeout_s: 560  # 单个 PDF 交 WisDoc 的总时限（秒，从提交算起）；轮询或取结果时超过则本次 WisDoc 记为超时、改用本机文字；只在下载图片时超过则停止下载，其余图片记为「（图片未下载）」
+
+figures:
+  enabled: true
+  model: google/gemini-3.1-flash-image   # 生图模型；对用户与正文一律称 WisImage
+  image_size: 2K                          # 1K / 2K / 4K
+  framework_aspect_ratio: "1:1"           # 研究框架图
+  design_aspect_ratio: "16:9"             # 各研究的设计图
+  max_rerenders: 2                        # 自检不合格时最多重画次数
+  timeout_s: 300
+  total_timeout_s: 560                    # 单张图的总时限（秒，含重试与等待）；每次请求的超时取 min(timeout_s, 剩余时间)，留在 600 秒的 Bash 超时之内
+  max_image_bytes: 31457280               # 30 MB
+
+export:
+  docx_name: 申请书正文.docx   # export_docx.py 写在 project_root 下
+  cite_superscript: true       # 引用编号 [1] 用上标
+
+consistency:
+  max_fix_rounds: 2
+  hidden_placeholder_words: [待补, 待核实, 待确认, 待填写, TODO]
+  extra_internal_id_patterns: ['S\d+']
+  placeholder_pattern: '【待补充：[^】]*】'
+  # 正文中不应出现的写作过程说明（占位 【待补充：……】 内的文字不计）
+  process_text_patterns: ["经核实", "已核实", "未经核实", "核实的文献", "检索核实", "未检索", "文献支持", "本次未", "台账", "assumptions.md", "evidence_map", "scientific_case", "proposal/", "由申请人", "建议申请人", "提交前删去", "保留占位", "申请人提出的", "原始口径", "正式申请书", "正式稿", "请申请人"]
+  # 非标准写法的占位（正则）；应改成 【待补充：……】 并列入占位清单
+  nonstandard_placeholder_patterns: ["\\[to be (?:supplied|added|confirmed)", "\\[TBD", "\\[待补充", "\\[请补充", "\\[需补充", "【请补充", "［待补充", "(?<![A-Za-z])XXX(?![A-Za-z])"]
+
+guardrails:
+  # 本 skill 自己写入的正文文件；proposal/ 下的文件；.bib 只追加（规则 8 的删除与 bib_refresh 重写除外）、写前备份（目标由 main.tex 解析）
+  allowed_write_files:   # 供执行说明引用，脚本不读取
+    - extraTex/4.5.生成式人工智能.tex
+  allowed_write_dirs:    # 供执行说明引用，脚本不读取
+    - proposal
+    - figures/nsfc-proposal
+
+yearly_plan:
+  # 按项目类型中的关键词定研究期限（年）；按顺序匹配，先命中先用。匹配不到时用 default_years，并提示记入 assumptions.md。
+  duration_by_keyword:
+    - [杰出青年, 5]
+    - [A类, 5]
+    - [重点项目, 5]
+    - [重大项目, 5]
+    - [面上, 4]
+    - [地区, 4]
+    - [青年, 3]
+  default_years: 3
+  max_years: 5
+
+chapter_checks:
+  # 绝对化措辞，只按短语匹配；单独的「首次」（如「首次随访」）是叙述先后，不报
+  risk_phrases: [首次提出, 首次发现, 首次实现, 首次揭示, 首次构建, 首次建立, 国内首次, 国际首次, 世界首次, 国内首创, 领先, 填补空白, 突破性]
+  # 含 S+数字、但不是内部编号的专业写法；误报时把写法加在这里
+  allowed_s_tokens: ["L5-S1", "L5–S1", "S100", "S100β", "S1P", "S1 受体", "S1受体"]
+  min_risks: 3   # 研究基础中研究风险的条数下限
+
+abstract:
+  zh_max_chars: 400
+  en_max_chars: 4000
+  content_points: {min: 3, max: 4}
+  zh_recommended_sentences: 5
+  title_candidates: 5
+  field_max_chars: 25
+  headings:
+    title: "# 标题建议"
+    zh: "# 中文摘要"
+    en: "# English Abstract"
+    field: "# 主要研究领域"
+
+# 篇幅标准与检查器参数（篇幅预算按文件名与其中 match 通配符匹配）
+length_standard:
+  unit: "cjk_chars"
+  tolerance_ratio: 0.08
+  pages:
+    # 2026 改版：正文原则上不超过 30 页；实操建议控制在 28 页以内留缓冲。
+    # 说明：页数受模板/字体/行距/图表影响很大；不要通过缩小字体/行距“挤页数”。
+    max: 28
+    hard_max: 30
+    notes: "页数为硬约束：建议 ≤28 页留缓冲；原则上不超过 30 页。"
+  overall:
+    # 合计口径（面上/青基 C 类）：
+    # - 合计约 18000–31000 字（2026-10 随各章下限下调；建议与页数联动校对：总页数≤28）
+    # 注意：这里的“字”是写作口径；脚本的 cjk_chars 只统计中日韩统一表意文字，英文/数字/标点会被低估。
+    min: 18000
+    max: 31000
+    notes: "合计约 18000–31000 字；建议总页数≤28 留缓冲。请按当年指南/模板校对。"
+  files:
+    - name: "立项依据"
+      match: "*立项依据*.tex"
+      min: 4500
+      max: 10000
+      notes: "约 4500–10000 字：穿透式，不铺陈；聚焦 Gap/Key Idea/价值论证。下限于 2026-10 按试写与评测下调，只作提示；证据不足时不凑字。"
+    - name: "研究内容"
+      match: "*研究内容*.tex"
+      min: 7000
+      max: 15000
+      notes: "约 7000–15000 字（图表多时取低值）：绝对核心；逻辑框架 + 关键设计 + 图表表达；应提炼创新点与年度计划（如把创新/计划拆到独立文件，请从本预算中等额扣除，保持总量不变）。下限于 2026-10 按试写与评测下调，只作提示。"
+    - name: "研究基础"
+      match: "*研究基础*.tex"
+      min: 5000
+      max: 6000
+      notes: "5–8 页（约 5000–6000 字）：证据链证明可行性；强相关预实验数据 + 核心技术能力 + 平台条件。"
+    - name: "特色与创新（通常并入研究内容）"
+      match: "*创新*.tex"
+      min: 800
+      max: 1500
+      notes: "2026 新版通常并入“研究内容”撰写；如单独成文件，控制在 0.5–1.5 页，聚焦 1–2 条高含金量创新，避免绝对化措辞。"
+    - name: "年度研究计划（通常并入研究内容）"
+      match: "*研究计划*.tex"
+      min: 800
+      max: 1500
+      notes: "2026 新版通常并入“研究内容”撰写；如单独成文件，控制在 0.5–1.5 页，按整年写三年计划；里程碑与可交付成果对齐。"
+
+# ============================================================================
+# 检查器行为
+# ============================================================================
+
+length_checker:
+  include_globs:
+    # 默认只统计会进入 PDF 的 LaTeX 源文件；如你在同目录还放了 README/笔记等 Markdown，
+    # 避免误计入篇幅。若确实需要统计 Markdown，可自行加入 "*.md" / "*.markdown"。
+    - "*.tex"
+  exclude_globs:
+    - "**/.bensz-api/**"
+    - "**/tests/**"
+    - "**/plans/**"
+    - "**/_artifacts/**"
+    - "**/.git/**"
+  latex:
+    # 当输入是一个标书目录且能识别出 main.tex 时：
+    # - 自动沿着 \input/\include 的依赖树收集“实际会被编译进 PDF 的文件”
+    # - 忽略被注释掉的 \input（避免把可选章节误计入篇幅）
+    # 值：auto/true/false
+    follow_inputs: "auto"
+    split_sections: true
+    section_commands:
+      - "section"
+      - "subsection"
+      - "subsubsection"
+    # 如你的模板用自定义命令（例如 \sec{...}），可把它加入列表（只写命令名，不含反斜杠）。
+    # 估算“可见文本”的启发式规则：会忽略常见 LaTeX 命令/数学环境/注释
+    strip_math: true
+    strip_commands: true
+
+sections:
+  - name: 立项依据
+    file: extraTex/1.1.立项依据.tex
+    guide: references/justification.md
+    brief: 立项依据
+    must_exclude: [实验步骤, 技术路线, 样本量设计, 年度安排, 研究方案细节]
+  - name: 研究内容
+    file: extraTex/2.1.研究内容.tex
+    guide: references/research_content.md
+    brief: 研究内容
+    must_exclude: [国内外研究现状的展开综述]
+  - name: 特色与创新
+    file: extraTex/2.2.特色与创新.tex
+    guide: references/research_content.md
+    brief: 研究内容
+    must_exclude: [首次, 国际领先, 填补空白]
+  - name: 年度研究计划
+    file: extraTex/2.3.年度研究计划.tex
+    guide: references/research_content.md
+    brief: 研究内容
+    must_exclude: [研究背景]
+  - name: 研究基础
+    file: extraTex/3.1.研究基础.tex
+    guide: references/foundation.md
+    brief: 研究基础
+    must_exclude: [申请人未提供的论文、数据或预实验结果]
+  - name: 工作条件
+    file: extraTex/3.2.工作条件.tex
+    guide: references/foundation.md
+    brief: 研究基础
+    must_exclude: [申请人未提供的平台或设备]
+  - name: 摘要
+    file: NSFC-ABSTRACTS.md
+    guide: references/abstract.md
+    must_exclude: [内部编号]
+  - name: 生成式人工智能使用说明
+    file: extraTex/4.5.生成式人工智能.tex
+    fallback_file: proposal/ai_declaration.md
+    must_exclude: [运行日志中没有记录的 AI 使用]

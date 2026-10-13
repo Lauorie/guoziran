@@ -8,6 +8,59 @@
 
 ## [Unreleased]
 
+- 新增 `nsfc-proposal` 设计文档 `docs/superpowers/specs/2026-10-09-nsfc-proposal-design.md`：以 nsfc-* 为主线并入 nsfc-writer 的科学论证、证据图谱和章节分工，接入 wispaper 检索，修复 `nsfc-justification-writer` 3 处 bug；本轮只写设计，不修改 Skill 源码。
+- 新增 `nsfc-proposal` 0.1.0：国自然正文统一入口，建立科学论证、证据图谱与章节分工，接入 wispaper 检索与 CrossRef/OpenAlex 元数据核对，按固定顺序调用写作 skill 并做跨章一致性检查；申请人材料中的 PDF 经团队 WisDoc 服务解析，并与本机抽取的文字比对覆盖率。
+- `nsfc-justification-writer` 1.4.0：允许提案新增模板标题命令；`list-runs` 不再列出工作区目录；新增 `--task-root` 并跨任务目录查找运行记录；接入 nsfc-proposal。
+- `nsfc-justification-writer` 1.4.0：coach 提示词允许新增已核验、已入 `.bib` 并在引用台账有记录的引用，及配置允许的标题命令。
+- `nsfc-research-content-writer` 1.1.0：检查脚本改为检测 S 编号泄漏（原规则与 SKILL.md 矛盾）；接入 nsfc-proposal。
+- `nsfc-research-content-writer` 1.1.0：年度计划按项目类型定研究期限（`config.yaml` 的 `yearly_plan`；杰出青年与 A 类按 5 年，类型先做 NFKC 规范化并去空白再匹配），检查脚本新增 `--years`、`--project-type`；风险词「首次」改为「首次提出」等短语；`projects/NSFC_General`、`projects/NSFC_Local` 的 AGENTS.md 年度计划由三年改为四年。
+- `nsfc-proposal` 0.1.0：content-writer 信息表第 10 项按项目类型写研究期限（年数取自 content-writer 的 `yearly_plan`），不再写死三年，类型不在年数表中时写明该类型；第 6.2 步的检查加 `--project-type`。
+- `nsfc-proposal` 0.1.0：新增 `figures.py`，用团队的生图服务 WisImage 生成研究框架图与各研究的设计图，第 6.2 步先出图再写研究内容；一致性检查新增 `missing_figure_file`；评审后按返回格式存 `.png` 或 `.jpg`，单张图设总时限，拒绝文字先脱敏后截取。
+- `nsfc-proposal` 0.1.0：`bib_resolve.py --dry-run` 的汇总写入 `bib_resolve.dryrun.json`，不覆盖 `bib_resolve.json`。
+- `nsfc-proposal` 0.1.0：补政策文件、摘要补全失败时的检索、检验力、对照与基线、否证条件的写法；`literature_leads.md` 模板新增「## 官方文件」。
+- `nsfc-research-foundation-writer` 0.2.0、`nsfc-abstract` 2.1.3：接入 nsfc-proposal。
+- `research-literature-search` 1.1.0：`run` 新增 `--host-results`，接收 wispaper 结果。
+- `research-literature-search` 1.1.0：`enrich-abstracts` 遇到重试后仍报 429 的服务，本次运行的后续记录跳过它，汇总写 `exhausted_providers`，`attempts` 计数不含跳过的服务。
+- `.gitignore`：放行 tests/nsfc-justification-writer、tests/nsfc-research-content-writer、tests/research-literature-search、tests/nsfc-proposal 下的测试脚本。
+- 终审修复：`nsfc-proposal` 的 `init` 不再登记 `.bib` 中已有的条目，`citation_ledger.py register-user` 改为 `--key`（全部登记须加 `--all`），没有引用台账改为必须修正，一致性检查识别跨行 `\cite`；`nsfc-research-content-writer` 新增 `checks.allowed_s_tokens`；`nsfc-justification-writer` 的 `--task-root` 须在 `.bensz-api` 下；`research-literature-search` 的 manifest 版本号改读 `config.yaml`；nsfc-proposal 计划与设计文档去掉本机路径。
+- `nsfc-proposal` 0.1.0：新增 `wispaper_search.py` 与 `wis_mcp_client.py`，经 MCP 会话检索，原始返回逐字存档并汇成 `rls.host_results.v1`，不再由模型手抄检索结果。
+- `nsfc-research-foundation-writer` 0.2.0：修复风险条目计数的正则多转义，「风险一」「风险 2」一类写法现在计入；新增 tests/nsfc-research-foundation-writer。
+- `nsfc-proposal` 0.1.0：作图提示词的标签不加括号、引号、书名号；神经或生理信号在动作不同的条件间比较时，设动作匹配的对照；编译命令不带相对路径的 `--project-dir`。
+- `nsfc-proposal` 0.1.0：一致性检查的过程说明词加入「正式申请书」「正式稿」「请申请人」；内文只有省略号的【待补充：……】视为占位格式说明，不计入占位。
+- `nsfc-proposal` 0.1.0：bib_resolve 按 CrossRef/OpenAlex 类型写条目：书章为 @incollection（booktitle、publisher），图书为 @book；其余 @misc 也带 publisher。参考文献样式不渲染 howpublished，书章此前没有出处（来源：funded-2 验证运行）。
+- `nsfc-proposal` 0.1.0：信息表列出 section_plan 中的占位并要求逐字照抄；研究基础的缺失项不再自拟占位文字，同一缺失项只有一种写法（来源：funded-2 验证运行）。
+- `nsfc-proposal` 0.1.0：wispaper 检索的 HTTP 正文与错误信息先脱敏再截断到 200 字；占位格式说明只在 AI 使用说明中豁免，其他文件的空占位报 `empty_placeholder`（需要复核）；执行说明补检索步骤的前台运行与超时重跑，第 0 步告知检索式会发送到 wispaper 服务，可选输入补 `WIS_MCP_URL`、`WIS_MCP_TOKEN`。
+- `nsfc-proposal` 0.1.0：`bib_resolve` 先解 HTML 实体再转义，期刊名不再显示「&amp;」。
+- `nsfc-proposal` 0.1.0：新增 `bib_refresh.py`，按台账 DOI 刷新已写入的 `.bib` 条目，key 与正文引用不变。
+- `nsfc-proposal` 0.1.0：引用句数字核对认摘要中的 percent、per cent 写法；percentage points 不当作 %。
+- `nsfc-justification-writer` 1.4.0：`refs`、`review`、`coach` 的 `--out` 先建目录。
+- `research-literature-search` 1.1.0：`enrich-abstracts` 新增 `--reuse`，沿用前次补到的摘要；nsfc-proposal 第 3 步第 6 项改用它。
+- `nsfc-length-aligner`：立项依据与研究内容的字数下限下调为 4500、7000，合计下限 18000；`nsfc-research-content-writer` 推荐字数同步。
+- `nsfc-proposal` 0.1.0：`bib_resolve` 只查 CrossRef，删去 OpenAlex 兜底。
+- `research-literature-search` 1.1.0：`enrich-abstracts` 可只按 wispaper 的标题检索结果补摘要（`--offline`、`--host-results`、`abstract-queries`），不发其他网络请求。
+- `nsfc-proposal` 0.1.0：第 3 步只用 wispaper 检索与补摘要，不再请求 OpenAlex、Semantic Scholar；wispaper 不可用时停下。
+- `nsfc-proposal` 0.1.0：小标题按每项研究的类型选；设计图不画照片，自检把照片判为不合格。
+- `research-literature-review`：OpenAlex 适配器移入本 skill，research-literature-search 接受调用方注入的检索源。
+- `research-literature-search` 1.1.0：删除 OpenAlex（检索源、补摘要、标识符与文档）。
+- `nsfc-ref-alignment`：在线核验 DOI 只查 Crossref；国自然写作的 skill 均不再含 OpenAlex。
+- 第五轮终审修复：综述 skill 补摘要仍用其 OpenAlex 适配器；nsfc-proposal 第 3 步补上 wispaper 失败的去向；文档与设计文档同步。
+- `nsfc-proposal` 0.1.0：`bib_resolve` 不再把试验注册、数据集当作文献；学位论文与书章条目类型更正。
+- `packages/bensz-nsfc`：`gbt7714-nsfc.bst` 补上标准的 `mastersthesis` 条目类型（原只有拼错的 `masterthesis`），硕士学位论文条目可正常排版。
+- `nsfc-justification-writer` 1.4.0：`wordcount` 可读信息表，默认字数目标与立项依据预算一致。
+- `nsfc-research-foundation-writer` 0.2.0：占位写法统一为【待补充：……】。
+- `research-literature-search` 1.1.0：只用宿主检索结果时 manifest 不再标注可补充；`research-literature-review` 更新日志更正。
+- `nsfc-proposal` 0.1.0：设计图自检核对图标数量。
+- 第六轮终审修复：旧版模板包缺 `mastersthesis` 的恢复办法；更正两处更新日志；`wordcount --info-form` 缺文件时报错；其余小修。
+- `nsfc-proposal` 0.1.0：开始时不再提示数据发往哪些服务。
+- `nsfc-proposal` 0.2.0：与原先调用的 6 个 skill 融合为一个自包含的 skill，写作规则并入 `references/`，检查并入 `scripts/`（`literature.py`、`chapter_check.py`、`abstract_check.py`、`length_check.py`、`plan_years.py`），不再依赖其他 skill；新增只改一章、只写摘要、篇幅对齐三种任务。
+- `nsfc-proposal` 0.2.0：参考文献中的 U+2010、U+2011 连字符改写为普通连字符，编译不再缺字；`projects/NSFC_Young`、`NSFC_General`、`NSFC_Local` 的 AGENTS.md 技能指引改为指向 nsfc-proposal。
+- `nsfc-proposal` 0.6.0：CrossRef 只补字段，查不到的文献按检索记录写入，不再挡在正文外（预印本写成网络文献，缺卷期页的列入待核实项）。
+- `nsfc-proposal` 0.5.1：一次只问一个问题。开场先问项目类型，再用文字问研究方向，不再给填写模板；缺的材料写占位，不集中追问。
+- `nsfc-proposal` 0.5.0：导出 Word（申请书正文.docx）；开场给填写模板、提问放在最后；篇幅下限只作参考，不凑字；补摘要认同标题不同 DOI 的同一篇。
+- `nsfc-proposal` 0.4.0：CrossRef 没有记录的中文文献，按出版方文章页的引文标签补全元数据（来源 `publisher_page`，列入待核实项）；检索式增加中文。
+- `nsfc-proposal` 0.3.0：拿不准的事用 AskUserQuestion 问申请人；扩写时页数优先；新增 `literature.py digest/select/evidence` 与 `power.py`；SKILL.md 第 3、7 步的细节移入 `references/literature.md`、`references/consistency_fixes.md`。
+- 本分支未写 BAC 记录，经负责人同意。
+- 新增 `nsfc-proposal` 实施计划 `docs/plans/2026-10-09-nsfc-proposal-实施计划.md`：20 个任务，含单元测试、端到端验收与盲评；计划中的代码已在临时副本中试跑（175 passed，另有 research-idea 4 个既有 errors）。本分支未写 BAC 记录，经负责人同意。
 - `research-idea` 0.13.0：依据 v18 审计闭环计划新增不可变 completion evidence hash、completed attestation、reviewer 原始回执逐字段对账和四条前向边 applicability 重放校验；旧 v5 现场保持只读兼容。
 - 修订 Skill 基础设施边界：移除重复 BSK 的 `contract.py` 与自建 completion attestation，通用 evidence/Gate/transition/重放统一交给本地 BSK；research-idea 仅保留边 applicability 与 reviewer receipt 领域适配。
 

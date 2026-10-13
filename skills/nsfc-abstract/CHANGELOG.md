@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-10-09
+
+### Changed（变更）
+- 与 nsfc-proposal 协作时，信息取自科学论证与已写章节，不再向用户提问。
+- 本分支未写 BAC 记录，经负责人同意。
+
 ## [2.1.2] - 2026-03-04
 
 ### Changed

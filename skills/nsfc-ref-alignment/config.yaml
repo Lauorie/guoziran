@@ -28,7 +28,7 @@ parameters:
     type: boolean
     required: false
     default: false
-    description: 是否进行在线核验（仅做确定性查询：优先用 DOI 到 Crossref/OpenAlex 检查“存在性/元信息一致性”；失败则降级为未核验）
+    description: 是否进行在线核验（仅做确定性查询：优先用 DOI 到 Crossref 检查“存在性/元信息一致性”；失败则降级为未核验）
 
 citation_commands:
   # 常见 natbib / plain LaTeX / ctex 场景

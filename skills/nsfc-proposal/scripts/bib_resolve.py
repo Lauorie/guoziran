@@ -1,0 +1,523 @@
+#!/usr/bin/env python3
+"""把选作证据的文献记录补全成 .bib 条目（设计文档 6.4 节）。
+
+输入：rls.paper.v1 记录（JSONL），来自检索或申请人材料。能不能引用由记录决定：检索到、选作证据的文献都写进 .bib。
+CrossRef 只用来补字段：有 DOI 时查 CrossRef 并核对标题；没有 DOI 或核对失败时，按标题查 CrossRef。
+CrossRef 有记录时用它的元数据（含卷、期、页码与文献类型）；中文文献可再按出版方文章页补全（bib_cn）；
+都没有时按记录自带的字段写（bib_record），缺的卷期页不补。CrossRef 认定为数据集、试验注册等非出版物的不写。
+条目追加到 main.tex 指向的第一个 .bib（写前备份，按 DOI 与题名去重）；写不成的记入 proposal/literature_leads.md，
+标 [unverified]，正文不得引用。已写入的条目要按来源更新时，用 bib_refresh.py。
+退出码：0 完成（含未核实条目）；2 输入或路径错误。
+"""
+
+from __future__ import annotations
+
+import argparse
+import html
+import json
+import re
+import shutil
+import sys
+import time
+import unicodedata
+from dataclasses import asdict, dataclass, replace
+from datetime import datetime
+from difflib import SequenceMatcher
+from pathlib import Path
+from typing import Any, Callable, Iterable, Mapping, Protocol
+from urllib.parse import quote
+
+import requests
+
+import bib_cn
+import bib_record
+from bib_record import record_authors  # noqa: F401  供测试引用
+from citation_ledger import record_added
+from http_retry import failure_label, get_with_retry
+from latex_files import BibIndex, normalize_doi, read_bib_index, scan_latex_tree, title_key
+from proposal_common import ProposalError, append_under_heading, load_config, proposal_paths, resolve_project_root
+
+USER_AGENT = "nsfc-proposal-bib-resolve/0.1"
+CROSSREF_WORKS = "https://api.crossref.org/works"
+ELLIPSIS_RE = re.compile(r"…|\.\.\.")
+MIN_FRAGMENT_CHARS = 20
+STOPWORDS = frozenset({"a", "an", "the", "of", "on", "in", "for", "and", "to", "with", "by", "from", "at", "via", "is", "are"})
+LATEX_SPECIALS = {
+    "\\": r"\textbackslash{}",
+    "{": r"\{",
+    "}": r"\}",
+    "~": r"\textasciitilde{}",
+    "^": r"\textasciicircum{}",
+    "&": r"\&",
+    "%": r"\%",
+    "$": r"\$",
+    "#": r"\#",
+    "_": r"\_",
+    # Times New Roman 没有 U+2010、U+2011 的字形，编译后缺字；换成普通连字符。软连字符不可见，删去
+    "‐": "-",
+    "‑": "-",
+    "­": "",
+}
+
+
+class HttpSession(Protocol):
+    def get(self, url: str, params: Mapping[str, Any] | None = None, headers: Mapping[str, str] | None = None,
+            timeout: float | None = None) -> Any: ...
+
+
+@dataclass(frozen=True)
+class Settings:
+    title_similarity: float = 0.92
+    doi_title_similarity: float = 0.8
+    year_window: int = 1
+    timeout: float = 15.0
+    http_retries: int = 3
+    http_backoff_s: float = 2.0
+    cn_fallback: bool = True
+    sleep: Callable[[float], None] = time.sleep
+
+    @classmethod
+    def from_config(cls, config: Mapping[str, Any]) -> "Settings":
+        lit = config.get("literature") or {}
+        return cls(
+            title_similarity=float(lit.get("title_similarity", 0.92)),
+            doi_title_similarity=float(lit.get("doi_title_similarity", 0.8)),
+            year_window=int(lit.get("year_window", 1)),
+            timeout=float(lit.get("http_timeout_s", 15)),
+            http_retries=int(lit.get("http_retries", 3)),
+            http_backoff_s=float(lit.get("http_backoff_s", 2)),
+            cn_fallback=bool(lit.get("cn_publisher_fallback", True)),
+        )
+
+
+CROSSREF_TYPES = {"journal-article": "article", "proceedings-article": "inproceedings", "book-chapter": "incollection",
+                  "book-part": "incollection", "book-section": "incollection", "book": "book", "monograph": "book",
+                  "edited-book": "book", "reference-book": "book"}
+NON_PUBLICATION_TYPES = frozenset({
+    "dataset", "database", "component", "peer-review", "grant", "journal", "journal-issue", "journal-volume",
+    "proceedings", "proceedings-series", "book-series", "book-set", "report-series", "standard-series",
+})
+THESIS_TYPES = ("phdthesis", "mastersthesis")
+MASTER_MARKERS = ("master", "硕士", "(ms)", "(ma)")
+
+
+@dataclass(frozen=True)
+class WorkMeta:
+    title: str
+    authors: tuple[tuple[str, str], ...]
+    journal: str | None
+    year: int | None
+    volume: str | None
+    issue: str | None
+    pages: str | None
+    doi: str | None
+    entry_type: str = "article"
+    publisher: str | None = None
+    kind: str | None = None
+    url: str | None = None           # 只在按记录写的预印本等 @misc 条目中使用
+
+
+@dataclass
+class Outcome:
+    record_id: str
+    title: str
+    status: str
+    bibkey: str | None = None
+    doi: str | None = None
+    source: str | None = None
+    reason: str | None = None
+    landing_url: str | None = None   # 中文文献兜底时的文章页
+    abstract: str | None = None      # 中文文献兜底时文章页给出的摘要（台账优先用它）
+    notes: list[str] | None = None
+    missing: list[str] | None = None  # 按记录写的条目缺的国标著录项（卷、期、页码）
+
+
+@dataclass(frozen=True)
+class Lookup:
+    meta: WorkMeta | None
+    source: str | None
+    reason: str | None
+    not_publication: bool = False    # CrossRef 认定是数据集、试验注册等，不是文献：不按记录写
+    other_title: bool = False        # 记录的 DOI 在 CrossRef 中是另一篇：按记录写时不写这个 DOI
+
+
+def _get_json(session: HttpSession, url: str, params: Mapping[str, Any] | None, settings: Settings) -> Any | None:
+    response = get_with_retry(session, url, params=params, headers={"User-Agent": USER_AGENT}, timeout=settings.timeout,
+                              retries=settings.http_retries, backoff_s=settings.http_backoff_s, sleep=settings.sleep)
+    if getattr(response, "status_code", 200) == 404:
+        return None
+    response.raise_for_status()
+    return response.json()
+
+
+def _str(value: Any) -> str | None:
+    return str(value).strip() if value not in (None, "") else None
+
+
+def _crossref_year(item: Mapping[str, Any]) -> int | None:
+    for key in ("published-print", "published-online", "issued", "published", "approved"):
+        block = item.get(key)
+        parts = block.get("date-parts") if isinstance(block, Mapping) else None
+        if isinstance(parts, list) and parts and isinstance(parts[0], list) and parts[0] and isinstance(parts[0][0], int):
+            return parts[0][0]
+    return None
+
+
+def crossref_meta(item: Mapping[str, Any]) -> WorkMeta | None:
+    titles = item.get("title")
+    title = titles[0].strip() if isinstance(titles, list) and titles and isinstance(titles[0], str) else ""
+    if not title:
+        return None
+    authors = []
+    for author in item.get("author") or []:
+        if isinstance(author, Mapping) and (author.get("family") or author.get("name")):
+            authors.append((str(author.get("family") or author.get("name")).strip(), str(author.get("given") or "").strip()))
+    journals = item.get("container-title")
+    journal = journals[0] if isinstance(journals, list) and journals else None
+    kind = item.get("type")
+    publisher = _str(item.get("publisher"))
+    if kind == "dissertation":
+        degree = " ".join(str(d) for d in item.get("degree") or []).lower()
+        entry_type = "mastersthesis" if any(marker in degree for marker in MASTER_MARKERS) else "phdthesis"
+        institutions = item.get("institution")
+        first = institutions[0] if isinstance(institutions, list) and institutions else None
+        publisher = _str(first.get("name")) if isinstance(first, Mapping) and first.get("name") else publisher
+    elif kind == "other":
+        entry_type = "incollection" if journal and item.get("page") else "misc"
+    else:
+        entry_type = "article" if kind is None else CROSSREF_TYPES.get(kind, "misc")
+    return WorkMeta(title=title, authors=tuple(authors), journal=_str(journal), year=_crossref_year(item),
+                    volume=_str(item.get("volume")), issue=_str(item.get("issue")), pages=_str(item.get("page")),
+                    doi=normalize_doi(item.get("DOI")), entry_type=entry_type,
+                    publisher=publisher, kind=kind)
+
+
+def _unescape_html(text: str) -> str:
+    """检索源的文本常带 HTML 实体（&amp;），偶有两层编码（&amp;amp;）；最多解两层。"""
+    for _ in range(2):
+        decoded = html.unescape(text)
+        if decoded == text:
+            break
+        text = decoded
+    return text
+
+
+def _norm_title(text: str) -> str:
+    text = unicodedata.normalize("NFKC", _unescape_html(text)).lower()
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"[^\w\s]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def title_matches(wanted: str, candidate: str, threshold: float) -> bool:
+    """完整标题按相似度比较；含省略号的截断标题要求每个足够长的片段都出现在候选标题中。"""
+    if ELLIPSIS_RE.search(wanted):
+        fragments = [f for f in (_norm_title(p) for p in ELLIPSIS_RE.split(wanted)) if len(f) >= MIN_FRAGMENT_CHARS]
+        target = _norm_title(candidate)
+        return bool(fragments) and all(f in target for f in fragments)
+    return SequenceMatcher(None, _norm_title(wanted), _norm_title(candidate)).ratio() >= threshold
+
+
+def year_ok(wanted: int | None, found: int | None, window: int) -> bool:
+    return wanted is None or found is None or abs(wanted - found) <= window
+
+
+def _ascii(text: str) -> str:
+    return re.sub(r"[^a-z]", "", unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii").lower())
+
+
+def make_bibkey(meta: WorkMeta, taken: set[str]) -> str:
+    family = _ascii(meta.authors[0][0]) if meta.authors else ""
+    if not family and bib_cn.has_cjk(meta.title):
+        base = bib_cn.cn_bibkey(meta.title, meta.year)
+    else:
+        first = next((w for w in (_ascii(x) for x in _norm_title(meta.title).split()) if w and w not in STOPWORDS),
+                     "untitled")
+        base = f"{family or 'anon'}{meta.year or 'nd'}{first}"
+    key, suffix = base, 0
+    while key in taken:
+        suffix += 1
+        key = base + chr(ord("a") + suffix - 1)
+    taken.add(key)
+    return key
+
+
+def _escape(text: str) -> str:
+    text = _unescape_html(text)
+    text = re.sub(r"</?(?:i|b|em|strong|sub|sup|scp|span|mml:[A-Za-z]+)(?:\s[^>]*)?>", "", text, flags=re.IGNORECASE)
+    return "".join(LATEX_SPECIALS.get(ch, ch) for ch in text)
+
+
+def to_bibtex(meta: WorkMeta, key: str) -> str:
+    venue_field = {"article": "journal", "inproceedings": "booktitle", "incollection": "booktitle", "book": None,
+                   "phdthesis": None, "mastersthesis": None}.get(meta.entry_type, "howpublished")
+    thesis = meta.entry_type in THESIS_TYPES
+    with_publisher = meta.entry_type not in ("article", "inproceedings")
+    authors = " and ".join(f"{_escape(f)}, {_escape(g)}" if g else _escape(f) for f, g in meta.authors)
+    pages = meta.pages.replace("-", "--") if meta.pages and "--" not in meta.pages else meta.pages
+    fields = [
+        ("title", "{" + _escape(meta.title) + "}"),
+        ("author", authors or None),
+        (venue_field, _escape(meta.journal) if meta.journal and venue_field else None),
+        ("school", _escape(meta.publisher) if meta.publisher and thesis else None),
+        ("publisher", _escape(meta.publisher) if meta.publisher and with_publisher and not thesis else None),
+        ("year", str(meta.year) if meta.year else None),
+        ("volume", meta.volume),
+        ("number", meta.issue),
+        ("pages", pages),
+        ("doi", meta.doi),
+        ("url", meta.url),
+    ]
+    lines = [f"@{meta.entry_type}{{{key},"]
+    lines += [f"  {name} = {{{value}}}," for name, value in fields if value]
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _record_fields(record: Mapping[str, Any]) -> tuple[str | None, str, int | None]:
+    identifiers = record.get("identifiers") if isinstance(record.get("identifiers"), Mapping) else {}
+    doi = normalize_doi(identifiers.get("doi") or record.get("doi"))
+    title = str(record.get("title") or "").strip()
+    year = record.get("year")
+    return doi, title, year if isinstance(year, int) and not isinstance(year, bool) else None
+
+
+def _crossref_doi(doi: str, title: str, *, session: HttpSession, settings: Settings) -> tuple[WorkMeta | None, str | None, str | None]:
+    """返回 (元数据, 失败原因, 判定)；判定为 not_publication（非出版物）、other_title（另一篇）或 None。"""
+    try:
+        data = _get_json(session, f"{CROSSREF_WORKS}/{quote(doi, safe='/')}", None, settings)
+    except (requests.RequestException, ValueError) as exc:
+        return None, f"CrossRef DOI 查询失败（{failure_label(exc)}）", None
+    meta = crossref_meta((data or {}).get("message") or {}) if data else None
+    if meta is None:
+        return None, "CrossRef 没有这个 DOI", None
+    if meta.kind in NON_PUBLICATION_TYPES:
+        return None, f"DOI {doi} 在 CrossRef 中是非出版物条目（类型 {meta.kind}），不作为文献", "not_publication"
+    if title and not title_matches(title, meta.title, settings.doi_title_similarity):
+        return None, f"DOI {doi} 对应的标题与记录不符", "other_title"
+    return meta, None, None
+
+
+def crossref_by_doi(doi: str, title: str, *, session: HttpSession, settings: Settings) -> tuple[WorkMeta | None, str | None]:
+    """用 DOI 回 CrossRef 取元数据，返回 (元数据, 失败原因)；给了标题时要求标题相符。"""
+    meta, reason, _verdict = _crossref_doi(doi, title, session=session, settings=settings)
+    return meta, reason
+
+
+def lookup(record: Mapping[str, Any], *, session: HttpSession, settings: Settings) -> Lookup:
+    """查 CrossRef；元数据为 None 时 reason 非空，并标明 CrossRef 是否认定它不是文献、DOI 是否属于另一篇。"""
+    doi, title, year = _record_fields(record)
+    failures: list[str] = []
+    verdict: str | None = None
+    if doi:
+        meta, failure, verdict = _crossref_doi(doi, title, session=session, settings=settings)
+        if meta is not None:
+            return Lookup(meta, "crossref", None)
+        failures.append(failure)
+    if not title:
+        return Lookup(None, None, "；".join(failures + ["记录没有标题"]))
+    query = re.sub(r"\s+", " ", ELLIPSIS_RE.sub(" ", title)).strip()
+    try:
+        data = _get_json(session, CROSSREF_WORKS, {"query.bibliographic": query, "rows": 10}, settings)
+    except (requests.RequestException, ValueError) as exc:
+        failures.append(f"CrossRef 标题检索失败（{failure_label(exc)}）")
+        return Lookup(None, None, "；".join(failures), verdict == "not_publication", verdict == "other_title")
+    skipped_kind: str | None = None
+    for item in ((data or {}).get("message") or {}).get("items") or []:
+        meta = crossref_meta(item) if isinstance(item, Mapping) else None
+        if not (meta and title_matches(title, meta.title, settings.title_similarity) and year_ok(year, meta.year, settings.year_window)):
+            continue
+        if meta.kind in NON_PUBLICATION_TYPES:
+            skipped_kind = skipped_kind or meta.kind
+            continue
+        return Lookup(meta, "crossref", None)
+    if skipped_kind:
+        failures.append(f"CrossRef 标题相符的只有非出版物条目（类型 {skipped_kind}，如试验注册、数据集），不作为文献")
+    else:
+        failures.append("CrossRef 无标题匹配的条目")
+    return Lookup(None, None, "；".join(failures), bool(skipped_kind) or verdict == "not_publication",
+                  verdict == "other_title")
+
+
+def _same_title(titles: Mapping[str, tuple[str, int | None]], title: str, year: int | None) -> str | None:
+    """.bib 中题名相同、年份不冲突的条目 key；按记录写的条目没有 DOI 时靠它去重。"""
+    hit = titles.get(title_key(title)) if title_key(title) else None
+    return hit[0] if hit and (year is None or hit[1] is None or hit[1] == year) else None
+
+
+def resolve_records(records: Iterable[Mapping[str, Any]], *, session: HttpSession, settings: Settings,
+                    index: BibIndex) -> tuple[list[Outcome], list[str]]:
+    taken = set(index.keys)
+    known = dict(index.doi_keys)
+    titles = dict(index.title_keys)
+    outcomes: list[Outcome] = []
+    entries: list[str] = []
+    for record in records:
+        doi, title, year = _record_fields(record)
+        record_id = str(record.get("record_id") or title or "?")
+        if doi and doi in known:
+            outcomes.append(Outcome(record_id, title, "exists", bibkey=known[doi], doi=doi))
+            continue
+        found = lookup(record, session=session, settings=settings)
+        meta, source, reason = found.meta, found.source, found.reason
+        extra = bib_cn.Fallback()
+        notes: list[str] = []
+        missing: list[str] | None = None
+        if meta is None and not found.not_publication and settings.cn_fallback and bib_cn.has_cjk(title):
+            extra = bib_cn.fallback_meta(record, session=session, settings=settings, work_meta=WorkMeta,
+                                         title_matches=title_matches, year_ok=year_ok)
+            if extra.meta is not None:
+                meta, source = extra.meta, bib_cn.SOURCE
+            else:
+                reason = f"{reason}；{extra.reason}"
+        if meta is None and not found.not_publication:
+            same = _same_title(titles, title, year)
+            if same:
+                outcomes.append(Outcome(record_id, title, "exists", bibkey=same, source=bib_record.SOURCE))
+                continue
+            meta, lacking = bib_record.record_meta(record, work_meta=WorkMeta, drop_doi=found.other_title)
+            if meta is None:
+                reason = f"{reason}；{lacking}"
+            else:
+                source = bib_record.SOURCE
+                notes = [f"CrossRef 无可用记录，元数据取自检索记录（{reason}）"]
+                if found.other_title and doi:
+                    notes.append(f"记录的 DOI {doi} 在 CrossRef 中是另一篇，未写入")
+                missing = list(bib_record.missing_fields(record, meta.entry_type)) or None
+        if meta is None:
+            outcomes.append(Outcome(record_id, title, "unresolved", reason=reason, landing_url=extra.landing_url))
+            continue
+        if meta.doi and meta.doi in known:
+            outcomes.append(Outcome(record_id, title, "exists", bibkey=known[meta.doi], doi=meta.doi, source=source))
+            continue
+        key = make_bibkey(meta, taken)
+        entries.append(to_bibtex(meta, key))
+        if meta.doi:
+            known[meta.doi] = key
+        titles.setdefault(title_key(meta.title), (key, meta.year))
+        outcomes.append(Outcome(record_id, title, "added", bibkey=key, doi=meta.doi, source=source,
+                                landing_url=extra.landing_url, abstract=extra.abstract,
+                                notes=(extra.notes or []) + notes or None, missing=missing))
+    return outcomes, entries
+
+
+def backup_file(path: Path, backup_dir: Path) -> Path:
+    """把 path 复制到 backup_dir，文件名加时间戳；返回备份路径。"""
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup = backup_dir / f"{path.name}.{datetime.now().strftime('%Y%m%d%H%M%S%f')}.bak"
+    shutil.copy2(path, backup)
+    return backup
+
+
+def append_entries(bib_path: Path, entries: list[str], backup_dir: Path) -> Path | None:
+    """追加条目；写前备份。没有条目时不碰文件。"""
+    if not entries:
+        return None
+    backup = None
+    text = ""
+    if bib_path.exists():
+        backup = backup_file(bib_path, backup_dir)
+        text = bib_path.read_text(encoding="utf-8")
+    else:
+        bib_path.parent.mkdir(parents=True, exist_ok=True)
+    if not text:
+        separator = ""
+    elif text.endswith("\n\n"):
+        separator = ""
+    elif text.endswith("\n"):
+        separator = "\n"
+    else:
+        separator = "\n\n"
+    bib_path.write_text(text + separator + "\n".join(entries), encoding="utf-8")
+    return backup
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows = []
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ProposalError(f"无法读取记录文件：{path}") from exc
+    for number, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise ProposalError(f"{Path(path).name} 第 {number} 行不是合法 JSON") from exc
+        if isinstance(value, dict):
+            rows.append(value)
+    return rows
+
+
+def check_task_root(task_root: Path) -> Path:
+    """返回解析后的任务目录；不是 .bensz-api/task-*/ 时报错。"""
+    task = Path(task_root).expanduser().resolve()
+    if not task.name.startswith("task-") or task.parent.name != ".bensz-api":
+        raise ProposalError(f"--task-root 必须指向 .bensz-api/task-*/ 目录：{task}")
+    return task
+
+
+def run(project_root: Path, records_path: Path, task_root: Path, *, session: HttpSession | None = None, dry_run: bool = False,
+        sleep: Callable[[float], None] | None = None) -> dict[str, Any]:
+    root = resolve_project_root(project_root)
+    task = check_task_root(task_root)
+    records = _read_jsonl(records_path)
+    tree = scan_latex_tree(root)
+    if not tree.bib_files:
+        raise ProposalError("main.tex 及其 \\input 文件中没有 \\bibliography，无法确定 .bib")
+    target = tree.bib_files[0]
+    settings = Settings.from_config(load_config())
+    if sleep is not None:
+        settings = replace(settings, sleep=sleep)
+    outcomes, entries = resolve_records(records, session=session or requests.Session(), settings=settings,
+                                        index=read_bib_index(tree.bib_files))
+    out_dir, backup = task / "nsfc-proposal" / "output", None
+    if not dry_run:
+        backup = append_entries(target, entries, out_dir / "bib_backup")
+        record_added(proposal_paths(root).ledger, tree.bib_files, records, outcomes)
+        for outcome in outcomes:
+            if outcome.status == "unresolved":
+                append_under_heading(proposal_paths(root).leads, "## 未核实线索", f"- [unverified] {outcome.title or outcome.record_id}；原因：{outcome.reason}；记录：{outcome.record_id}")
+            elif outcome.status == "added" and outcome.source == bib_cn.SOURCE:
+                notes = "；".join(outcome.notes or [])
+                append_under_heading(proposal_paths(root).assumptions, "## 待核实项", (
+                    f"- 中文文献 {outcome.bibkey}（{outcome.title}）：CrossRef 无记录，期刊名与卷期页取自出版方文章页 "
+                    f"{outcome.landing_url}；投稿前对照知网或期刊原文核对" + (f"；{notes}" if notes else "")))
+        incomplete = [f"{o.bibkey}（缺{'、'.join(o.missing)}）" for o in outcomes
+                      if o.status == "added" and o.source == bib_record.SOURCE and o.missing]
+        if incomplete:
+            append_under_heading(proposal_paths(root).assumptions, "## 待核实项", (
+                f"- 以下 {len(incomplete)} 条参考文献 CrossRef 无记录，按检索记录写入，著录项不全：{'、'.join(incomplete)}；"
+                "投稿前对照原文补齐"))
+    summary = {
+        "bib_file": str(target),
+        "backup": str(backup) if backup else None,
+        "dry_run": dry_run,
+        "counts": {status: sum(1 for o in outcomes if o.status == status) for status in ("added", "exists", "unresolved")},
+        "outcomes": [asdict(o) for o in outcomes],
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    name = "bib_resolve.dryrun.json" if dry_run else "bib_resolve.json"  # a dry run never overwrites the real summary
+    (out_dir / name).write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    return summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="bib_resolve.py", description="补全文献元数据并追加到项目 .bib")
+    parser.add_argument("--project-root", required=True)
+    parser.add_argument("--records", required=True, help="rls.paper.v1 JSONL：选作证据的文献记录")
+    parser.add_argument("--task-root", required=True, help="本任务的 .bensz-api/task-*/ 目录")
+    parser.add_argument("--dry-run", action="store_true", help="只查询，汇总写入 bib_resolve.dryrun.json；不写 .bib、引用台账、线索文件和 bib_resolve.json")
+    args = parser.parse_args(argv)
+    try:
+        summary = run(Path(args.project_root), Path(args.records), Path(args.task_root), dry_run=args.dry_run)
+    except ProposalError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
