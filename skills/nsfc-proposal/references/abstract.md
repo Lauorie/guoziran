@@ -1,6 +1,6 @@
 # 摘要与题目的写法
 
-写 `NSFC-ABSTRACTS.md`：题目建议、中文摘要、英文摘要、主要研究领域。有科学论证时，信息取自 `scientific_case.yaml` 和已写成的各章；科学问题、假设与术语的表述以科学论证为准。没有科学论证时（只写摘要的任务），取自申请人给的信息与项目中已有的各章。缺前期结果、研究内容要点这类关键信息时，按 SKILL.md「提问」集中问一次；仍缺的写占位。
+写 `NSFC-ABSTRACTS.md`：题目建议、中文摘要、英文摘要、主要研究领域。有科学论证时，信息取自 `scientific_case.yaml` 和已写成的各章；科学问题、假设与术语的表述以科学论证为准。没有科学论证时（只写摘要的任务），取自申请人给的信息与项目中已有的各章。缺研究内容要点这类不问就写不成的信息时，按 SKILL.md「提问」一次问一个；前期结果等其余缺项写占位。
 
 数字限制见 `config.yaml` 的 `abstract` 段：中文摘要字符上限 `zh_max_chars`，英文 `en_max_chars`，研究内容点数 `content_points`，推荐句数 `zh_recommended_sentences`，题目候选条数 `title_candidates`，主要研究领域的汉字上限 `field_max_chars`。
 

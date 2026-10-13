@@ -1,6 +1,6 @@
 skill_info:
   name: nsfc-proposal
-  version: 0.5.0
+  version: 0.5.1
   description: "国自然申请书正文的统一入口：建立科学论证、证据图谱和章节分工，检索并核实文献，按各章写法成稿，检查摘要、篇幅与跨章一致性。"
   category: writing
   author: "Lauorie"

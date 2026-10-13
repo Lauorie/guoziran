@@ -59,12 +59,14 @@ class SkillDocTest(unittest.TestCase):
 
     def test_version_only_in_config(self) -> None:
         config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
-        self.assertEqual(config["skill_info"]["version"], "0.5.0")
-        self.assertNotIn("0.5.0", TEXT)
-        self.assertNotIn("0.5.0", (SKILL / "README.md").read_text(encoding="utf-8"))
+        self.assertEqual(config["skill_info"]["version"], "0.5.1")
+        self.assertNotIn("0.5.1", TEXT)
+        self.assertNotIn("0.5.1", (SKILL / "README.md").read_text(encoding="utf-8"))
 
     def test_changelog(self) -> None:
         changelog = (SKILL / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("## [0.5.1] - 2026-10-13", changelog)
+        self.assertLess(changelog.index("## [0.5.1]"), changelog.index("## [0.5.0]"))
         self.assertIn("## [0.5.0] - 2026-10-13", changelog)
         self.assertLess(changelog.index("## [0.5.0]"), changelog.index("## [0.4.0]"))
         self.assertIn("## [0.4.0] - 2026-10-13", changelog)
@@ -249,7 +251,7 @@ class RoundSevenFixDocsTest(unittest.TestCase):
         self.assertIn("「无人值守」", readme)
 
     def test_batches_and_mechanical_fixes(self) -> None:
-        self.assertIn("超过 4 个时分几次连续问", TEXT)
+        self.assertIn("一次只问一个问题", TEXT)  # 0.5.1 起取代「每次最多 4 个」
         self.assertIn("按检查脚本结果做的机械修改", TEXT)
         self.assertIn("要在内容之间取舍的修改", TEXT)
 
@@ -338,13 +340,28 @@ class RoundEightDocsTest(unittest.TestCase):
     """2026-10-13 平台日志带来的通用改动：开场模板、提问放最后、篇幅不凑字、导出 Word。"""
 
     def test_opening_and_stop_rules(self) -> None:
-        opening = TEXT.split("### 开场：先拿到研究方向", 1)[1].split("\n### ", 1)[0]
-        for phrase in ("用文字问，不用选项卡", "「方向已明确」", "1. 研究方向或暂定题目", "例：", "不问协作方式", "拟 2–3 个聚焦方向"):
+        opening = TEXT.split("### 开场：一次问一件事", 1)[1].split("\n### ", 1)[0]
+        for phrase in ("每次只问一个问题", "「这次申请哪一类项目？（影响正文提纲与研究期限）」", "研究方向用文字问，不用选项卡",
+                       "「方向已明确」", "例：", "不问协作方式", "拟 2–3 个聚焦方向"):
             self.assertIn(phrase, opening)
         stop = TEXT.split("### 停下等回答", 1)[1].split("\n### ", 1)[0]
         for phrase in ("pending", "不留 in_progress", "提问是本轮最后一段文字", "不再调用工具"):
             self.assertIn(phrase, stop)
         self.assertIn("选项卡只用于在几个已知的做法之间选", TEXT)
+
+    def test_questions_are_asked_one_per_turn(self) -> None:
+        block = TEXT.split("### 提问", 1)[1].split("\n### ", 1)[0]
+        for phrase in ("一次只问一个问题", "只问会卡住下一步、或会改变正文内容的事", "题干末尾用括号说明这个答案影响什么",
+                       "不标「（推荐）」", "一次一个"):
+            self.assertIn(phrase, block)
+        self.assertIn("设计参数只在清单里列出，不逐个提问", TEXT)
+        self.assertIn("可以随时给我文件路径」，不作为提问", TEXT)
+        abstract = (SKILL / "references" / "abstract.md").read_text(encoding="utf-8")
+        readme = (SKILL / "README.md").read_text(encoding="utf-8")
+        self.assertIn("一次只问一个问题", readme)
+        for text in (TEXT, abstract, readme):
+            for old in ("集中问", "只写第 1 条也行", "填写模板", "每次最多 4 个", "合并成一次", "一并问"):
+                self.assertNotIn(old, text)
 
     def test_word_export_and_length(self) -> None:
         for phrase in ("export_docx.py --project-root P", "P/申请书正文.docx", "pip install --user python-docx",
