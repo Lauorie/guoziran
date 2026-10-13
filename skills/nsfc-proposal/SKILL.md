@@ -110,9 +110,9 @@ python3 S/scripts/case.py validate --project-root P
 
 先读 `references/literature.md`：检索式写法、方法类论断、申请人论文、各脚本的退出码、补检与复用都在那里。本步按下面的顺序做。
 
-1. 写英文关键词检索式，存为 `T/nsfc-proposal/input/keyword_queries.json`，并抄入 `P/proposal/literature_leads.md`。
+1. 写关键词检索式，存为 `T/nsfc-proposal/input/keyword_queries.json`，并抄入 `P/proposal/literature_leads.md`。以英文为主；研究对象、政策背景或数据在国内的，另写几条中文检索式，以便检到中文期刊论文。
 2. 研究方案借用的方法各写成一条方法类论断；申请人已发表的论文写入 `T/nsfc-proposal/output/applicant.jsonl`，各对应一条 `applicant_result` 论断。
-3. 对每条 `gap`、`mechanism` 类论断和方法类论断写一个英文问句，存为 `T/nsfc-proposal/input/claim_queries_1.json`（超过 `literature.bundle_max_queries` 条时拆成多个文件）。
+3. 对每条 `gap`、`mechanism` 类论断和方法类论断写一个问句（英文为主，关于国内现状的论断可用中文），存为 `T/nsfc-proposal/input/claim_queries_1.json`（超过 `literature.bundle_max_queries` 条时拆成多个文件）。
 4. 用 `scripts/wispaper_search.py` 检索（`config.yaml` 中 `literature.use_wispaper` 为 false 时不检索，按本步末尾的离线情形处理）。凭据 `WIS_MCP_URL`、`WIS_MCP_TOKEN` 由脚本从环境变量或上级目录的 `.env` 读取，不要打开 `.env`。
 
    ```bash
@@ -154,7 +154,7 @@ python3 S/scripts/case.py validate --project-root P
    python3 S/scripts/literature.py evidence --task-root T --project-root P
    ```
 
-   两个 jsonl 文件都要以换行结尾。可引用的是 `added` 条目，以及 `exists` 且在台账中有有效记录的条目；其余不得引用，能否在正文引用还取决于规则 5 的三个条件。
+   CrossRef 没有记录的中文文献，`bib_resolve` 改从出版方文章页的引文标签取期刊名与卷期页（来源记为 `publisher_page`），并在 `assumptions.md` 的「## 待核实项」逐条登记，请申请人投稿前对照知网核对；文章页缺期刊名的仍为未核实。两个 jsonl 文件都要以换行结尾。可引用的是 `added` 条目，以及 `exists` 且在台账中有有效记录的条目；其余不得引用，能否在正文引用还取决于规则 5 的三个条件。
 8. 读 `T/nsfc-proposal/output/evidence_by_claim.md` 中的完整摘要，按 `references/evidence_wording.md` 填写每条论断的 `evidence` 与 `support`，再运行 `case.py validate`，直到 `[scientific_case]` 和 `[evidence_map]` 前缀的问题清零。
 
 申请人要求不联网（完全离线），或 `literature.use_wispaper` 为 false 时，跳过 4–7：文献类论断保持 `unsupported`，并在 `assumptions.md` 的「## 待核实项」写明「本次未检索文献」。现状论断的写法见规则 5 的 `unsupported` 两类。证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标；不用推测或泛泛的背景凑字数。
@@ -363,7 +363,7 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 ### Skill 专属约束
 
 - 不编造文献、数据、病例数、前期成果和合作单位；申请人没提供的内容只写占位。
-- 文献的作者、期刊、年份、卷期页码只取自 CrossRef 的返回，不凭记忆填写。
+- 文献的作者、期刊、年份、卷期页码只取自 CrossRef 的返回；CrossRef 没有记录的中文文献，取自出版方文章页的引文标签（`bib_resolve.py` 自动处理）。都不凭记忆填写。
 - 只在「提问」一节列出的情形提问；其余步骤不打断用户。
 - 只用本 skill 目录中的脚本与参考资料，不读取、不调用其他 skill 的文件。
 - 不调用 research-idea。需要系统探索选题时，建议用户先运行它，再把结论写进 `scientific_case.yaml`。

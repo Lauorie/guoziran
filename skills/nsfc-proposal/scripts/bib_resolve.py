@@ -27,6 +27,7 @@ from urllib.parse import quote
 
 import requests
 
+import bib_cn
 from citation_ledger import record_added
 from http_retry import failure_label, get_with_retry
 from latex_files import BibIndex, normalize_doi, read_bib_index, scan_latex_tree
@@ -68,6 +69,7 @@ class Settings:
     timeout: float = 15.0
     http_retries: int = 3
     http_backoff_s: float = 2.0
+    cn_fallback: bool = True
     sleep: Callable[[float], None] = time.sleep
 
     @classmethod
@@ -80,6 +82,7 @@ class Settings:
             timeout=float(lit.get("http_timeout_s", 15)),
             http_retries=int(lit.get("http_retries", 3)),
             http_backoff_s=float(lit.get("http_backoff_s", 2)),
+            cn_fallback=bool(lit.get("cn_publisher_fallback", True)),
         )
 
 
@@ -118,6 +121,9 @@ class Outcome:
     doi: str | None = None
     source: str | None = None
     reason: str | None = None
+    landing_url: str | None = None   # 中文文献兜底时的文章页
+    abstract: str | None = None      # 中文文献兜底时文章页给出的摘要（台账优先用它）
+    notes: list[str] | None = None
 
 
 def _get_json(session: HttpSession, url: str, params: Mapping[str, Any] | None, settings: Settings) -> Any | None:
@@ -206,9 +212,13 @@ def _ascii(text: str) -> str:
 
 
 def make_bibkey(meta: WorkMeta, taken: set[str]) -> str:
-    family = (_ascii(meta.authors[0][0]) if meta.authors else "") or "anon"
-    first = next((w for w in (_ascii(x) for x in _norm_title(meta.title).split()) if w and w not in STOPWORDS), "untitled")
-    base = f"{family}{meta.year or 'nd'}{first}"
+    family = _ascii(meta.authors[0][0]) if meta.authors else ""
+    if not family and bib_cn.has_cjk(meta.title):
+        base = bib_cn.cn_bibkey(meta.title, meta.year)
+    else:
+        first = next((w for w in (_ascii(x) for x in _norm_title(meta.title).split()) if w and w not in STOPWORDS),
+                     "untitled")
+        base = f"{family or 'anon'}{meta.year or 'nd'}{first}"
     key, suffix = base, 0
     while key in taken:
         suffix += 1
@@ -318,8 +328,16 @@ def resolve_records(records: Iterable[Mapping[str, Any]], *, session: HttpSessio
             outcomes.append(Outcome(record_id, title, "exists", bibkey=known[doi], doi=doi))
             continue
         meta, source, reason = lookup(record, session=session, settings=settings)
+        extra = bib_cn.Fallback()
+        if meta is None and settings.cn_fallback and bib_cn.has_cjk(title):
+            extra = bib_cn.fallback_meta(record, session=session, settings=settings, work_meta=WorkMeta,
+                                         title_matches=title_matches, year_ok=year_ok)
+            if extra.meta is not None:
+                meta, source = extra.meta, bib_cn.SOURCE
+            else:
+                reason = f"{reason}；{extra.reason}"
         if meta is None:
-            outcomes.append(Outcome(record_id, title, "unresolved", reason=reason))
+            outcomes.append(Outcome(record_id, title, "unresolved", reason=reason, landing_url=extra.landing_url))
             continue
         if meta.doi and meta.doi in known:
             outcomes.append(Outcome(record_id, title, "exists", bibkey=known[meta.doi], doi=meta.doi, source=source))
@@ -328,7 +346,8 @@ def resolve_records(records: Iterable[Mapping[str, Any]], *, session: HttpSessio
         entries.append(to_bibtex(meta, key))
         if meta.doi:
             known[meta.doi] = key
-        outcomes.append(Outcome(record_id, title, "added", bibkey=key, doi=meta.doi, source=source))
+        outcomes.append(Outcome(record_id, title, "added", bibkey=key, doi=meta.doi, source=source,
+                                landing_url=extra.landing_url, abstract=extra.abstract, notes=extra.notes or None))
     return outcomes, entries
 
 
@@ -410,6 +429,11 @@ def run(project_root: Path, records_path: Path, task_root: Path, *, session: Htt
         for outcome in outcomes:
             if outcome.status == "unresolved":
                 append_under_heading(proposal_paths(root).leads, "## 未核实线索", f"- [unverified] {outcome.title or outcome.record_id}；原因：{outcome.reason}；记录：{outcome.record_id}")
+            elif outcome.status == "added" and outcome.source == bib_cn.SOURCE:
+                notes = "；".join(outcome.notes or [])
+                append_under_heading(proposal_paths(root).assumptions, "## 待核实项", (
+                    f"- 中文文献 {outcome.bibkey}（{outcome.title}）：CrossRef 无记录，期刊名与卷期页取自出版方文章页 "
+                    f"{outcome.landing_url}；投稿前对照知网或期刊原文核对" + (f"；{notes}" if notes else "")))
     summary = {
         "bib_file": str(target),
         "backup": str(backup) if backup else None,

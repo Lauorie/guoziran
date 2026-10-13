@@ -132,9 +132,15 @@ def record_added(ledger_path: Path, bib_files: list[Path], records: list[dict[st
             continue
         record_doi = _record_doi(record)
         same_work = record_doi is None or normalize_doi(outcome.doi) == record_doi
+        provenance = _record_provenance(record, outcome.record_id)
+        page_abstract = getattr(outcome, "abstract", None)
+        if getattr(outcome, "landing_url", None):
+            provenance["landing_url"] = outcome.landing_url  # 中文文献兜底：元数据所取自的出版方文章页
+        if page_abstract:
+            provenance["abstract_source"] = "publisher_page"
         append_event(ledger_path, add_event(
             outcome.bibkey, source=outcome.source, entry_text=texts[outcome.bibkey], doi=outcome.doi,
-            abstract=_record_abstract(record) if same_work else None, provenance=_record_provenance(record, outcome.record_id)))
+            abstract=page_abstract or (_record_abstract(record) if same_work else None), provenance=provenance))
 
 
 def register_user_entries(project_root: Path, keys: Sequence[str] | None = None, bib_files: list[Path] | None = None) -> list[str]:

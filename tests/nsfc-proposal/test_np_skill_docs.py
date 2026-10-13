@@ -59,12 +59,14 @@ class SkillDocTest(unittest.TestCase):
 
     def test_version_only_in_config(self) -> None:
         config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
-        self.assertEqual(config["skill_info"]["version"], "0.3.0")
-        self.assertNotIn("0.3.0", TEXT)
-        self.assertNotIn("0.3.0", (SKILL / "README.md").read_text(encoding="utf-8"))
+        self.assertEqual(config["skill_info"]["version"], "0.4.0")
+        self.assertNotIn("0.4.0", TEXT)
+        self.assertNotIn("0.4.0", (SKILL / "README.md").read_text(encoding="utf-8"))
 
     def test_changelog(self) -> None:
         changelog = (SKILL / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("## [0.4.0] - 2026-10-13", changelog)
+        self.assertLess(changelog.index("## [0.4.0]"), changelog.index("## [0.3.0]"))
         self.assertIn("## [0.3.0] - 2026-10-12", changelog)
         self.assertLess(changelog.index("## [0.3.0]"), changelog.index("## [0.2.0]"))
         self.assertIn("## [0.2.0] - 2026-10-12", changelog)
@@ -314,6 +316,19 @@ class FreshFourDocsTest(unittest.TestCase):
         for field in ("hypothesis", "entry_point", "feasibility", "risks"):
             self.assertIn(f"`{field}`", step4)
         self.assertIn("不填论断编号 `C<n>`", step4)
+
+
+
+class ChineseFallbackDocsTest(unittest.TestCase):
+    def test_chinese_queries_and_publisher_page_rule(self) -> None:
+        self.assertIn("另写几条中文检索式", TEXT)
+        self.assertIn("来源记为 `publisher_page`", TEXT)
+        self.assertIn("CrossRef 没有记录的中文文献，取自出版方文章页的引文标签", TEXT)
+        guide = (SKILL / "references" / "literature.md").read_text(encoding="utf-8")
+        for phrase in ("`citation_*` 引文标签", "期刊名必须有", "doi.org 确认已注册", "`bib_refresh` 不刷新这类条目"):
+            self.assertIn(phrase, guide)
+        config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
+        self.assertIs(config["literature"]["cn_publisher_fallback"], True)
 
 
 if __name__ == "__main__":

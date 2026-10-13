@@ -4,6 +4,20 @@ All notable changes to this skill will be documented in this file.
 
 The version number is the single source of truth in `config.yaml` (`skill_info.version`).
 
+## [0.4.0] - 2026-10-13
+
+依据：中文检索式试检（wispaper 能返回中文期刊论文，但多数没有期刊名与卷期页；知网 DOI 在 CrossRef 查不到）。申请人选择「按分层兜底做」。
+
+### Added（新增）
+
+- `scripts/bib_cn.py`：CrossRef 没有记录的中文文献，从出版方文章页的 `citation_*` 引文标签取期刊名、卷、期、页码、作者与摘要；文章页题名须与记录相符，缺期刊名不兜底；DOI 经 doi.org handle 接口确认已注册才写入；只访问公网主机名，页面最多读 2 MB。
+
+### Changed（变更）
+
+- `bib_resolve.py`：中文记录在 CrossRef 核对失败后走上述兜底，来源记为 `publisher_page`，逐条登记到 `assumptions.md` 的「## 待核实项」；中文条目的 bibkey 为 `cn<年份><题名哈希>`。`config.yaml` 新增 `literature.cn_publisher_fallback`。
+- 引用台账记下文章页地址，摘要取自文章页时记 `abstract_source`；`bib_refresh.py` 拒绝刷新 `publisher_page` 条目。
+- 检索式以英文为主，研究对象、政策背景或数据在国内的另写中文检索式；元数据规则改为「CrossRef，或中文文献的出版方文章页」。
+
 ## [0.3.0] - 2026-10-12
 
 依据：fresh-3 完整运行的记录，以及四个单章任务的新旧对比测试（2026-10-12，skill-creator）。

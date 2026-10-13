@@ -34,7 +34,7 @@
 
 - 各章正文，写进项目的 `extraTex/`；摘要与题目建议写进 `NSFC-ABSTRACTS.md`。
 - `proposal/` 目录：科学论证、证据图谱、章节分工、待核实清单、文献线索。正文里缺的内容都写成 `【待补充：……】`，并列在 `proposal/assumptions.md` 里。
-- 核对过的参考文献，追加到项目的 `.bib`。查不到的只进线索清单，正文不引用。元数据只经 Crossref 核对；DOI 不在 Crossref 登记的文献（如 arXiv 的 10.48550、Zenodo 等 DataCite DOI）无法核对，nsfc-proposal 把它们列入线索清单、正文不引用。
+- 核对过的参考文献，追加到项目的 `.bib`。查不到的只进线索清单，正文不引用。元数据只经 Crossref 核对；DOI 不在 Crossref 登记的文献（如 arXiv 的 10.48550、Zenodo 等 DataCite DOI）无法核对，nsfc-proposal 把它们列入线索清单、正文不引用。例外是中文期刊论文：Crossref 没有记录时，从期刊官网文章页的引文标签取期刊名与卷期页，这些条目会列入待核实项，请你投稿前对照知网核一遍。
 - 你提供的材料先被解析成文字再读。PDF 经团队的 WisDoc 服务解析（文件会上传到该服务），需要 `WISDOCRS_BASE_URL`（环境变量或 `.env`）；未配置时退回本机解析。解析结果只从该服务的主机、其子域名或同一上级域名下的主机下载；放在其他主机上时，在 `WISDOC_ALLOWED_HOSTS` 中列出（逗号分隔）。材料不能离开本机时，告诉它只在本机解析。DOCX、Markdown、TXT 只在本机处理。
 - 文献检索经团队的 wis-scholar-search 服务（MCP）执行，检索式会发送到该服务，原始返回存在任务目录。需要 `WIS_MCP_URL`（MCP 端点）、`WIS_MCP_TOKEN`（Bearer token，不带 `Bearer ` 前缀）（环境变量或 `.env`）；`WIS_MCP_CONSUMER` 可选，网关要求时填。未配置时停在检索这一步，请你配置；不改用其他检索源。
 - 研究内容中的研究框架图和各项研究的设计图，由团队的 WisImage 服务生成，存放在项目的 `figures/nsfc-proposal/`。作图说明取自科学论证，会发送到该服务。需要 `WISMODEL_IMAGE_URL`、`WISMODEL_API_KEY`、`DEPLOY_REGION`（环境变量或 `.env`）；未配置或出图失败时，正文留占位。图由 AI 生成，请逐张核对内容与文字。

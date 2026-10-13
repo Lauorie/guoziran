@@ -4,8 +4,8 @@
 
 ## 检索式
 
-- 关键词检索式用英文，条数在 `config.yaml` 中 `literature.keyword_queries` 的范围内（`min` 至 `max` 条），写入 `T/nsfc-proposal/input/keyword_queries.json`（格式 `{"queries": [...]}`），并抄入 `P/proposal/literature_leads.md` 的「## 检索式」。
-- 对每条 `gap`、`mechanism` 类论断和每条方法类论断写一个英文问句，写入 `T/nsfc-proposal/input/claim_queries_1.json`；超过 `literature.bundle_max_queries` 条时拆成 `claim_queries_2.json` 等，每个文件不超过这个条数。
+- 关键词检索式以英文为主。研究对象、政策背景或数据在国内的，另写几条中文检索式（约占三分之一）：英文检索式基本检不到中文期刊论文。条数在 `config.yaml` 中 `literature.keyword_queries` 的范围内（`min` 至 `max` 条），写入 `T/nsfc-proposal/input/keyword_queries.json`（格式 `{"queries": [...]}`），并抄入 `P/proposal/literature_leads.md` 的「## 检索式」。
+- 对每条 `gap`、`mechanism` 类论断和每条方法类论断写一个问句（英文为主，关于国内现状的论断可用中文），写入 `T/nsfc-proposal/input/claim_queries_1.json`；超过 `literature.bundle_max_queries` 条时拆成 `claim_queries_2.json` 等，每个文件不超过这个条数。
 
 ## 方法类论断
 
@@ -56,6 +56,7 @@
 - 申请人论文与检索记录先合并成一个文件，`bib_resolve` 只对它运行一次。每次运行都会覆盖 `T/nsfc-proposal/output/bib_resolve.json`；加 `--dry-run` 时只查询，不写 `.bib`、引用台账和线索文件，汇总写入同目录的 `bib_resolve.dryrun.json`，不覆盖前者。
 - 检索记录排在前面：同一 DOI 出现两次时 `bib_resolve` 采用第一条，检索记录带有补全的摘要。没有申请人论文时，`cat` 只列 `selected_enriched.jsonl`。两个文件都要以换行结尾，否则拼接处两行相连，`bib_resolve` 会报该行不是合法 JSON 并以退出码 2 停下。
 - `bib_resolve` 写入 `.bib` 的同时，把来源写进 `P/proposal/citation_ledger.jsonl`。候选引用键是输出中 `added` 条目的 bibkey，以及 `exists` 且在台账中有有效记录（`citation_ledger.py show` 能列出）的 bibkey；`exists` 但台账中没有记录的（`init` 之前就在 `.bib` 中、未经申请人确认的条目），不得引用。`unresolved` 条目已写入线索清单，正文不得引用。能否在正文引用，取决于规则 5 的三个条件。
+- CrossRef 没有记录的中文文献（知网等的 DOI 多登记在中文 DOI 机构，CrossRef 查不到）：`bib_resolve` 打开记录 `url` 指向的出版方文章页，读其中的 `citation_*` 引文标签。文章页的题名须与记录相符，期刊名必须有；作者、卷、期、页码、摘要取自文章页，文章页没有作者时用检索记录的作者。DOI 经 doi.org 确认已注册才写入。这样写入的条目，来源记为 `publisher_page`，并在 `assumptions.md` 的「## 待核实项」逐条登记，请申请人投稿前对照知网或期刊原文核对。`bib_refresh` 不刷新这类条目，有误时 drop 后重新解析。文章页打不开、没有引文标签或缺期刊名的，照常记为未核实，不得引用。
 
 ## 按论断汇总证据
 

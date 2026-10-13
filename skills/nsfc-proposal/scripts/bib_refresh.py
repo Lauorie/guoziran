@@ -54,6 +54,10 @@ def _check_keys(keys: Sequence[str], texts: Mapping[str, str], ledger: Mapping[s
     if not_added:
         raise ProposalError(f"这些条目不是 bib_resolve 写入的（台账中没有有效的 add 记录），不能刷新：{'、'.join(not_added)}；"
                             "申请人登记的条目由申请人核对")
+    from_page = [k for k in keys if ledger[k].get("source") == "publisher_page"]
+    if from_page:
+        raise ProposalError(f"这些条目的元数据取自出版方文章页（中文文献兜底），不能按 CrossRef 刷新：{'、'.join(from_page)}；"
+                            "有误时先 citation_ledger.py drop，从 .bib 删去，再用 bib_resolve 重新解析")
     no_doi = [k for k in keys if not normalize_doi(ledger[k].get("doi"))]
     if no_doi:
         raise ProposalError(f"这些条目在台账中没有 DOI，不能刷新：{'、'.join(no_doi)}；"

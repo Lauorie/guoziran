@@ -1,6 +1,6 @@
 skill_info:
   name: nsfc-proposal
-  version: 0.3.0
+  version: 0.4.0
   description: "国自然申请书正文的统一入口：建立科学论证、证据图谱和章节分工，检索并核实文献，按各章写法成稿，检查摘要、篇幅与跨章一致性。"
   category: writing
   author: "Lauorie"
@@ -23,6 +23,7 @@ literature:
   bundle_max_queries: 25               # 供执行说明引用，脚本不读取：每个论断检索式文件的条数上限
   title_similarity: 0.92
   doi_title_similarity: 0.8
+  cn_publisher_fallback: true   # CrossRef 没有记录的中文文献，从出版方文章页的引文标签补全（bib_resolve 读取）
   year_window: 1
   http_timeout_s: 15
   http_retries: 3       # 遇 429/500/502/503/504 或连接超时的重试次数
