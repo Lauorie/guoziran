@@ -57,7 +57,9 @@ class BriefTextTest(unittest.TestCase):
                         "4. **核心科学假设（陈述句，预测性结果，不写验证方式）**", "5. **本项目切入点（差异化切口）**",
                         "8. **主流路线与代表工作（引用先核验）**"):
             self.assertIn(heading, form)
-        self.assertIn("4500–10000", form)
+        self.assertIn("不超过 10000 字；4500 字只作参考", form)
+        self.assertIn("不为凑字加句子", form)
+        self.assertNotIn("4500–10000", form)
         self.assertIn("技术路线", form)  # 本章不写
         self.assertNotIn("Q1", form)
 
@@ -144,8 +146,8 @@ class BriefTextTest(unittest.TestCase):
         for entry, writer in zip(plan["files"], ("nsfc-justification-writer", "nsfc-research-foundation-writer")):
             del entry["section"]
             entry["writer"] = writer
-        self.assertIn("4500–10000", brief(valid_case(), plan, "立项依据"))
-        self.assertNotIn("4500–10000", brief(valid_case(), plan, "研究基础"))
+        self.assertIn("不超过 10000 字", brief(valid_case(), plan, "立项依据"))
+        self.assertNotIn("不超过 10000 字", brief(valid_case(), plan, "研究基础"))
 
 
 class StateCommandTest(unittest.TestCase):

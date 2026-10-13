@@ -129,7 +129,7 @@ def render_case_md(case: Mapping[str, Any], evidence: Mapping[str, Any] | None, 
         include = "；".join(_describe(r, ids) for r in _strs(entry.get("must_include"))) or NONE
         exclude = "；".join(_strs(entry.get("must_exclude"))) or NONE
         length = entry.get("length") if isinstance(entry.get("length"), Mapping) else None
-        size = f"{length.get('min')}–{length.get('max')} 字" if length else NONE
+        size = length_text(length) if length else NONE
         section = (section_for(config, entry) or {}).get("name") or "—"
         out.append(f"| {entry.get('file')} | {section} | {include} | {exclude} | {size} |")
     out.append("")
@@ -150,12 +150,20 @@ def render_case_md(case: Mapping[str, Any], evidence: Mapping[str, Any] | None, 
     return "\n".join(out)
 
 
+def length_text(length: Mapping[str, Any]) -> str:
+    """篇幅写成「上限 + 参考下限」：模型把「min–max」当成要写满的目标，会为凑下限加空话。"""
+    low, high = length.get("min"), length.get("max")
+    if low and high:
+        return f"不超过 {high} 字；{low} 字只作参考，证据和材料不够时可以更短，不为凑字加句子"
+    return f"不超过 {high} 字" if high else f"{low} 字只作参考"
+
+
 def _section_notes(plan: Mapping[str, Any] | None, brief: str, config: Mapping[str, Any]) -> list[str]:
     notes = []
     for entry in _plan_entries(plan, brief, config):
         length = entry.get("length") if isinstance(entry.get("length"), Mapping) else None
         if length:
-            notes.append(f"{entry.get('file')} 篇幅：{length.get('min')}–{length.get('max')} 字")
+            notes.append(f"{entry.get('file')} 篇幅：{length_text(length)}")
         exclude = _strs(entry.get("must_exclude"))
         if exclude:
             notes.append(f"{entry.get('file')} 不写：{'；'.join(exclude)}")

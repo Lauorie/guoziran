@@ -33,6 +33,7 @@
 ## 你会得到什么
 
 - 各章正文，写进项目的 `extraTex/`；摘要与题目建议写进 `NSFC-ABSTRACTS.md`。
+- Word 版正文 `申请书正文.docx`，写在项目根目录：按提纲排各章，参考文献按 GB/T 7714 列在立项依据之后，占位黄色高亮，文末附题目与摘要。
 - `proposal/` 目录：科学论证、证据图谱、章节分工、待核实清单、文献线索。正文里缺的内容都写成 `【待补充：……】`，并列在 `proposal/assumptions.md` 里。
 - 核对过的参考文献，追加到项目的 `.bib`。查不到的只进线索清单，正文不引用。元数据只经 Crossref 核对；DOI 不在 Crossref 登记的文献（如 arXiv 的 10.48550、Zenodo 等 DataCite DOI）无法核对，nsfc-proposal 把它们列入线索清单、正文不引用。例外是中文期刊论文：Crossref 没有记录时，从期刊官网文章页的引文标签取期刊名与卷期页，这些条目会列入待核实项，请你投稿前对照知网核一遍。
 - 你提供的材料先被解析成文字再读。PDF 经团队的 WisDoc 服务解析（文件会上传到该服务），需要 `WISDOCRS_BASE_URL`（环境变量或 `.env`）；未配置时退回本机解析。解析结果只从该服务的主机、其子域名或同一上级域名下的主机下载；放在其他主机上时，在 `WISDOC_ALLOWED_HOSTS` 中列出（逗号分隔）。材料不能离开本机时，告诉它只在本机解析。DOCX、Markdown、TXT 只在本机处理。
@@ -42,7 +43,7 @@
 
 ## 目录里有什么
 
-- `scripts/`：确定性的工作。科学论证的校验与渲染（`case.py`）、材料解析（`materials.py`）、wispaper 检索（`wispaper_search.py`）与文献池（`literature.py`：建池、阅读表、按论断选文、按论断汇总证据）、样本量估算（`power.py`）、元数据核对与引用台账（`bib_resolve.py`、`bib_refresh.py`、`citation_ledger.py`）、出图（`figures.py`）、各章检查（`chapter_check.py`）、摘要校验（`abstract_check.py`）、篇幅检查（`length_check.py`）、跨章一致性检查（`consistency_check.py`）。
+- `scripts/`：确定性的工作。科学论证的校验与渲染（`case.py`）、材料解析（`materials.py`）、wispaper 检索（`wispaper_search.py`）与文献池（`literature.py`：建池、阅读表、按论断选文、按论断汇总证据）、样本量估算（`power.py`）、元数据核对与引用台账（`bib_resolve.py`、`bib_refresh.py`、`citation_ledger.py`）、出图（`figures.py`）、各章检查（`chapter_check.py`）、摘要校验（`abstract_check.py`）、篇幅检查（`length_check.py`）、跨章一致性检查（`consistency_check.py`）、导出 Word（`export_docx.py`）。
 - `references/`：需要判断的部分。科学论证、证据措辞、文献检索（`literature.md`）、章节分工、一致性问题的处理（`consistency_fixes.md`）、出图，以及各章写法：`justification.md`（立项依据）、`research_content.md`（研究内容、特色与创新、年度研究计划）、`foundation.md`（研究基础、工作条件）、`abstract.md`（摘要与题目）、`length.md`（篇幅对齐）。
 - `config.yaml`：检索、出图、章节、研究期限、各章检查、摘要限制与篇幅预算的参数。
 
@@ -59,7 +60,7 @@
 ## 写完之后
 
 1. 逐条处理 `proposal/assumptions.md` 里的占位和待核实项。
-2. 编译 PDF，检查篇幅；超出时让它做篇幅对齐。
+2. 编译 PDF，检查篇幅；超出时让它做篇幅对齐。它每次改完都会重新导出 Word，你可以直接在 Word 里改。
 3. 需要时用 nsfc-reviewers 模拟评审，用 nsfc-qc 质检。
 
 ## 注意

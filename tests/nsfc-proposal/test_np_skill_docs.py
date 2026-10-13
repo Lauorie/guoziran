@@ -59,12 +59,14 @@ class SkillDocTest(unittest.TestCase):
 
     def test_version_only_in_config(self) -> None:
         config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
-        self.assertEqual(config["skill_info"]["version"], "0.4.0")
-        self.assertNotIn("0.4.0", TEXT)
-        self.assertNotIn("0.4.0", (SKILL / "README.md").read_text(encoding="utf-8"))
+        self.assertEqual(config["skill_info"]["version"], "0.5.0")
+        self.assertNotIn("0.5.0", TEXT)
+        self.assertNotIn("0.5.0", (SKILL / "README.md").read_text(encoding="utf-8"))
 
     def test_changelog(self) -> None:
         changelog = (SKILL / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("## [0.5.0] - 2026-10-13", changelog)
+        self.assertLess(changelog.index("## [0.5.0]"), changelog.index("## [0.4.0]"))
         self.assertIn("## [0.4.0] - 2026-10-13", changelog)
         self.assertLess(changelog.index("## [0.4.0]"), changelog.index("## [0.3.0]"))
         self.assertIn("## [0.3.0] - 2026-10-12", changelog)
@@ -89,7 +91,7 @@ class RoundThreeDocsTest(unittest.TestCase):
         self.assertNotIn("〉", rule[0])
 
     def test_wispaper_step_states_foreground_timeout_and_rerun(self) -> None:
-        blocks = [b for b in re.split(r"\n(?=\d+\. )", TEXT) if "wispaper_search.py" in b and b.lstrip().startswith("4. ")]
+        blocks = [b for b in re.split(r"\n(?=\d+\. )", TEXT) if "wispaper_search.py run" in b and b.lstrip().startswith("4. ")]
         self.assertEqual(len(blocks), 1)
         self.assertIn("600000", blocks[0])
         self.assertIn("原样重跑", blocks[0])
@@ -224,7 +226,7 @@ class RoundSevenDocsTest(unittest.TestCase):
         for rel in ("references/literature.md", "references/consistency_fixes.md"):
             self.assertIn(f"`{rel}`", TEXT)
         self.assertNotIn("`no_citation_ledger`（没有引用台账）", TEXT)
-        self.assertLess(len(TEXT), 27000)
+        self.assertLess(len(TEXT), 30000)
 
 
 class RoundSevenFixDocsTest(unittest.TestCase):
@@ -329,6 +331,30 @@ class ChineseFallbackDocsTest(unittest.TestCase):
             self.assertIn(phrase, guide)
         config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
         self.assertIs(config["literature"]["cn_publisher_fallback"], True)
+
+
+
+class RoundEightDocsTest(unittest.TestCase):
+    """2026-10-13 平台日志带来的通用改动：开场模板、提问放最后、篇幅不凑字、导出 Word。"""
+
+    def test_opening_and_stop_rules(self) -> None:
+        opening = TEXT.split("### 开场：先拿到研究方向", 1)[1].split("\n### ", 1)[0]
+        for phrase in ("用文字问，不用选项卡", "「方向已明确」", "1. 研究方向或暂定题目", "例：", "不问协作方式", "拟 2–3 个聚焦方向"):
+            self.assertIn(phrase, opening)
+        stop = TEXT.split("### 停下等回答", 1)[1].split("\n### ", 1)[0]
+        for phrase in ("pending", "不留 in_progress", "提问是本轮最后一段文字", "不再调用工具"):
+            self.assertIn(phrase, stop)
+        self.assertIn("选项卡只用于在几个已知的做法之间选", TEXT)
+
+    def test_word_export_and_length(self) -> None:
+        for phrase in ("export_docx.py --project-root P", "P/申请书正文.docx", "pip install --user python-docx",
+                       "下限只作参考，不是必须写满的目标", "看到字数偏少也不要为此补句子"):
+            self.assertIn(phrase, TEXT)
+        self.assertEqual(TEXT.count("重新导出 Word（第 8 步第 4 项）"), 3)
+        config = yaml.safe_load((SKILL / "config.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(config["export"]["docx_name"], "申请书正文.docx")
+        for name in ("export_docx.py", "docx_writer.py", "docx_latex.py", "docx_blocks.py", "docx_bib.py"):
+            self.assertTrue((SKILL / "scripts" / name).is_file(), name)
 
 
 if __name__ == "__main__":

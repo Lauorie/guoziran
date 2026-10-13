@@ -54,6 +54,7 @@
 - `nsfc-proposal` 0.1.0：开始时不再提示数据发往哪些服务。
 - `nsfc-proposal` 0.2.0：与原先调用的 6 个 skill 融合为一个自包含的 skill，写作规则并入 `references/`，检查并入 `scripts/`（`literature.py`、`chapter_check.py`、`abstract_check.py`、`length_check.py`、`plan_years.py`），不再依赖其他 skill；新增只改一章、只写摘要、篇幅对齐三种任务。
 - `nsfc-proposal` 0.2.0：参考文献中的 U+2010、U+2011 连字符改写为普通连字符，编译不再缺字；`projects/NSFC_Young`、`NSFC_General`、`NSFC_Local` 的 AGENTS.md 技能指引改为指向 nsfc-proposal。
+- `nsfc-proposal` 0.5.0：导出 Word（申请书正文.docx）；开场给填写模板、提问放在最后；篇幅下限只作参考，不凑字；补摘要认同标题不同 DOI 的同一篇。
 - `nsfc-proposal` 0.4.0：CrossRef 没有记录的中文文献，按出版方文章页的引文标签补全元数据（来源 `publisher_page`，列入待核实项）；检索式增加中文。
 - `nsfc-proposal` 0.3.0：拿不准的事用 AskUserQuestion 问申请人；扩写时页数优先；新增 `literature.py digest/select/evidence` 与 `power.py`；SKILL.md 第 3、7 步的细节移入 `references/literature.md`、`references/consistency_fixes.md`。
 - 本分支未写 BAC 记录，经负责人同意。

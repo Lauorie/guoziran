@@ -4,6 +4,21 @@ All notable changes to this skill will be documented in this file.
 
 The version number is the single source of truth in `config.yaml` (`skill_info.version`).
 
+## [0.5.0] - 2026-10-13
+
+依据：托管运行环境的两份运行轨迹（模型 deepseek-v4.1-flash）与同一模型的复现。用户只说「我想写个国自然」时流程停在等方向，用户不知道该答什么；完整运行中模型为凑字数补空话；补摘要漏掉 DOI 不同的同一篇论文；用户要 Word 版。本版只同步与运行环境无关的几处。
+
+### Added（新增）
+
+- `scripts/export_docx.py`（`docx_latex.py`、`docx_blocks.py`、`docx_bib.py`、`docx_writer.py`）：把正文项目导出为「申请书正文.docx」，按提纲排各章，引用按出现顺序编号，参考文献按 GB/T 7714 写在立项依据之后，插入图与图注，占位黄色高亮，文末附题目与中英文摘要。认得官方风格模板标题里的 `\punctstyle`、`\linebreak` 等宏。
+- SKILL.md「开场」：没有研究方向时用文字给出填写模板与例子；宽泛方向先拟聚焦方向请申请人选，再写科学论证。「停下等回答」：先把待办改为 pending，提问放在本轮最后。
+
+### Changed（变更）
+
+- 写作要点里的篇幅写成「不超过 X 字；下限只作参考」，规则 6 写明不为凑字加句子。
+- 补摘要：DOI 不同但标题逐字相同（期刊版与预印本、仓储版）视为同一篇，来源记 `matched_by: title`。
+- 第 8 步、只改一章、只写摘要、篇幅对齐之后都导出 Word；编译 PDF 照旧。
+
 ## [0.4.0] - 2026-10-13
 
 依据：中文检索式试检（wispaper 能返回中文期刊论文，但多数没有期刊名与卷期页；知网 DOI 在 CrossRef 查不到）。申请人选择「按分层兜底做」。

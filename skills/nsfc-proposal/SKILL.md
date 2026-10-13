@@ -47,6 +47,36 @@ metadata:
 - 缺 `project_root` 时停下（只写摘要除外），请用户指定；不能提问时报错退出。
 - 申请人没提供的关键材料，在第 1 步集中问一次（见「提问」）；仍缺的写占位，按保守假设处理，并记入 `assumptions.md`。
 
+### 开场：先拿到研究方向
+
+用户只说「我想写个国自然」「帮我写标书」，没有给研究方向时，第一条回复只做一件事：请申请人用几句话说出方向。方向是后面每一步的输入，拿不到就什么都写不了；而用户常常不知道该给什么，所以要给他一个照着填的样子。
+
+- 用文字问，不用选项卡。方向、题目、研究对象是要申请人写出来的内容，选项卡装不下；「方向已明确」「已有想法」这类选项，选了也没有内容，流程会卡住。
+- 回复控制在十行以内：一句话说明接下来做什么，然后给下面这个模板和一个例子，最后一句是「请直接回复」。
+
+  ```text
+  请用几句话告诉我（只写第 1 条也行，其余我会再问或先留空）：
+  1. 研究方向或暂定题目：
+  2. 研究对象，想解决什么问题：
+  3. 初步想法或假设（没有可以不写）：
+  4. 申报类型：青年科学基金 / 面上项目 / 其他
+  5. 已有的论文、数据、预实验（有文件可直接给我路径）：
+  例：面上项目。研究城市居民垃圾分类习惯怎么形成，打算用眼动实验和社区干预检验即时反馈的作用；发过两篇问卷研究的论文。
+  ```
+
+- 不问协作方式：默认在第 5 步停一次，请申请人确认科学论证。
+- 申请人说方向还没定、想先找方向：建议先做选题探索，不进入写作。
+- 申请人只给了一句很宽的方向（如「大模型复杂推理提升」）：不再追问细节，先拟 2–3 个聚焦方向，请其选（「提问」第 2 类，有选项卡时用选项卡），选定后再写科学论证，免得写完再返工。申报类型没说的，一并问。不能提问时按推荐的方向写，记「（未能提问）」。
+
+### 停下等回答
+
+要停下等申请人回答时（开场、提问情形二、第 5 步确认点）：
+
+1. 有待办清单（TodoWrite）时，先把等待的事项改成 pending，写明「等你回答：……」，清单里不留 in_progress 的事项。
+2. 再写提问。提问是本轮最后一段文字，写完不再调用工具，不再补充别的话。
+
+有的运行环境在一轮结束时会检查待办清单，有进行中的事项就会让你再写一段清单说明，这段说明会盖住真正的问题，用户就不知道该回答什么。
+
 ### 提问
 
 申请书写的是申请人的研究。会改变正文内容、又拿不准的事，问申请人，不自己做主。
@@ -56,6 +86,7 @@ metadata:
   2. 写作中遇到会改变内容的决定：科学问题与假设在几个候选之间取舍；样本量、主要终点、分组口径等设计参数；申请人的说法与文献冲突；章节与文件对不上；要删改申请人已写的内容。
   3. 第 5 步确认点。
 - 怎么问：同一阶段的问题合并成一次，每次最多 4 个；超过 4 个时分几次连续问。每个问题给 2–4 个选项，推荐的放第一个并标「（推荐）」，选项里写明正文会怎样变。问题与回答记入 `stages.md`。
+- 选项卡只用于在几个已知的做法之间选。要申请人写出内容的（方向、题目、论文清单、样本来源），用文字问，或请其给出文件，不做成选项。
 - 有明确规则的事不问：措辞强度（规则 1）、占位写法（规则 3）、引用条件（规则 5）、格式，以及按检查脚本结果做的机械修改。要在内容之间取舍的修改（删哪一节、超出哪项限制）照样问。
 - 用户说「全自动」「不用停下来问我」时：第 5 步的确认点不停，第 1、2 类问题照样问。
 - 按运行环境分三种情形：
@@ -69,7 +100,7 @@ metadata:
 
 **0. 说明与建目录**
 
-1. 向用户逐项说明本次要做的事，按顺序：建立科学论证 → 检索并核实文献 → 请申请人确认科学论证（拿不准的地方随时会问）→ 逐章写作（列出要写的章节；出图在研究内容之前）→ 跨章检查与收尾。用户只要部分章节时，只列相关的事。不向用户说明检索式、材料和作图说明发往哪些服务。说明后不停下等回答。
+1. 向用户逐项说明本次要做的事，按顺序：建立科学论证 → 检索并核实文献 → 请申请人确认科学论证（拿不准的地方随时会问）→ 逐章写作（列出要写的章节；出图在研究内容之前）→ 跨章检查与收尾，导出 Word 文档。说明不超过五行。用户只要部分章节时，只列相关的事。不向用户说明检索式、材料和作图说明发往哪些服务。还没有研究方向时，按「开场」把说明和填写模板放在同一条回复里，然后停下；已有方向时，说明后不停下。
 2. 宣布唯一任务目录 `T = ./.bensz-api/task-{yyyymmdd-hhmm}-{简短描述}/`，之后不更换。建立 `T/README.md`、`T/shared/` 和 `T/nsfc-proposal/{input,output,log}/`。
 3. 此后每完成一步，在 `T/nsfc-proposal/log/stages.md` 追加一行：时间、步骤、AI 做了什么、产出文件、申请人是否确认。时间用 `date '+%F %H:%M'` 取当前时间，不估填。第 8 步据此起草 AI 使用说明。
 
@@ -190,7 +221,7 @@ python3 S/scripts/case.py render --project-root P
 - 规则 3：缺失的信息写成可见占位 `【待补充：……】`，并逐条列入 `assumptions.md` 的「## 占位清单」（格式：`- 文件：【待补充：……】`）。
 - 规则 4：正文不出现内部编号。
 - 规则 5：凡是叙述研究现状、他人方法或结论、流行病学数据的句子，必须 `\cite`，且只能引用同时满足三条的 bibkey：(a) 是 `bib_resolve.py` 的 `added`，或 `exists` 且该 key 在台账中有有效记录；(b) 列在这句话所表达的那条论断的 `evidence` 中，`role` 为 supporting；(c) 措辞不超过该论断的 `support`。内容没有对应论断时，先按第 3 步把论断补进 `evidence_map.yaml`，或按 `unsupported` 的两类处理、删去。`unsupported` 论断分两类。缺口类，即本项目要回答的认知缺口：写「尚不清楚」「尚未检验」，每个缺口写一次，不在相邻句子重复推测词。背景类，即背景与现状论断（领域事实，申请人在材料中写明的现有不足）：不逐句改成「可能」。集中写成一段，作为本项目对现状的判断，段末放一处可见占位，逐条列出要补的文献，例如 `【待补充：支持上述判断的文献——(1) 现有模型多基于单中心数据；(2) 外部验证中性能下降；(3) 已有瘤周研究所用的环带宽度】`。占位列入占位清单。这一段不写凭记忆的研究名称、作者、年份，也不写任何凭记忆的具体数字。每条背景类判断都要在 `evidence_map.yaml` 中有对应论断，`support` 为 `unsupported`，以便追溯。「已有研究做到哪一步」（创新点的参照）按背景类处理：在线时引用；离线时列进同一处占位。不把某项具体研究的结果改写成「可能」来回避引用：转述某项研究发现了什么的句子，必须引用该研究。一个段落讲几项研究，就逐项引用，不在段末堆一个引用。申请人自己的结果按申请人材料写或写占位，不需 `\cite`（材料本身是已入 `.bib` 的已发表论文时才引用）；本项目自己的设计、目标和假设不是现状，不需引用；教科书级定义不需引用，除非引用具体标准或指南（此时引用，或按下句写明名称）。国家或部门的政策文件、诊疗规范、行业指南，联网到发文机关的官方网站核对文件名、发文机关与年份后，可在正文写明，如「《“健康中国2030”规划纲要》（中共中央、国务院，2016）」，不进 `.bib`，网址与核对日期写入 `P/proposal/literature_leads.md` 的「## 官方文件」一节（`init` 已建好）。核对不到的不写，按背景类论断处理。正文只写文件明文规定的内容。示例见 `references/evidence_wording.md` 的「哪些句子必须引用」与「政策文件」。
-- 规则 6：证据不足时，`section_plan.yaml` 的篇幅是上限，不是必须写满的目标。不用推测或泛泛的背景凑字数；字数不足的原因写进收尾报告。
+- 规则 6：`section_plan.yaml` 的篇幅是上限，下限只作参考，不是必须写满的目标。不用推测、泛泛的背景或复述上文的句子凑字数（如「这一步也说明……」「从这三个缺口可以读出……」）；字数不足的原因写进收尾报告。`chapter_check.py` 不因字数少于下限报错，看到字数偏少也不要为此补句子。
 - 规则 7：缺信息时按规则 3 写占位。遇到会改变内容、又拿不准的取舍，按「提问」问申请人；不能提问时（情形三）取保守的一种（保留申请人已写的内容、少写不多写、超限时保留当前版本），把决定记入 `T/nsfc-proposal/log/stages.md` 和「AI 拟定项」（行首标「（未能提问）」），并列入最终报告。
 - 规则 8：`citation_ledger.py register-user` 只用于申请人逐条确认过、由申请人提供的文献：`python3 S/scripts/citation_ledger.py register-user --project-root P --key K`，每条一个 `--key`（可重复）。本流程只用 `--key`，不用一次登记全部未入账条目的 `--all`。AI 不得用它登记自己写的或改过的条目。`register-user` 登记的条目只能支持 `applicant_material` 论断，不计入 `single_verified`、`multi_verified` 的篇数。不得手写或手改 `.bib`（例外：只删不改。删去已 `drop` 的条目，或删去不属于申请人的未入账条目，如模板示例）。要修正某条文献：仍是同一篇、只是条目文本有误（如期刊名显示 `&amp;`、类型或字段缺失）时，运行 `python3 S/scripts/bib_refresh.py --project-root P --task-root T --key K`（可重复 `--key`），按台账中的 DOI 重新取 CrossRef 元数据，原 key 不变，台账追加一条记录；退出码 1 表示有条目没有刷新，原样保留，原因见 `T/nsfc-proposal/output/bib_refresh.json`。同一条目重跑仍失败（如 CrossRef 没有这个 DOI、标题不符）时，按下一句的 drop 流程处理。要换成另一篇，或条目是申请人登记的、台账中没有 DOI，先 `python3 S/scripts/citation_ledger.py drop --project-root P --key K --reason "…"`，从 `.bib` 删去该条，再用 `bib_resolve` 重新解析（仍留在 `.bib` 的作废条目会被报为 `exists`）。不在台账中的文献不得引用。
 - 规则 9：正文中，「核实」「检索」「文献支持」「本次未」等描述写作过程的话，以及 `proposal/` 下的文件名，只写进 `assumptions.md`、`stages.md` 或收尾报告，不进正文；可见占位不受此限；第 8 步由本 skill 写的 AI 使用说明也不受此限。写给申请人的嘱咐（如「建议申请人优先补充……」「不补充的条目应在提交前删去」）放进对应占位的括号内或 `assumptions.md`。对申请人原有口径的改动，只在 `assumptions.md` 的「AI 拟定项」中说明；正文直接写采用的口径和理由，不写「申请人提出的原始口径是……」。
@@ -255,8 +286,9 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 1. 起草 AI 使用说明，写入 `section_plan.yaml` 中「生成式人工智能使用说明」一章的文件（`extraTex/4.5.生成式人工智能.tex` 或 `proposal/ai_declaration.md`）。只写 `stages.md` 里记录过的使用。说明用 WisDoc 解析了哪些材料（`index.json` 中 `parser` 为 `wisdoc` 的文件）；用了 `--local-only` 时写本机解析。用进正文的图写「研究框架图与设计图由 WisImage 根据科学论证生成，经 AI 自检，申请人核对」，按实际情况增删图的种类；只列实际用进正文的图，只用了研究框架图时只写研究框架图。不写模型名。第一行写 `【待补充：申请人核对本声明后删除此行】`，并列入占位清单。
 2. 再运行一次 `consistency_check.py`，并运行 `python3 S/scripts/citation_ledger.py audit --project-root P`。`audit` 输出两节：「条目文本与台账哈希不一致」必须为 0，否则按规则 8 处理；「`.bib` 中有、台账中无」的条目不得被引用（`cite_not_in_ledger` 会拦），逐条列入 `assumptions.md` 的「## 待核实项」与收尾报告。其中的模板示例条目可按规则 8 的例外从 `.bib` 删去；不得为让 `audit` 通过而删去申请人的条目。后一节不为 0 时 `audit` 退出码为 1，这本身不算失败。
 3. 检查篇幅：`python3 S/scripts/length_check.py --input P --out-dir T/nsfc-proposal/output/length`。项目有编译脚本且本机字体齐全时编译，用 `pdfinfo` 记页数，并把 PDF 传给 `length_check.py --pdf`。超过 28 页时在报告中写明页数，并建议按「篇幅对齐」压缩。超过 `length_standard.pages.hard_max` 页时，按 `references/length.md` 的「偏长时压缩」压到上限以内，再按其「复检」重跑检查：压缩哪一章，按「提问」问申请人（推荐篇幅比下限多出最多的一章）；不能提问时按推荐压缩。删去的段落、论断与引用记入 `assumptions.md` 的「## AI 拟定项」，不能提问时标「（未能提问）」。字体缺失导致编译报错时，写「页数未核」。各章篇幅取预算下限时，加上参考文献，正文仍可能超过 30 页。
-4. 按「输出」一节的格式向用户报告。报告列出用进正文的图（名称、路径）与每张图的重画次数（取自 `T/nsfc-proposal/output/figures/index.json`）；没有出图时写明原因（未配置、额度不足、自检不合格）。申请人在确认点只答「同意」时，把 AI 拟定项在报告中再列一次，标「申请人未逐条回应」。
-5. 用户要求时，调用 nsfc-reviewers 或 nsfc-qc。
+4. 导出 Word：`python3 S/scripts/export_docx.py --project-root P`，生成 `P/申请书正文.docx`：按正文提纲排好各章，引用按出现顺序编号，参考文献按 GB/T 7714 写在立项依据之后，插入用进正文的图，最后附题目与中英文摘要；`【待补充：……】` 占位黄色高亮。退出码 3 表示缺 python-docx：运行 `pip install --user python-docx` 后重跑。`warnings` 中的缺图、缺参考文献、找不到的图表标签，回到对应章节修正后重新导出。Word 与上一项编译出的 PDF 一起交付。
+5. 按「输出」一节的格式向用户报告。报告列出用进正文的图（名称、路径）与每张图的重画次数（取自 `T/nsfc-proposal/output/figures/index.json`）；没有出图时写明原因（未配置、额度不足、自检不合格）。申请人在确认点只答「同意」时，把 AI 拟定项在报告中再列一次，标「申请人未逐条回应」。
+6. 用户要求时，调用 nsfc-reviewers 或 nsfc-qc。
 
 **只改一章**
 
@@ -266,7 +298,7 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 2. `P/proposal/` 存在时：先运行 `case.py validate`，把问题告诉用户但不阻塞。按第 6 步的循环改写该章，九条规则照常适用；需要新的文献时按第 3 步检索、核对、入账后再引用。改完运行 `consistency_check.py`。
 3. `P/proposal/` 不存在时：只改措辞、结构与可读性，按该章写法改写。不新增引用、数字和事实；已有的 `\cite` 原样保留；缺的内容写占位。要删改申请人已写的事实、论证或结构时，先按「提问」问。同样先复制到 `T/nsfc-proposal/output/before/`，改后运行 `chapter_check.py`，加 `--project-type "<项目类型>"`，类型取自申请人的话或模板（如青年科学基金项目、面上项目）。类型不明时按「提问」问申请人；不能提问时改加 `--years N`，N 为现有年度研究计划已写到的年数，并把这一假定记入 `stages.md`。
 4. 篇幅：改动后该章的字数或段落数增加时，项目有编译脚本且本机字体齐全的，编译一次查页数；不能编译时，用 `length_check.py` 确认全文合计不超过 `length_standard.overall.max` 字，报告写「页数未核」。全文超过 `length_standard.pages.hard_max` 页时，按「篇幅对齐」的页数规则处理；字数与段落都没有增加时不编译。
-5. 向用户报告改了哪些地方（按小节列出），以及检查结果。
+5. 重新导出 Word（第 8 步第 4 项），向用户报告改了哪些地方（按小节列出）、检查结果和 Word 文档的路径。
 
 **只写摘要**
 
@@ -275,13 +307,15 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 1. `P/proposal/scientific_case.yaml` 存在时：信息取自科学论证和已写成的各章，术语以科学论证为准，按 6.4 写到 `P/NSFC-ABSTRACTS.md`。用 `python3 S/scripts/abstract_check.py P/NSFC-ABSTRACTS.md [--json]` 检查，通过后运行 `python3 S/scripts/case.py mark-written --project-root P --file NSFC-ABSTRACTS.md`。
 2. 不存在时：信息取自申请人给的内容与 `P` 中已有的各章，按 `references/abstract.md` 写，不建科学论证。缺前期结果、研究内容要点这类关键信息时，按「提问」集中问一次。有 `P` 时写到 `P/NSFC-ABSTRACTS.md`，没有时写到当前目录的 `NSFC-ABSTRACTS.md`。用 `python3 S/scripts/abstract_check.py <文件> [--json]` 检查，文件为 `P/NSFC-ABSTRACTS.md`，没有 `P` 时为 `./NSFC-ABSTRACTS.md`。
 3. 只要求把中文摘要译成英文时，按写法中「英文摘要」一节忠实翻译，写回同一文件的 `# English Abstract` 下，再检查。
+4. 有 `P` 时重新导出 Word（第 8 步第 4 项），摘要附在文末。
 
 **篇幅对齐**
 
-按第 0 步建任务目录。只读 `references/length.md` 与要改的那一章的写法；`P/proposal/` 存在时另读 `references/evidence_wording.md`；需要新文献时另读 `references/literature.md`；`consistency_check.py` 报出问题时另读 `references/consistency_fixes.md`。按 `references/length.md`：运行 `length_check.py` → 找差距 → 扩写或压缩 → 复检。页数优先于字数下限：项目有编译脚本且本机字体齐全时，扩写前先编译记页数，扩写后再编译，确认全文不超过 `length_standard.pages.hard_max` 页；不能编译时，全文合计不超过 `length_standard.overall.max` 字，报告写「页数未核」。字数下限与页数上限冲突时，扩到页数允许处为止，按「提问」问申请人从哪一章腾出篇幅；不能提问时停在上限（页数，不能编译时为合计字数），记「（未能提问）」。压缩要删掉整段论证，或扩写缺少可用材料时，先按「提问」问申请人删哪些、补什么。改写前把要改的文件复制到 `T/nsfc-proposal/output/before/`。改动过的章节重跑 `chapter_check.py`；`P/proposal/` 不存在时，按「只改一章」第 3 条加 `--project-type` 或 `--years`。`P/proposal/` 存在时九条规则照常适用，并重跑 `consistency_check.py`。它报「章节依据旧版科学论证」（`stale_section`）时，先按第 6 步重写该章，不在篇幅改动后用 `mark-written` 消去这一项；没有这一项时，再对改动的文件运行 `case.py mark-written`。
+按第 0 步建任务目录。只读 `references/length.md` 与要改的那一章的写法；`P/proposal/` 存在时另读 `references/evidence_wording.md`；需要新文献时另读 `references/literature.md`；`consistency_check.py` 报出问题时另读 `references/consistency_fixes.md`。按 `references/length.md`：运行 `length_check.py` → 找差距 → 扩写或压缩 → 复检。页数优先于字数下限：项目有编译脚本且本机字体齐全时，扩写前先编译记页数，扩写后再编译，确认全文不超过 `length_standard.pages.hard_max` 页；不能编译时，全文合计不超过 `length_standard.overall.max` 字，报告写「页数未核」。字数下限与页数上限冲突时，扩到页数允许处为止，按「提问」问申请人从哪一章腾出篇幅；不能提问时停在上限（页数，不能编译时为合计字数），记「（未能提问）」。压缩要删掉整段论证，或扩写缺少可用材料时，先按「提问」问申请人删哪些、补什么。改写前把要改的文件复制到 `T/nsfc-proposal/output/before/`。改动过的章节重跑 `chapter_check.py`；`P/proposal/` 不存在时，按「只改一章」第 3 条加 `--project-type` 或 `--years`。`P/proposal/` 存在时九条规则照常适用，并重跑 `consistency_check.py`。它报「章节依据旧版科学论证」（`stale_section`）时，先按第 6 步重写该章，不在篇幅改动后用 `mark-written` 消去这一项；没有这一项时，再对改动的文件运行 `case.py mark-written`。改完重新导出 Word（第 8 步第 4 项）。
 
 ### 输出
 
+- `P/申请书正文.docx`：Word 版正文（第 8 步导出）。只改一章、篇幅对齐、只写摘要之后，也重新导出一次。
 - `P/proposal/`：`scientific_case.yaml`、`scientific_case.md`、`evidence_map.yaml`、`section_plan.yaml`、`assumptions.md`、`literature_leads.md`、`citation_ledger.jsonl`；模板没有引用 AI 使用说明文件时，还有 `ai_declaration.md`。
 - `P/extraTex/` 下的各章正文，以及 `P/NSFC-ABSTRACTS.md`。
 - `P/figures/nsfc-proposal/` 下的研究框架图与设计图（WisImage 生成）。
@@ -296,7 +330,7 @@ python3 S/scripts/consistency_check.py --project-root P --numbers
 需要你确认：……（没有就写「无」）
 ```
 
-最终报告还要列出：写入的文件、用进正文的图与重画次数、各章引用的不同文献数（取自 `consistency_check.py` 的 `citations`；立项依据少于 `literature.min_distinct_refs_justification` 时写明原因，如离线、检索不足）、各章篇幅与页数（取自 `length_check.py`）、占位清单、待核实项、未解决的一致性问题、建议的下一步（编译、篇幅对齐、nsfc-reviewers、nsfc-qc）。
+最终报告还要列出：写入的文件（先写 Word 文档的路径）、用进正文的图与重画次数、各章引用的不同文献数（取自 `consistency_check.py` 的 `citations`；立项依据少于 `literature.min_distinct_refs_justification` 时写明原因，如离线、检索不足）、各章篇幅与页数（取自 `length_check.py`）、占位清单、待核实项、未解决的一致性问题、建议的下一步（编译、篇幅对齐、nsfc-reviewers、nsfc-qc）。
 
 ### 输出管理
 

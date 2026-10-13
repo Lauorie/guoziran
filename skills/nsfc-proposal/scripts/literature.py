@@ -189,9 +189,15 @@ def _needs_abstract(row: Mapping[str, Any], min_chars: int) -> bool:
     return not (isinstance(abstract, str) and len(abstract.strip()) >= min_chars)
 
 
+def _same_title(hit: Mapping[str, Any], title: str) -> bool:
+    """标题规范化后逐字相同且足够长：同一篇论文的期刊版与预印本、仓储版 DOI 不同，标题相同。"""
+    own = _title_key(_strip_ellipses(title))
+    return len(own) >= TRUNCATED_TITLE_MIN_CHARS and _title_key(hit.get("title")) == own
+
+
 def _host_match(hit: Mapping[str, Any], *, title: str, doi: str | None) -> bool:
-    """检索结果是否就是这条记录：DOI 都有时比 DOI；否则比标题，截断的标题按前缀比。"""
-    if _same_paper(hit, title=title, doi=doi):
+    """检索结果是否就是这条记录：DOI 都有时比 DOI，DOI 不同但标题逐字相同也算；否则比标题，截断的标题按前缀比。"""
+    if _same_paper(hit, title=title, doi=doi) or _same_title(hit, title):
         return True
     if doi and normalize_doi(hit.get("doi")):
         return False
@@ -226,6 +232,10 @@ def _fill_from_host(row: dict[str, Any], host_results: Mapping[str, list[dict[st
         row["abstract"] = candidate
         row["abstract_status"] = "present"
         row["abstract_provenance"] = {**provenance, "query": query, "rejected_mismatch": rejected}
+        hit_doi = normalize_doi(hit.get("doi"))
+        if doi and hit_doi and hit_doi != doi:
+            row["abstract_provenance"]["matched_by"] = "title"  # DOI 不同（多为预印本或仓储版），按标题逐字相同取摘要
+            row["abstract_provenance"]["hit_doi"] = hit_doi
         return
     row["abstract_status"] = "missing"
     row["abstract_provenance"] = {**provenance, "rejected_mismatch": rejected}

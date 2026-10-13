@@ -73,8 +73,17 @@ class EnrichTests(Base):
         self.assertIn("missing_abstract", rows[0]["quality_warnings"])
         self.assertEqual(summary["filled"], 0)
 
-    def test_doi_disagreement_rejects_hit(self) -> None:
+    def test_doi_disagreement_with_same_title_is_accepted_and_marked(self) -> None:
+        # 平台实测：期刊版 DOI 与仓储版 DOI 不同，标题逐字相同，摘要应能取用
         host = _host(self.dir / "h.json", [(TITLE, [{"title": TITLE, "abstract": FULL, "doi": "10.1000/other"}])])
+        _s, rows = self._enrich([{"record_id": "r1", "title": TITLE, "doi": "10.1000/own"}], host)
+        self.assertEqual(rows[0]["abstract_status"], "present")
+        self.assertEqual(rows[0]["abstract_provenance"]["matched_by"], "title")
+        self.assertEqual(rows[0]["abstract_provenance"]["hit_doi"], "10.1000/other")
+
+    def test_doi_disagreement_with_similar_title_rejects_hit(self) -> None:
+        near = TITLE.replace("a", "e", 2)
+        host = _host(self.dir / "h.json", [(TITLE, [{"title": near, "abstract": FULL, "doi": "10.1000/other"}])])
         _s, rows = self._enrich([{"record_id": "r1", "title": TITLE, "doi": "10.1000/own"}], host)
         self.assertEqual(rows[0]["abstract_status"], "missing")
         self.assertEqual(rows[0]["abstract_provenance"]["rejected_mismatch"], 1)
